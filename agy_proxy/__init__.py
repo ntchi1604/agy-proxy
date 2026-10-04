@@ -9,3 +9,7 @@ try:
     install_dns_fallback()
 except Exception:
     pass
+
+from agy_proxy.patcher import Patcher
+
+__all__ = ["Patcher"]

@@ -506,8 +506,9 @@ def build_parser() -> argparse.ArgumentParser:
     switch_parser.add_argument("--set-primary", dest="set_primary", action="store_true", default=True, help="Also set as primary proxy account (default: True)")
     switch_parser.add_argument("--no-set-primary", dest="set_primary", action="store_false", help="Do not set as primary proxy account")
     switch_parser.add_argument("--next", "-n", action="store_true", help="Switch to next account with highest quota")
-    switch_parser.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
+    switch_parser.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "ide", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
     switch_parser.add_argument("--cli", action="store_true", help="Switch session ONLY for terminal agy CLI (~/.gemini/antigravity-cli)")
+    switch_parser.add_argument("--ide", action="store_true", help="Switch session ONLY for IDE (~/.gemini/antigravity-ide)")
     switch_parser.add_argument("--standalone", action="store_true", help="Switch session ONLY for Standalone Web UI (~/.gemini/jetski-standalone-oauth-token)")
     switch_parser.add_argument("--all", action="store_true", help="Switch session for ALL environments (default)")
 
@@ -529,8 +530,9 @@ def build_parser() -> argparse.ArgumentParser:
     auth_switch.add_argument("--no-set-primary", dest="set_primary", action="store_false", help="Do not set as primary proxy account")
     auth_switch.add_argument("--next", "-n", action="store_true", help="Switch to next account with highest quota")
     auth_switch.add_argument("--list", "-l", action="store_true", help="List available OAuth accounts and quotas")
-    auth_switch.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
+    auth_switch.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "ide", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
     auth_switch.add_argument("--cli", action="store_true", help="Switch session ONLY for terminal agy CLI (~/.gemini/antigravity-cli)")
+    auth_switch.add_argument("--ide", action="store_true", help="Switch session ONLY for IDE (~/.gemini/antigravity-ide)")
     auth_switch.add_argument("--standalone", action="store_true", help="Switch session ONLY for Standalone Web UI (~/.gemini/jetski-standalone-oauth-token)")
     auth_switch.add_argument("--all", action="store_true", help="Switch session for ALL environments (default)")
 
@@ -670,6 +672,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Rate-limit cooldown in seconds upon receiving HTTP 429 from provider (default: 0 / disabled)",
+    )
+    parser.add_argument(
+        "--tray",
+        action="store_true",
+        help="Run Antigravity Proxy with a system tray icon",
     )
     return parser
 
@@ -896,6 +903,14 @@ def main():
         access_log=bool(args.debug or effective_log_level.lower() == "debug"),
     )
     server = uvicorn.Server(config)
+
+    if getattr(args, "tray", False):
+        try:
+            from agy_proxy.tray import start_tray_in_thread
+            start_tray_in_thread(port=args.port)
+            console.print("[dim]System tray icon started.[/dim]")
+        except Exception as e:
+            console.print(f"[bold red]Failed to start system tray:[/bold red] {e}")
 
     try:
         server.run()

@@ -34,6 +34,7 @@ def resolve_antigravity_destinations(target_env: str = "all") -> list[Path]:
     home = Path.home()
     cli_dest = Path(os.environ.get("ANTIGRAVITY_TOKEN_FILE") or (home / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"))
     standalone_dest1 = home / ".gemini" / "jetski-standalone-oauth-token"
+    ide_dest = home / ".gemini" / "antigravity-ide" / "antigravity-oauth-token"
 
     env = (target_env or "all").strip().lower()
 
@@ -41,8 +42,10 @@ def resolve_antigravity_destinations(target_env: str = "all") -> list[Path]:
         return [cli_dest]
     elif env in ("standalone", "s"):
         return [standalone_dest1]
+    elif env in ("ide", "i"):
+        return [ide_dest]
     elif env in ("all", "a"):
-        targets = [cli_dest, standalone_dest1]
+        targets = [cli_dest, ide_dest, standalone_dest1]
         return targets
     else:
         return [cli_dest, standalone_dest1]
@@ -66,7 +69,7 @@ def get_antigravity_token_destinations() -> list[Path]:
     return [DEFAULT_TOKEN_FILE]
 
 
-def get_active_antigravity_accounts(pool: AccountPool) -> tuple[AccountSession | None, AccountSession | None]:
+def get_active_antigravity_accounts(pool: AccountPool) -> tuple[AccountSession | None, AccountSession | None, AccountSession | None]:
     """Reads the Antigravity token files and resolves which accounts are currently active in CLI and Standalone."""
     if hasattr(pool, "reload_if_modified"):
         pool.reload_if_modified()
@@ -115,8 +118,10 @@ def get_active_antigravity_accounts(pool: AccountPool) -> tuple[AccountSession |
             logger.debug("cli-active check failed for %s: %s", token_path, e)
         return None
 
+    ide_path = resolve_antigravity_destinations("ide")[0]
+    active_ide = _resolve(ide_path)
     active_standalone = _resolve(standalone_path)
-    return _resolve(cli_path), active_standalone
+    return _resolve(cli_path), active_ide, active_standalone
 
 
 def format_antigravity_token_payload(account: AccountSession) -> dict[str, Any]:
@@ -449,13 +454,12 @@ def format_agy_quota_display(account: AccountSession) -> str:
             format_progress_bar(c_wk),
             claude_q.get("weekly", {}).get("description") or "Quota available",
         ])
-        if c_5h < 0.999 or claude_q.get("5h", {}).get("description"):
-            lines.extend([
-                "",
-                "Five Hour Limit Remaining",
-                format_progress_bar(c_5h),
-                claude_q.get("5h", {}).get("description") or "Quota available",
-            ])
+        lines.extend([
+            "",
+            "Five Hour Limit Remaining",
+            format_progress_bar(c_5h),
+            claude_q.get("5h", {}).get("description") or "Quota available",
+        ])
         return "\n".join(lines)
 
     for i, group in enumerate(groups):
@@ -474,8 +478,6 @@ def format_agy_quota_display(account: AccountSession) -> str:
             f = float(b.get("remainingFraction", 1.0))
             d = b.get("description", "")
             # In official agy, 3p-5h is an internal smoothing window and is omitted when full and without notice
-            if b_id == "3p-5h" and f >= 0.999 and not d:
-                continue
 
             if not is_first_bucket:
                 lines.append("")
@@ -515,8 +517,11 @@ def main():
     parser.add_argument("--no-set-primary", dest="set_primary", action="store_false", help="Do not set as primary proxy account")
     parser.add_argument("--next", "-n", action="store_true", help="Rotate to next account with highest remaining quota")
     parser.add_argument("--list", "-l", action="store_true", help="List available accounts and status")
-    parser.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
+    parser.add_argument("--env", "--target-env", dest="target_env", choices=["cli", "ide", "standalone", "all"], default=None, help="Target destination environment (cli, standalone, or all; default: all)")
     parser.add_argument("--cli", action="store_true", help="Switch session ONLY for Antigravity CLI")
+    parser.add_argument("--ide", action="store_true", help="Switch session ONLY for Antigravity IDE (VS Code / Cursor)")
+    parser.add_argument("--auto", "-a", action="store_true", help="Run as a daemon to auto-switch on 429/quota exhaustion")
+    parser.add_argument("--interval", type=int, default=60, help="Interval in seconds for auto mode")
 
     args = parser.parse_args()
 
@@ -564,12 +569,49 @@ def main():
         if args.cli:
             target_env = "cli"
             env_explicitly_set = True
-        elif args.both:
+        elif getattr(args, "ide", False):
+            target_env = "ide"
+            env_explicitly_set = True
+        elif getattr(args, "both", False):
             target_env = "all"
             env_explicitly_set = True
         elif args.target_env:
             target_env = args.target_env
             env_explicitly_set = True
+
+        if args.auto:
+            print(f"Starting Antigravity auto-switcher (interval={args.interval}s, env={target_env})...")
+            while True:
+                pool.reload_if_modified()
+                cli_acc, standalone_acc = get_active_antigravity_accounts(pool)
+                needs_switch = False
+                
+                accs_to_check = []
+                if target_env in ("cli", "all") and cli_acc:
+                    accs_to_check.append(cli_acc)
+                if target_env in ("standalone", "all") and standalone_acc and standalone_acc != cli_acc:
+                    accs_to_check.append(standalone_acc)
+
+                for active_acc in accs_to_check:
+                    if active_acc.is_quota_exhausted() or active_acc.is_rate_limited("gemini"):
+                        print(f"[{datetime.now().isoformat()}] Account {active_acc.email} is rate-limited or quota exhausted.")
+                        needs_switch = True
+                        break
+                        
+                if needs_switch:
+                    print(f"[{datetime.now().isoformat()}] Auto-switching to next available account...")
+                    try:
+                        await switch_antigravity_session(
+                            pool=pool, 
+                            to_next=True, 
+                            target_env=target_env, 
+                            allow_overwrite=True, 
+                            set_primary=args.set_primary
+                        )
+                    except Exception as e:
+                        print(f"Auto-switch failed: {e}", file=sys.stderr)
+                        
+                await asyncio.sleep(args.interval)
 
         # Interactive or list mode
         if args.list or (not real_targets and not args.next):
@@ -614,7 +656,7 @@ def main():
 
             if not env_explicitly_set:
                 try:
-                    env_input = input("Target environment [all/cli/standalone] (default: all): ").strip().lower()
+                    env_input = input("Target environment [all/cli/ide/standalone] (default: all): ").strip().lower()
                     if env_input in ("cli", "c"):
                         target_env = "cli"
                 except (KeyboardInterrupt, EOFError):
@@ -624,7 +666,7 @@ def main():
             to_next = args.next
             target = real_targets[0] if real_targets else None
 
-        env_label = "CLI only" if target_env == "cli" else ("Standalone only" if target_env == "standalone" else "All environments")
+        env_label = "CLI only" if target_env == "cli" else ("IDE only" if target_env == "ide" else ("Standalone only" if target_env == "standalone" else "All environments"))
         print(f"\nSwitching Antigravity session [{env_label}]...")
         try:
             acc, written = await switch_antigravity_session(

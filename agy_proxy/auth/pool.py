@@ -13,6 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+try:
+    import keyring
+except ImportError:
+    keyring = None
+
 import httpx
 
 from agy_proxy.auth.api_key import AIStudioApiKeySession
@@ -41,6 +46,26 @@ from agy_proxy.auth.token_utils import (
 )
 from agy_proxy.models import is_3p_model
 
+def _load_sensitive_data(acc_id: str, item: dict):
+    if keyring is None:
+        return
+    try:
+        data_str = keyring.get_password("agy_proxy.credentials", acc_id)
+        if data_str:
+            sensitive = json.loads(data_str)
+            item.update(sensitive)
+    except Exception as e:
+        pass  # Silently fallback to JSON per user preference
+
+def _save_sensitive_data(acc_id: str, sensitive: dict, fallback_item: dict):
+    if keyring is not None:
+        try:
+            keyring.set_password("agy_proxy.credentials", acc_id, json.dumps(sensitive))
+            return
+        except Exception as e:
+            pass  # Silently fallback to JSON per user preference
+    # Fallback to plain text if keyring is unavailable or fails
+    fallback_item.update(sensitive)
 
 def _web_sessions_match(a: Any, b: Any) -> bool:
     """
@@ -432,6 +457,9 @@ class AccountPool:
                     if not acc_id:
                         seed = (item.get("email") or item.get("name") or item.get("refresh_token") or "").strip().lower()
                         acc_id = f"acc_{hashlib.md5(seed.encode('utf-8')).hexdigest()[:8]}" if seed else f"acc_{os.urandom(4).hex()}"
+                    
+                    _load_sensitive_data(acc_id, item)
+                    
                     acc = AccountSession(
                         account_id=acc_id,
                         refresh_token=item.get("refresh_token", ""),
@@ -468,6 +496,10 @@ class AccountPool:
                     if not acc_id:
                         seed = (raw_key or item.get("email") or item.get("name") or "").strip()
                         acc_id = f"key_{hashlib.md5(seed.encode('utf-8')).hexdigest()[:8]}" if seed else f"key_{os.urandom(4).hex()}"
+                    
+                    _load_sensitive_data(acc_id, item)
+                    raw_key = item.get("api_key") or item.get("refresh_token") or item.get("access_token") or raw_key
+                    
                     acc = AIStudioApiKeySession(
                         account_id=acc_id,
                         api_key=raw_key,
@@ -499,6 +531,8 @@ class AccountPool:
                     if not acc_id:
                         seed = (item.get("email") or item.get("name") or str((item.get("cookies") or {}).get("__Secure-1PSID", "")) or "").strip()
                         acc_id = f"gw_{hashlib.md5(seed.encode('utf-8')).hexdigest()[:8]}" if seed else f"gw_{os.urandom(4).hex()}"
+
+                    _load_sensitive_data(acc_id, item)
 
                     # Strict preservation of disabled state
                     raw_enabled = item.get("enabled")
@@ -647,6 +681,13 @@ class AccountPool:
                     self.save_accounts()
                     break
 
+        # ── Step 7: IDE State Sync ──────────────────────────────────────────
+        try:
+            from agy_proxy.ide_sync import sync_ide_accounts
+            sync_ide_accounts(self)
+        except Exception as e:
+            logger.debug("IDE sync failed: %s", e)
+
         self._is_loaded = True
         self._update_file_mtimes()
 
@@ -734,16 +775,19 @@ class AccountPool:
                         "email": acc.email,
                         "name": acc.name,
                         "picture": acc.picture,
-                        "refresh_token": acc.refresh_token,
-                        "access_token": acc.access_token,
                         "expiry_timestamp": acc.expiry_timestamp,
                         "auth_method": "consumer",
                         "project_id": getattr(acc, "project_id", None),
                         "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
+                    }
+                    sensitive = {
+                        "refresh_token": acc.refresh_token,
+                        "access_token": acc.access_token,
                         "id_token": getattr(acc, "id_token", None),
                     }
+                    _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     oauth_list.append(entry_dict)
                 elif acc.auth_method == "api_key":
                     raw_key = getattr(acc, "api_key", "") or acc.refresh_token or ""
@@ -753,12 +797,13 @@ class AccountPool:
                         "name": acc.name,
                         "picture": acc.picture,
                         "auth_method": "api_key",
-                        "api_key": raw_key,
                         "project_id": getattr(acc, "project_id", None),
                         "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
                     }
+                    sensitive = {"api_key": raw_key}
+                    _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     key_list.append(entry_dict)
                 elif acc.auth_method == "gemini_web":
                     entry_dict = {
@@ -768,7 +813,6 @@ class AccountPool:
                         "picture": acc.picture,
                         "auth_method": "gemini_web",
                         "cdp_port": getattr(acc, "cdp_port", 9222),
-                        "cookies": getattr(acc, "_cookies", {}),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
                         "total_requests": getattr(acc, "total_requests", 0),
@@ -776,6 +820,8 @@ class AccountPool:
                         "last_used_model": getattr(acc, "last_used_model", None),
                         "last_client_type": getattr(acc, "last_client_type", None),
                     }
+                    sensitive = {"cookies": getattr(acc, "_cookies", {})}
+                    _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     web_list.append(entry_dict)
 
                 if entry_dict is not None:
@@ -826,6 +872,23 @@ class AccountPool:
             _write_file(self.web_sessions_file,"web sessions",   web_list,   "web_sessions")
             self._update_file_mtimes()
             logger.debug("Accounts saved to disk (%d OAuth, %d API keys, %d web sessions)", len(oauth_list), len(key_list), len(web_list))
+
+
+            # ── 4. Save stats if enabled ─────────────────────────────────────────
+            if os.environ.get("AGY_PROXY_SAVE_STATS", "false").lower() == "true":
+                try:
+                    from agy_proxy.auth.constants import STATS_FILE
+                    stats = {}
+                    for acc_id, acc in self.accounts.items():
+                        stats[acc_id] = {
+                            "total_requests": getattr(acc, "total_requests", 0),
+                            "last_used_timestamp": getattr(acc, "last_used_timestamp", 0.0),
+                        }
+                    STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    with open(STATS_FILE, "w", encoding="utf-8") as f:
+                        json.dump(stats, f, indent=2)
+                except Exception as e:
+                    logger.debug("Failed to save stats.json: %s", e)
 
     async def initialize_all(self):
         """Initializes user info, project, quota, and models for all active loaded accounts."""

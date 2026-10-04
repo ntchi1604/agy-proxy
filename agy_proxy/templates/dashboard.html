@@ -253,6 +253,52 @@
             </button>
           </div>
 
+          
+          <!-- Batch Operations -->
+          <button id="batchDeleteBtn" onclick="batchDeleteAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 font-medium transition flex items-center space-x-1" title="Delete Selected">
+            <i class="fa-solid fa-trash text-[10px]"></i>
+            <span>Delete Selected</span>
+          </button>
+          <button id="batchRefreshBtn" onclick="batchRefreshAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800 text-indigo-300 border border-indigo-800 font-medium transition flex items-center space-x-1" title="Refresh Selected">
+            <i class="fa-solid fa-rotate text-[10px]"></i>
+            <span>Refresh Selected</span>
+          </button>
+
+          <!-- Export/Import -->
+          <div class="h-4 border-l border-slate-700"></div>
+          <button onclick="exportAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Export Accounts">
+            <i class="fa-solid fa-download text-indigo-400 text-[10px]"></i>
+            <span>Export</span>
+          </button>
+          <button onclick="document.getElementById('importFileInput').click()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Import Accounts">
+            <i class="fa-solid fa-upload text-emerald-400 text-[10px]"></i>
+            <span>Import</span>
+          </button>
+          <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importAccounts(event)">
+
+          
+          <!-- Batch Operations -->
+          <button id="batchDeleteBtn" onclick="batchDeleteAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 font-medium transition flex items-center space-x-1" title="Delete Selected">
+            <i class="fa-solid fa-trash text-[10px]"></i>
+            <span>Delete Selected</span>
+          </button>
+          <button id="batchRefreshBtn" onclick="batchRefreshAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800 text-indigo-300 border border-indigo-800 font-medium transition flex items-center space-x-1" title="Refresh Selected">
+            <i class="fa-solid fa-rotate text-[10px]"></i>
+            <span>Refresh Selected</span>
+          </button>
+
+          <!-- Export/Import -->
+          <div class="h-4 border-l border-slate-700"></div>
+          <button onclick="exportAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Export Accounts">
+            <i class="fa-solid fa-download text-indigo-400 text-[10px]"></i>
+            <span>Export</span>
+          </button>
+          <button onclick="document.getElementById('importFileInput').click()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Import Accounts">
+            <i class="fa-solid fa-upload text-emerald-400 text-[10px]"></i>
+            <span>Import</span>
+          </button>
+          <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importAccounts(event)">
+
           <button onclick="toggleAllAccounts(true)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Enable all accounts">
             <i class="fa-solid fa-play text-emerald-400 text-[10px]"></i>
             <span>Enable All</span>
@@ -855,6 +901,53 @@ https://your-tunnel.trycloudflare.com/v1</pre>
   <!-- TAB 5: SETTINGS -->
   <div id="tabContent-settings" class="hidden space-y-6">
 
+    
+    <!-- Process Control Panel -->
+    <div class="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-white flex items-center">
+          <i class="fa-solid fa-microchip mr-2 text-emerald-400"></i> Process Control
+        </h2>
+      </div>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Manage the background <span class="font-mono text-emerald-300">agy</span> and <span class="font-mono text-emerald-300">language_server</span> processes.
+      </p>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <!-- AGY Process -->
+        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+          <div>
+            <div class="font-semibold text-white text-sm flex items-center">
+              <i class="fa-solid fa-server mr-2 text-indigo-400"></i> agy proxy
+            </div>
+            <div id="processStatus-agy" class="text-xs text-slate-400 mt-1 flex items-center space-x-1">
+              <span class="w-2 h-2 rounded-full bg-slate-500"></span> <span>Checking...</span>
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <button onclick="controlProcess('agy', 'start')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-sm">Start</button>
+            <button onclick="controlProcess('agy', 'kill')" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition shadow-sm">Kill</button>
+          </div>
+        </div>
+        
+        <!-- Language Server Process -->
+        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+          <div>
+            <div class="font-semibold text-white text-sm flex items-center">
+              <i class="fa-solid fa-code mr-2 text-purple-400"></i> language_server
+            </div>
+            <div id="processStatus-ls" class="text-xs text-slate-400 mt-1 flex items-center space-x-1">
+              <span class="w-2 h-2 rounded-full bg-slate-500"></span> <span>Checking...</span>
+            </div>
+          </div>
+          <div class="flex space-x-2">
+            <button onclick="controlProcess('language_server', 'start')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-sm">Start</button>
+            <button onclick="controlProcess('language_server', 'kill')" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition shadow-sm">Kill</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Context Auto-Compactor & Summarizer Card -->
     <div class="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4">
       <div class="flex items-center justify-between">
@@ -1062,6 +1155,16 @@ https://your-tunnel.trycloudflare.com/v1</pre>
         </div>
       </div>
 
+      
+      <!-- Proxy URL Input (Shared) -->
+      <div class="px-3.5 py-3 rounded-xl bg-slate-900 border border-slate-800">
+        <label class="text-[11px] text-slate-400 block mb-1 font-medium flex items-center justify-between">
+          <span><i class="fa-solid fa-network-wired text-indigo-400 mr-1"></i> Proxy URL (Optional)</span>
+          <span class="text-[9px] font-mono text-slate-500">e.g. http://proxy:8080</span>
+        </label>
+        <input type="text" id="addProxyUrlInput" placeholder="http://user:pass@host:port" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono">
+      </div>
+
       <div class="flex items-center justify-end space-x-3 pt-2">
         <button onclick="closeAddAccountModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
           Cancel
@@ -1117,6 +1220,12 @@ https://your-tunnel.trycloudflare.com/v1</pre>
         <label class="text-[11px] text-slate-400 block mb-1 font-medium">Display Name</label>
         <input type="text" id="renameInput" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 transition" placeholder="e.g. Personal Gemini Key" onkeydown="if(event.key==='Enter') submitRenameModal(); if(event.key==='Escape') closeRenameModal();">
       </div>
+
+      <div>
+        <label class="text-[11px] text-slate-400 block mb-1 font-medium">Proxy URL (Optional)</label>
+        <input type="text" id="renameProxyUrlInput" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-mono focus:outline-none focus:border-indigo-500 transition" placeholder="http://user:pass@host:port" onkeydown="if(event.key==='Enter') submitRenameModal(); if(event.key==='Escape') closeRenameModal();">
+      </div>
+
       <div class="flex items-center justify-end space-x-2.5 pt-1">
         <button onclick="closeRenameModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
           Cancel
@@ -1147,24 +1256,30 @@ https://your-tunnel.trycloudflare.com/v1</pre>
       <!-- Choose target environment -->
       <div class="space-y-2">
         <label class="text-[11px] text-slate-400 font-medium block">Select Destination Environment</label>
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
           <label class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/60 cursor-pointer transition text-center relative has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/10 group">
             <input type="radio" name="agyTargetEnv" value="cli" class="sr-only">
             <i class="fa-solid fa-terminal text-base text-emerald-400 mb-1.5"></i>
-            <span class="text-xs font-bold text-white">CLI Only</span>
+            <span class="text-xs font-bold text-white">CLI</span>
             <span class="text-[9px] text-slate-400 mt-0.5">Terminal / agy</span>
+          </label>
+          <label class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-purple-500/60 cursor-pointer transition text-center relative has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 group">
+            <input type="radio" name="agyTargetEnv" value="ide" class="sr-only">
+            <i class="fa-solid fa-code text-base text-purple-400 mb-1.5"></i>
+            <span class="text-xs font-bold text-white">IDE</span>
+            <span class="text-[9px] text-slate-400 mt-0.5">VS Code / Cursor</span>
           </label>
           <label class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/60 cursor-pointer transition text-center relative has-[:checked]:border-cyan-500 has-[:checked]:bg-cyan-500/10 group">
             <input type="radio" name="agyTargetEnv" value="standalone" class="sr-only">
             <i class="fa-solid fa-globe text-base text-cyan-400 mb-1.5"></i>
-            <span class="text-xs font-bold text-white">Standalone Only</span>
+            <span class="text-xs font-bold text-white">Hub (Standalone)</span>
             <span class="text-[9px] text-slate-400 mt-0.5">Web UI Agent</span>
           </label>
           <label class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/60 cursor-pointer transition text-center relative has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-500/10 group">
             <input type="radio" name="agyTargetEnv" value="all" checked class="sr-only">
             <i class="fa-solid fa-bolt text-base text-indigo-400 mb-1.5"></i>
             <span class="text-xs font-bold text-white">All</span>
-            <span class="text-[9px] text-slate-400 mt-0.5">CLI + Standalone</span>
+            <span class="text-[9px] text-slate-400 mt-0.5">CLI + IDE + Hub</span>
           </label>
         </div>
       </div>
@@ -1176,8 +1291,12 @@ https://your-tunnel.trycloudflare.com/v1</pre>
           <span class="font-mono text-emerald-300 font-medium truncate max-w-[210px]" id="modalCurrentCli">-</span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="flex items-center space-x-1"><i class="fa-solid fa-globe text-cyan-400 text-[10px]"></i><span>Active Standalone:</span></span>
-          <span class="font-mono text-cyan-300 font-medium truncate max-w-[210px]" id="modalCurrentIde">-</span>
+          <span class="flex items-center space-x-1"><i class="fa-solid fa-code text-purple-400 text-[10px]"></i><span>Active IDE:</span></span>
+          <span class="font-mono text-purple-300 font-medium truncate max-w-[210px]" id="modalCurrentIdeStatus">-</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="flex items-center space-x-1"><i class="fa-solid fa-globe text-cyan-400 text-[10px]"></i><span>Active Hub:</span></span>
+          <span class="font-mono text-cyan-300 font-medium truncate max-w-[210px]" id="modalCurrentStandaloneStatus">-</span>
         </div>
       </div>
 
@@ -1310,7 +1429,8 @@ ightarrow$ v1.0.3</p>
     let collapsedSections = new Set(); // tracks which section addTypes are collapsed
     let cliActiveAccountId = null;    // account_id currently active in AGY CLI
     let standaloneActiveAccountId = null;    // account_id currently active in AGY IDE
-    let cliActiveInfo = { cli: null, ide: null };
+    let ideActiveAccountId = null;
+    let cliActiveInfo = { cli: null, ide: null, standalone: null };
     let targetActivateAccountId = null;
 
     function setAccountView(mode) {
@@ -1652,9 +1772,12 @@ ightarrow$ v1.0.3</p>
       const cliName = cliActiveInfo?.cli?.name || cliActiveInfo?.cli?.email || 'None';
       const ideName = cliActiveInfo?.ide?.name || cliActiveInfo?.ide?.email || 'None';
       const curCli = document.getElementById('modalCurrentCli');
-      const curIde = document.getElementById('modalCurrentIde');
+      const curIde = document.getElementById('modalCurrentIdeStatus');
+      const standaloneName = cliActiveInfo?.standalone?.name || cliActiveInfo?.standalone?.email || 'None';
+      const curStandalone = document.getElementById('modalCurrentStandaloneStatus');
       if (curCli) curCli.innerText = cliName;
       if (curIde) curIde.innerText = ideName;
+      if (curStandalone) curStandalone.innerText = standaloneName;
 
       // Reset radio to both
       const radios = document.getElementsByName('agyTargetEnv');
@@ -1694,7 +1817,7 @@ ightarrow$ v1.0.3</p>
       const acc = rawAccountsData.find(a => a.account_id === targetActivateAccountId);
       const accName = acc ? (acc.name || acc.email) : targetActivateAccountId;
 
-      const targetLabel = target === 'cli' ? 'CLI' : (target === 'standalone' ? 'Standalone' : 'CLI + Standalone');
+      const targetLabel = target === 'cli' ? 'CLI' : (target === 'standalone' ? 'Standalone' : (target === 'ide' ? 'IDE' : 'All'));
       showToast(`Activating ${accName} in ${targetLabel}...`, 'info');
       closeActivateSessionModal();
 
@@ -1964,7 +2087,8 @@ ightarrow$ v1.0.3</p>
           const cliData = await cliRes.json();
           cliActiveInfo = cliData || { cli: null, ide: null };
           cliActiveAccountId = cliData?.cli?.account_id || null;
-          standaloneActiveAccountId = cliData?.standalone?.account_id || cliData?.ide?.account_id || null;
+          standaloneActiveAccountId = cliData?.standalone?.account_id || null;
+          ideActiveAccountId = cliData?.ide?.account_id || null;
         }
         renderAccounts();
         populatePlaygroundAccounts();
@@ -2608,6 +2732,7 @@ ightarrow$ v1.0.3</p>
       let agyActivePills = '';
       if (addType === 'oauth') {
         const cliAcc = items.find(a => a.account_id === cliActiveAccountId);
+        const ideAcc = items.find(a => a.account_id === window.ideActiveAccountId);
         const standaloneAcc = items.find(a => a.account_id === standaloneActiveAccountId);
 
         if (cliAcc && standaloneAcc && cliAcc.account_id === standaloneAcc.account_id) {
@@ -3201,7 +3326,7 @@ ightarrow$ v1.0.3</p>
         const res = await fetch(`/api/accounts/${currentRenameAccountId}/rename`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newName })
+          body: JSON.stringify({ name: newName, proxy_url: document.getElementById("renameProxyUrlInput").value.trim() || undefined })
         });
         if (res.ok) {
           closeRenameModal();
@@ -3792,6 +3917,8 @@ ightarrow$ v1.0.3</p>
               name: name,
               cdp_port: cdpPort,
               raw_cookies: rawCookies || null,
+              proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
+              proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
             })
           });
           if (!res.ok) {
@@ -3828,7 +3955,7 @@ ightarrow$ v1.0.3</p>
           const res = await fetch('/api/accounts/apikey', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey, name: label })
+            body: JSON.stringify({ api_key: apiKey, name: label, proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined })
           });
           if (!res.ok) {
             const errText = await res.text();
@@ -3867,6 +3994,8 @@ ightarrow$ v1.0.3</p>
             code: codeOrUrl,
             state: currentOAuthState,
             code_verifier: currentOAuthVerifier,
+            proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
+            proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
           })
         });
         if (!res.ok) {
@@ -4639,6 +4768,453 @@ ${data.stderr || data.stdout || data.error}`;
       } catch(e) {
         console.error('Failed to save compactor settings', e);
         showToast('Failed to save context settings: ' + e.message, 'error');
+      }
+    }
+
+    
+    // === NEW SHARD 2 FUNCTIONS ===
+
+    // Export Accounts
+    async function exportAccounts() {
+      try {
+        const res = await fetch('/api/accounts/export');
+        if (!res.ok) throw new Error('Failed to export');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'agy_accounts_backup.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Accounts exported successfully', 'success');
+      } catch (err) {
+        showToast('Export failed: ' + err.message, 'error');
+      }
+    }
+
+    // Import Accounts
+    async function importAccounts(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          const res = await fetch('/api/accounts/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(json)
+          });
+          if (!res.ok) throw new Error('Failed to import');
+          const data = await res.json();
+          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
+          loadAccounts();
+        } catch (err) {
+          showToast('Import failed: ' + err.message, 'error');
+        } finally {
+          event.target.value = ''; // Reset file input
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Process Control
+    async function pollProcessStatus() {
+      try {
+        const res = await fetch('/api/processes/status');
+        if (res.ok) {
+          const data = await res.json();
+          const pAgy = document.getElementById('processStatus-agy');
+          const pLs = document.getElementById('processStatus-ls');
+          
+          if (pAgy && data.agy) {
+            const isUp = data.agy.status === 'running';
+            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
+          }
+          if (pLs && data.language_server) {
+            const isUp = data.language_server.status === 'running';
+            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll process status:', err);
+      }
+    }
+    
+    // Start polling automatically
+    setInterval(pollProcessStatus, 5000);
+    setTimeout(pollProcessStatus, 1000); 
+    // === NEW SHARD 2 FUNCTIONS ===
+
+    // Export Accounts
+    async function exportAccounts() {
+      try {
+        const res = await fetch('/api/accounts/export');
+        if (!res.ok) throw new Error('Failed to export');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'agy_accounts_backup.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Accounts exported successfully', 'success');
+      } catch (err) {
+        showToast('Export failed: ' + err.message, 'error');
+      }
+    }
+
+    // Import Accounts
+    async function importAccounts(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          const res = await fetch('/api/accounts/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(json)
+          });
+          if (!res.ok) throw new Error('Failed to import');
+          const data = await res.json();
+          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
+          loadAccounts();
+        } catch (err) {
+          showToast('Import failed: ' + err.message, 'error');
+        } finally {
+          event.target.value = ''; // Reset file input
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Process Control
+    async function pollProcessStatus() {
+      try {
+        const res = await fetch('/api/processes/status');
+        if (res.ok) {
+          const data = await res.json();
+          const pAgy = document.getElementById('processStatus-agy');
+          const pLs = document.getElementById('processStatus-ls');
+          
+          if (pAgy && data.agy) {
+            const isUp = data.agy.status === 'running';
+            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
+          }
+          if (pLs && data.language_server) {
+            const isUp = data.language_server.status === 'running';
+            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll process status:', err);
+      }
+    }
+    
+    // Start polling automatically
+    setInterval(pollProcessStatus, 5000);
+    setTimeout(pollProcessStatus, 1000); // Initial poll
+
+    async function controlProcess(procName, action) {
+      try {
+        const res = await fetch(`/api/processes/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_name: procName })
+        });
+        if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
+        showToast(`Process ${procName} ${action} command sent`, 'success');
+        pollProcessStatus();
+      } catch (err) {
+        showToast(`Process control error: ${err.message}`, 'error');
+      }
+    }
+
+    // Batch Operations
+    function getSelectedBatchAccounts() {
+      const boxes = document.querySelectorAll('.account-batch-checkbox:checked');
+      return Array.from(boxes).map(b => b.value);
+    }
+
+    function updateBatchButtons() {
+      const selected = getSelectedBatchAccounts();
+      const delBtn = document.getElementById('batchDeleteBtn');
+      const refBtn = document.getElementById('batchRefreshBtn');
+      if (selected.length > 0) {
+        delBtn.classList.remove('hidden');
+        refBtn.classList.remove('hidden');
+      } else {
+        delBtn.classList.add('hidden');
+        refBtn.classList.add('hidden');
+      }
+    }
+
+    async function batchDeleteAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch delete failed');
+        showToast(`Deleted ${selected.length} accounts`, 'success');
+        loadAccounts();
+        updateBatchButtons(); // hide buttons
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function batchRefreshAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch refresh failed');
+        showToast(`Refreshing ${selected.length} accounts...`, 'success');
+        setTimeout(loadAccounts, 2000);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // Initial poll
+
+    async function controlProcess(procName, action) {
+      try {
+        const res = await fetch(`/api/processes/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_name: procName })
+        });
+        if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
+        showToast(`Process ${procName} ${action} command sent`, 'success');
+        pollProcessStatus();
+      } catch (err) {
+        showToast(`Process control error: ${err.message}`, 'error');
+      }
+    }
+
+    // Batch Operations
+    function getSelectedBatchAccounts() {
+      const boxes = document.querySelectorAll('.account-batch-checkbox:checked');
+      return Array.from(boxes).map(b => b.value);
+    }
+
+    function updateBatchButtons() {
+      const selected = getSelectedBatchAccounts();
+      const delBtn = document.getElementById('batchDeleteBtn');
+      const refBtn = document.getElementById('batchRefreshBtn');
+      if (selected.length > 0) {
+        delBtn.classList.remove('hidden');
+        refBtn.classList.remove('hidden');
+      } else {
+        delBtn.classList.add('hidden');
+        refBtn.classList.add('hidden');
+      }
+    }
+
+    async function batchDeleteAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch delete failed');
+        showToast(`Deleted ${selected.length} accounts`, 'success');
+        loadAccounts();
+        updateBatchButtons(); // hide buttons
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function batchRefreshAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch refresh failed');
+        showToast(`Refreshing ${selected.length} accounts...`, 'success');
+        setTimeout(loadAccounts, 2000);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    
+    // === NEW SHARD 2 FUNCTIONS ===
+
+    // Export Accounts
+    async function exportAccounts() {
+      try {
+        const res = await fetch('/api/accounts/export');
+        if (!res.ok) throw new Error('Failed to export');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'agy_accounts_backup.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Accounts exported successfully', 'success');
+      } catch (err) {
+        showToast('Export failed: ' + err.message, 'error');
+      }
+    }
+
+    // Import Accounts
+    async function importAccounts(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          const res = await fetch('/api/accounts/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(json)
+          });
+          if (!res.ok) throw new Error('Failed to import');
+          const data = await res.json();
+          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
+          loadAccounts();
+        } catch (err) {
+          showToast('Import failed: ' + err.message, 'error');
+        } finally {
+          event.target.value = ''; // Reset file input
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Process Control
+    async function pollProcessStatus() {
+      try {
+        const res = await fetch('/api/processes/status');
+        if (res.ok) {
+          const data = await res.json();
+          const pAgy = document.getElementById('processStatus-agy');
+          const pLs = document.getElementById('processStatus-ls');
+          
+          if (pAgy && data.agy) {
+            const isUp = data.agy.status === 'running';
+            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
+          }
+          if (pLs && data.language_server) {
+            const isUp = data.language_server.status === 'running';
+            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll process status:', err);
+      }
+    }
+    
+    // Start polling automatically
+    setInterval(pollProcessStatus, 5000);
+    setTimeout(pollProcessStatus, 1000); // Initial poll
+
+    async function controlProcess(procName, action) {
+      try {
+        const res = await fetch(`/api/processes/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ process_name: procName })
+        });
+        if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
+        showToast(`Process ${procName} ${action} command sent`, 'success');
+        pollProcessStatus();
+      } catch (err) {
+        showToast(`Process control error: ${err.message}`, 'error');
+      }
+    }
+
+    // Batch Operations
+    function getSelectedBatchAccounts() {
+      const boxes = document.querySelectorAll('.account-batch-checkbox:checked');
+      return Array.from(boxes).map(b => b.value);
+    }
+
+    function updateBatchButtons() {
+      const selected = getSelectedBatchAccounts();
+      const delBtn = document.getElementById('batchDeleteBtn');
+      const refBtn = document.getElementById('batchRefreshBtn');
+      if (selected.length > 0) {
+        delBtn.classList.remove('hidden');
+        refBtn.classList.remove('hidden');
+      } else {
+        delBtn.classList.add('hidden');
+        refBtn.classList.add('hidden');
+      }
+    }
+
+    async function batchDeleteAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch delete failed');
+        showToast(`Deleted ${selected.length} accounts`, 'success');
+        loadAccounts();
+        updateBatchButtons(); // hide buttons
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function batchRefreshAccounts() {
+      const selected = getSelectedBatchAccounts();
+      if (selected.length === 0) return;
+
+      try {
+        const res = await fetch('/api/accounts/batch-refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_ids: selected })
+        });
+        if (!res.ok) throw new Error('Batch refresh failed');
+        showToast(`Refreshing ${selected.length} accounts...`, 'success');
+        setTimeout(loadAccounts, 2000);
+      } catch (err) {
+        showToast(err.message, 'error');
       }
     }
 

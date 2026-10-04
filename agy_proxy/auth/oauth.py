@@ -54,6 +54,7 @@ class AntigravityOAuthSession(AccountSession):
             is_primary=is_primary,
             enabled=enabled,
             on_token_refreshed=on_token_refreshed,
+            **kwargs,
         )
         self.refresh_token = refresh_token
         self.access_token = access_token

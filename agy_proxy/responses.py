@@ -230,6 +230,7 @@ def responses_payload_to_openai_chat(payload: dict[str, Any]) -> tuple[OpenAICha
         top_p=top_p,
         max_tokens=max_tokens,
         stream=bool(payload.get("stream", True)),
+        stream_options={"include_usage": True},
     )
 
     return chat_req, session_key
@@ -300,6 +301,17 @@ async def stream_responses_events(
                 total_usage["total_tokens"] = usage.get("total_tokens", total_usage["total_tokens"])
                 total_usage["input_tokens"] = usage.get("prompt_tokens", total_usage["input_tokens"])
                 total_usage["output_tokens"] = usage.get("completion_tokens", total_usage["output_tokens"])
+
+            if "error" in chunk:
+                yield {
+                    "type": "response.failed",
+                    "response": {
+                        "id": resp_id,
+                        "status": "failed",
+                        "error": chunk["error"],
+                    },
+                }
+                return
 
             choices = chunk.get("choices", [])
             if not choices:

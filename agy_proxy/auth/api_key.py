@@ -44,6 +44,7 @@ class AIStudioApiKeySession(AccountSession):
             is_primary=is_primary,
             enabled=enabled,
             on_token_refreshed=on_token_refreshed,
+            **kwargs,
         )
         self.api_key = raw_key
         self.project_id = project_id or "google-ai-studio"

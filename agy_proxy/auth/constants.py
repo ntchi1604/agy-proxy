@@ -31,7 +31,7 @@ _os_name = "darwin" if platform.system().lower() == "darwin" else "linux"
 _arch_name = "arm64" if platform.machine().lower() in ("arm64", "aarch64") else "amd64"
 USER_AGENT = os.environ.get(
     "AGY_USER_AGENT",
-    f"antigravity/ide/2.5.5 (aidev_client; os_type={_os_name}; arch={_arch_name})",
+    f"antigravity/hub/2.19.1 (aidev_client; os_type={_os_name}; arch={_arch_name}; cl=991101027)",
 )
 
 DEFAULT_TOKEN_FILE = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
@@ -40,7 +40,8 @@ DEFAULT_TOKEN_FILE = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-
 CONFIG_DIR = Path.home() / ".config" / "agy-proxy"
 DEFAULT_ACCOUNTS_FILE = CONFIG_DIR / "accounts.json"          # OAuth (consumer) accounts
 DEFAULT_API_KEYS_FILE = CONFIG_DIR / "api_keys.json"          # Google AI Studio API keys
-DEFAULT_WEB_SESSIONS_FILE = CONFIG_DIR / "web_sessions.json"  # Gemini Web browser sessions
+DEFAULT_WEB_SESSIONS_FILE = CONFIG_DIR / "web_sessions.json"
+STATS_FILE = CONFIG_DIR / "stats.json"  # Gemini Web browser sessions
 
 # Legacy files for seamless auto-migration
 LEGACY_ACCOUNTS_FILES = [

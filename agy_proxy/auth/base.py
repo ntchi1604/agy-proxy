@@ -25,6 +25,7 @@ class BaseAccountSession:
         is_primary: bool = False,
         enabled: bool = True,
         on_token_refreshed: Any | None = None,
+        proxy_url: str | None = None,
         **kwargs,
     ):
         self.account_id = account_id
@@ -35,12 +36,13 @@ class BaseAccountSession:
         self.is_primary = is_primary
         self.enabled = enabled
         self.on_token_refreshed = on_token_refreshed
+        self.proxy_url = proxy_url or kwargs.get("proxy_url")
 
         self.error_message: str | None = None
-        self.total_requests: int = 0
-        self.last_used_timestamp: float = 0.0
-        self.last_used_model: str | None = None
-        self.last_client_type: str | None = None
+        self.total_requests: int = kwargs.get("total_requests", 0)
+        self.last_used_timestamp: float = kwargs.get("last_used_timestamp", 0.0)
+        self.last_used_model: str | None = kwargs.get("last_used_model", None)
+        self.last_client_type: str | None = kwargs.get("last_client_type", None)
         self.rate_limited_models: dict[str, float] = {}  # model_group -> reset_timestamp
         self.quota_summary: dict[str, Any] = kwargs.get("quota_summary") or {}
         self._lock = asyncio.Lock()
@@ -59,6 +61,7 @@ class BaseAccountSession:
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout=300.0, connect=20.0, read=300.0, write=120.0, pool=30.0),
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0),
+                proxy=self.proxy_url,
             )
         return self._http_client
 
@@ -104,6 +107,16 @@ class BaseAccountSession:
         key = "3p" if is_3p else "gemini"
         self.rate_limited_models[key] = time.time() + duration
         logger.warning("[%s] Marked as rate-limited for group %s for %.0fs", self.email, key, duration)
+        try:
+            from plyer import notification
+            notification.notify(
+                title="Antigravity Rate Limit (429)",
+                message=f"Account {self.email} rate-limited for {model}",
+                app_name="Antigravity Proxy",
+                timeout=5
+            )
+        except Exception:
+            pass
 
     def is_token_expired(self, skew_seconds: float = 60.0) -> bool:
         """Checks if session access token is expired or within skew threshold."""
@@ -129,14 +142,29 @@ class BaseAccountSession:
         if not model:
             gemini_q = qd.get("gemini", {})
             claude_q = qd.get("3p", {}) or qd.get("claude", {})
+            
+            gemini_pct = gemini_q.get("percent", 100.0)
+            claude_pct = claude_q.get("percent", 100.0)
+            if (gemini_pct < 5.0 and gemini_pct > 0.0) or (claude_pct < 5.0 and claude_pct > 0.0):
+                try:
+                    from plyer import notification
+                    notification.notify(
+                        title="Antigravity Low Quota",
+                        message=f"Account {self.email} quota < 5%",
+                        app_name="Antigravity Proxy",
+                        timeout=5
+                    )
+                except Exception:
+                    pass
+
             gemini_ex = (
-                gemini_q.get("percent", 100.0) <= 0.0
+                gemini_pct <= 0.0
                 or gemini_q.get("fraction", 1.0) <= 0.001
                 or (gemini_q.get("weekly", {}).get("percent", 100.0) <= 0.0 if "weekly" in gemini_q else False)
                 or (gemini_q.get("5h", {}).get("percent", 100.0) <= 0.0 if "5h" in gemini_q else False)
             )
             claude_ex = (
-                claude_q.get("percent", 100.0) <= 0.0
+                claude_pct <= 0.0
                 or claude_q.get("fraction", 1.0) <= 0.001
                 or (claude_q.get("weekly", {}).get("percent", 100.0) <= 0.0 if "weekly" in claude_q else False)
                 or (claude_q.get("5h", {}).get("percent", 100.0) <= 0.0 if "5h" in claude_q else False)
@@ -181,6 +209,7 @@ class BaseAccountSession:
             "quota_details": self.get_quota_details(),
             "available_models": [m for m in getattr(self, "available_models", {}).keys() if not m.startswith(("tab_", "chat_"))],
             "error_message": self.error_message,
+            "proxy_url": getattr(self, "proxy_url", None),
         }
 
 

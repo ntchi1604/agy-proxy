@@ -33,6 +33,7 @@ from agy_proxy.compactor import (
     compactor_settings,
     prune_tool_results,
 )
+from agy_proxy.search import search_multi_engine
 
 logger = logging.getLogger("agy_proxy.client")
 
@@ -595,6 +596,7 @@ class CloudCodeClient:
 
         for acc in candidates:
             for attempt in range(2):
+                has_yielded = False
                 try:
                     client = await acc.get_http_client()
                     headers = await acc.get_auth_headers()
@@ -640,6 +642,7 @@ class CloudCodeClient:
                                             break
                                         raise RuntimeError(chunk["message"])
                                     elif chunk["type"] == "thinking":
+                                        has_yielded = True
                                         yield {
                                             "candidates": [{
                                                 "content": {"parts": [{"thought": True, "text": chunk["text"]}], "role": "model"},
@@ -651,6 +654,7 @@ class CloudCodeClient:
                                         if has_tools:
                                             accumulated_text += chunk["text"]
                                         else:
+                                            has_yielded = True
                                             yield {
                                                 "candidates": [{
                                                     "content": {"parts": [{"text": chunk["text"]}], "role": "model"},
@@ -681,6 +685,7 @@ class CloudCodeClient:
                                                 else:
                                                     parts.append({"text": "Task completed."})
 
+                                            has_yielded = True
                                             yield {
                                                 "candidates": [{
                                                     "content": {"parts": parts, "role": "model"},
@@ -690,6 +695,7 @@ class CloudCodeClient:
                                                 "usageMetadata": {"promptTokenCount": 0, "candidatesTokenCount": 0},
                                             }
                                         else:
+                                            has_yielded = True
                                             yield {
                                                 "candidates": [{
                                                     "content": {"parts": [{"text": ""}], "role": "model"},
@@ -702,6 +708,9 @@ class CloudCodeClient:
                                     continue
                                 return
                             except RuntimeError as gw_err:
+                                if has_yielded:
+                                    logger.warning("[%s] GeminiWeb stream interrupted mid-way: %s", acc_label, gw_err)
+                                    raise
                                 if is_continuation and retry_turn == 0:
                                     logger.warning("[%s] GeminiWeb continuation error (%s), resetting and retrying as fresh conversation...", acc_label, gw_err)
                                     acc.reset_conversation(session_key)
@@ -710,6 +719,9 @@ class CloudCodeClient:
                                 last_error = gw_err
                                 break
                             except Exception as gw_err:
+                                if has_yielded:
+                                    logger.warning("[%s] GeminiWeb stream interrupted mid-way: %s", acc_label, gw_err)
+                                    raise
                                 logger.warning("[%s] GeminiWeb unexpected error: %s", acc_label, gw_err)
                                 last_error = gw_err
                                 break
@@ -837,18 +849,25 @@ class CloudCodeClient:
                                         try:
                                             data_obj = json.loads(raw_json)
                                             # Normalize response wrapper for AI Studio / CloudCode
+                                            has_yielded = True
                                             yield data_obj
                                         except json.JSONDecodeError as e:
                                             logger.warning("Failed to decode SSE JSON chunk: %s", e)
                             return  # Succeeded, end generator
 
                     except httpx.HTTPStatusError as e:
+                        if has_yielded:
+                            logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
+                            raise
                         last_error = e
                         if e.response.status_code in (401, 403, 429, 500, 502, 503, 504, 404):
                             logger.warning("[%s] Account error [%d]. Failing over to next candidate account...", acc.email, e.response.status_code)
                             break
                         raise
                     except (httpx.TimeoutException, httpx.NetworkError) as e:
+                        if has_yielded:
+                            logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
+                            raise
                         err_name = type(e).__name__
                         err_msg = f"{err_name}: {e}" if str(e) else err_name
                         await acc.close()
@@ -860,18 +879,27 @@ class CloudCodeClient:
                         last_error = e
                         break
                     except Exception as e:
+                        if has_yielded:
+                            logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
+                            raise
                         err_name = type(e).__name__
                         err_msg = f"{err_name}: {e}" if str(e) else err_name
                         logger.warning("[%s] Account error (%s). Failing over to next account...", acc.email, err_msg)
                         last_error = e
                         break
                 except httpx.HTTPStatusError as e:
+                    if has_yielded:
+                        logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
+                        raise
                     last_error = e
                     if e.response.status_code in (400, 422):
                         raise
                     logger.warning("[%s] Account error [%d]. Failing over to next account in pool...", acc.email, e.response.status_code)
                     break
                 except Exception as e:
+                    if has_yielded:
+                        logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
+                        raise
                     err_name = type(e).__name__
                     err_msg = f"{err_name}: {e}" if str(e) else err_name
                     logger.warning("[%s] Account error (%s). Failing over to next account in pool...", acc.email, err_msg)
@@ -1097,7 +1125,7 @@ class CloudCodeClient:
         usage_dict: dict[str, Any] = {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
+            "total_tokens": total_tokens or (prompt_tokens + completion_tokens),
         }
         if cached_tokens > 0:
             usage_dict["prompt_tokens_details"] = {
@@ -1609,13 +1637,24 @@ class CloudCodeClient:
                 "requestType": "chat",
             }
 
-        async for data in self._post_sse_stream_with_failover(
-            "v1internal:streamGenerateContent?alt=sse",
-            build_payload,
-            model_name=backend_model,
-            specific_account_id=specific_account_id,
-        ):
-            yield f"data: {json.dumps(data)}\n\n"
+        try:
+            async for data in self._post_sse_stream_with_failover(
+                "v1internal:streamGenerateContent?alt=sse",
+                build_payload,
+                model_name=backend_model,
+                specific_account_id=specific_account_id,
+            ):
+                yield f"data: {json.dumps(data)}\n\n"
+        except Exception as e:
+            logger.warning("[Gemini Native Stream] Error: %s", e)
+            err_chunk = {
+                "error": {
+                    "message": str(e),
+                    "code": getattr(e, "response", None) and e.response.status_code or 500,
+                    "status": "INTERNAL"
+                }
+            }
+            yield f"data: {json.dumps(err_chunk)}\n\n"
 
     async def generate_gemini_native(
         self,
