@@ -1240,6 +1240,15 @@ class TestGeminiWebSession(unittest.TestCase):
             self.assertTrue(pool2.accounts["acc_oauth_1"].enabled)
             self.assertFalse(pool2.accounts["gw_session_1"].enabled)
 
+    def test_base_account_get_http_client(self):
+        from agy_proxy.auth.base import BaseAccountSession
+        acc = BaseAccountSession(account_id="test_acc", email="test@example.com")
+        client = asyncio.run(acc.get_http_client())
+        self.assertIsNotNone(client)
+        self.assertFalse(client.is_closed)
+        asyncio.run(acc.close())
+        self.assertIsNone(acc._http_client)
+
 
 if __name__ == "__main__":
     unittest.main()

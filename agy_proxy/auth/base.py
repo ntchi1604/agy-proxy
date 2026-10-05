@@ -3,6 +3,7 @@ Base account session classes and polymorphic session factory.
 """
 
 import asyncio
+import os
 import time
 from typing import Any
 
