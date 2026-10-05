@@ -56,6 +56,7 @@ class OAuthCallbackRequest(BaseModel):
     code: str
     state: str | None = None
     code_verifier: str | None = None
+    proxy_url: str | None = None
 
 
 def create_app(
@@ -577,6 +578,7 @@ def create_app(
                 code_or_url=req.code,
                 verifier=req.code_verifier,
                 state=req.state,
+                proxy_url=req.proxy_url,
             )
             return acc.to_dict()
         except Exception as e:
@@ -635,11 +637,12 @@ def create_app(
     class AddApiKeyRequest(BaseModel):
         api_key: str
         name: str | None = "Gemini API Key"
+        proxy_url: str | None = None
 
     @app.post("/api/accounts/apikey")
     async def add_account_api_key(req: AddApiKeyRequest):
         try:
-            acc = await pool.add_api_key_account(api_key=req.api_key, name=req.name)
+            acc = await pool.add_api_key_account(api_key=req.api_key, name=req.name, proxy_url=req.proxy_url)
             return acc.to_dict()
         except Exception as e:
             logger.error("Error adding API key account: %s", e)
@@ -650,6 +653,7 @@ def create_app(
         cdp_port: int | None = 9222
         raw_cookies: str | None = None
         cookies: dict[str, str] | None = None
+        proxy_url: str | None = None
 
     @app.post("/api/accounts/gemini-web")
     async def add_account_gemini_web(req: AddGeminiWebRequest):
@@ -660,6 +664,7 @@ def create_app(
                 cdp_port=req.cdp_port or 9222,
                 raw_cookies=req.raw_cookies,
                 cookies=req.cookies,
+                proxy_url=req.proxy_url,
             )
             d = acc.to_dict()
             if d.get("has_cookies"):
@@ -728,7 +733,8 @@ def create_app(
             }
 
     class RenameAccountRequest(BaseModel):
-        name: str
+        name: str | None = None
+        proxy_url: str | None = None
 
     @app.post("/api/accounts/{account_id}/rename")
     @app.patch("/api/accounts/{account_id}/rename")
@@ -736,10 +742,20 @@ def create_app(
         acc = pool.get_account(account_id)
         if not acc:
             raise HTTPException(status_code=404, detail="Account not found.")
-        if not req.name or not req.name.strip():
-            raise HTTPException(status_code=400, detail="Name cannot be empty.")
-        pool.rename_account(acc.account_id, req.name.strip())
-        return {"status": "ok", "account_id": acc.account_id, "name": req.name.strip()}
+        new_name = req.name.strip() if req.name and req.name.strip() else None
+        update_proxy = req.proxy_url is not None
+        pool.rename_account(
+            acc.account_id,
+            new_name=new_name,
+            proxy_url=req.proxy_url,
+            update_proxy=update_proxy,
+        )
+        return {
+            "status": "ok",
+            "account_id": acc.account_id,
+            "name": acc.name,
+            "proxy_url": getattr(acc, "proxy_url", None),
+        }
 
     class ToggleAccountRequest(BaseModel):
         enabled: bool | None = None
@@ -1591,105 +1607,178 @@ def create_app(
                     body = None
         # --- Route to proper account and track usage ---
         is_generation = action in ("streamGenerateContent", "generateContent") or action_path in ("streamGenerateContent", "generateContent")
-        acc = None
-        
-        if is_generation:
-            # Extract requested model from body or fallback to default
-            req_model = DEFAULT_MODEL
-            if isinstance(body, dict):
-                req_model = body.get("model") or body.get("request", {}).get("model") or DEFAULT_MODEL
-                
-                # FIX: Antigravity IDE sends context role when experimental flags are enabled,
-                # but CloudCode backend rejects it. We must rewrite it to USER.
-                contents = body.get("request", {}).get("contents", [])
-                for item in contents:
-                    if isinstance(item, dict) and item.get("role", "").lower() == "context":
-                        item["role"] = "USER"
 
+        # 1. Sanitize roles: rewrite 'context' and 'USER' to lowercase 'user', 'MODEL'/'assistant' to 'model'
+        # Crucial: Anthropic Claude models reject 'USER' with HTTP 500 Unknown Error.
+        def _sanitize_roles(contents_list):
+            if not isinstance(contents_list, list):
+                return
+            for item in contents_list:
+                if isinstance(item, dict):
+                    r = item.get("role")
+                    if isinstance(r, str):
+                        r_lower = r.lower()
+                        if r_lower in ("user", "context"):
+                            item["role"] = "user"
+                        elif r_lower in ("model", "assistant"):
+                            item["role"] = "model"
+
+        req_model = DEFAULT_MODEL
+        if isinstance(body, dict):
+            req_model = body.get("model") or body.get("request", {}).get("model") or DEFAULT_MODEL
+            from agy_proxy.models import normalize_model_name
+            req_model = normalize_model_name(req_model)
+            if "model" in body:
+                body["model"] = req_model
+            if "request" in body and isinstance(body["request"], dict):
+                if "model" in body["request"]:
+                    body["request"]["model"] = req_model
+                _sanitize_roles(body["request"].get("contents", []))
+            _sanitize_roles(body.get("contents", []))
+
+        # 2. Identify target account from Authorization header if present
+        target_account = None
+        auth_header = request.headers.get("authorization") or ""
+        bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else None
+        if bearer_token:
+            for candidate in pool.accounts.values():
+                if not getattr(candidate, "enabled", True):
+                    continue
+                if getattr(candidate, "access_token", None) == bearer_token or getattr(candidate, "refresh_token", None) == bearer_token:
+                    target_account = candidate
+                    break
+            if not target_account:
+                try:
+                    from agy_proxy.auth.token_utils import _decode_jwt_payload
+                    claims = _decode_jwt_payload(bearer_token)
+                    token_email = (claims.get("email") or "").strip().lower()
+                    if token_email:
+                        for candidate in pool.accounts.values():
+                            if getattr(candidate, "enabled", True) and (getattr(candidate, "email", "") or "").strip().lower() == token_email:
+                                target_account = candidate
+                                break
+                except Exception:
+                    pass
+
+        # 3. Build candidate accounts list
+        if is_generation:
             try:
-                candidates = account_pool.get_candidate_accounts(model=req_model)
-                if candidates:
-                    acc = candidates[0]
+                candidates = pool.get_candidate_accounts(model=req_model)
             except Exception as e:
                 logger.debug("Failed to get candidate accounts: %s", e)
-                
-        if not acc:
-            acc = next((a for a in account_pool.accounts.values() if getattr(a, "enabled", True)), None)
+                candidates = [a for a in pool.accounts.values() if getattr(a, "enabled", True)]
 
-        if not acc:
+            # Prioritize target_account if requested and healthy
+            if target_account and target_account in candidates:
+                candidates = [target_account] + [a for a in candidates if a.account_id != target_account.account_id]
+            elif target_account and getattr(target_account, "enabled", True):
+                candidates = [target_account] + candidates
+        else:
+            if target_account:
+                candidates = [target_account]
+            else:
+                primary_acc = pool.primary_account if hasattr(pool, "primary_account") else None
+                if primary_acc and primary_acc.enabled:
+                    candidates = [primary_acc]
+                else:
+                    candidates = [a for a in pool.accounts.values() if getattr(a, "enabled", True)]
+
+        if not candidates:
             return JSONResponse(status_code=200, content={})
 
-        if is_generation:
-            acc.total_requests = getattr(acc, "total_requests", 0) + 1
-            acc.last_used_timestamp = time.time()
-
         route_desc = f"/v1internal:{action}" if action else f"/v1internal/{action_path}"
-        if is_generation:
-            logger.info(f"[{getattr(acc, 'email', acc.account_id)}] Handling CloudCode generation: {route_desc}")
-        # -----------------------------------------------
-        try:
-            from agy_proxy.auth import CLOUDCODE_BASE_URL
-            headers = await acc.get_auth_headers()
-            
-            # Pass through the original client's User-Agent so we don't break new features
-            if "user-agent" in request.headers:
-                headers["User-Agent"] = request.headers["user-agent"]
-                
-            if action:
-                target_url = f"{CLOUDCODE_BASE_URL}/v1internal:{action}"
-            else:
-                target_url = f"{CLOUDCODE_BASE_URL}/v1internal/{action_path}"
-            c = await acc.get_http_client()
-            query_params = dict(request.query_params)
+        timeout_sec = 180.0 if is_generation else 25.0
+        query_params = dict(request.query_params)
+        from agy_proxy.auth import CLOUDCODE_BASE_URL
+        if action:
+            target_url = f"{CLOUDCODE_BASE_URL}/v1internal:{action}"
+        else:
+            target_url = f"{CLOUDCODE_BASE_URL}/v1internal/{action_path}"
 
-            if request.method == "POST":
-                if isinstance(body, dict):
-                    resp = await c.post(target_url, headers=headers, json=body, params=query_params, timeout=15.0)
-                elif body is not None:
-                    resp = await c.post(target_url, headers=headers, content=str(body).encode("utf-8"), params=query_params, timeout=15.0)
-                else:
-                    resp = await c.post(target_url, headers=headers, params=query_params, timeout=15.0)
-            elif request.method == "GET":
-                resp = await c.get(target_url, headers=headers, params=query_params, timeout=15.0)
-            else:
-                resp = await c.request(request.method, target_url, headers=headers, json=body if isinstance(body, dict) else None, params=query_params, timeout=15.0)
-            if resp.status_code >= 400:
-                logger.error(f"CloudCode Error {resp.status_code}: {resp.text}")
+        # 4. Multi-candidate failover loop
+        for acc_idx, acc in enumerate(candidates):
+            is_last = (acc_idx == len(candidates) - 1)
+            acc_label = getattr(acc, "email", acc.account_id)
+            if is_generation:
+                logger.info(f"[{acc_label}] Handling CloudCode generation: {route_desc}")
 
             try:
-                data = resp.json()
+                headers = await acc.get_auth_headers()
+                if "user-agent" in request.headers:
+                    headers["User-Agent"] = request.headers["user-agent"]
 
-                
-                # --- Enable all boolean experimental flags (ported from enable_all_flags.py) ---
-                if action == "listExperiments" or action_path == "listExperiments":
-                    for flag in data.get("flags", []):
-                        if "boolValue" in flag:
-                            flag["boolValue"] = True
-                
-                elif action == "fetchAvailableModels" or action_path == "fetchAvailableModels":
-                    for model_id, model_data in data.get("models", {}).items():
-                        # Old format
-                        for section in model_data.get("capabilities", {}).values():
-                            if isinstance(section, dict):
-                                for k, v in section.items():
-                                    if isinstance(v, dict) and "boolValue" in v:
-                                        v["boolValue"] = True
-                        
-                        # New format
-                        experiments = model_data.get("modelExperiments", {}).get("experiments", {})
-                        for exp_name, exp_val in experiments.items():
-                            if isinstance(exp_val, dict) and "boolValue" in exp_val:
-                                exp_val["boolValue"] = True
-                
-                return JSONResponse(status_code=resp.status_code, content=data)
-            except Exception:
-                return Response(
-                    content=resp.content,
-                    status_code=resp.status_code,
-                    media_type=resp.headers.get("content-type", "application/json"),
-                )
-        except Exception as e:
-            logger.debug("CloudCode internal passthrough error (%s): %s", route_desc, e)
+                c = await acc.get_http_client()
+
+                if request.method == "POST":
+                    if isinstance(body, dict):
+                        resp = await c.post(target_url, headers=headers, json=body, params=query_params, timeout=timeout_sec)
+                    elif body is not None:
+                        resp = await c.post(target_url, headers=headers, content=str(body).encode("utf-8"), params=query_params, timeout=timeout_sec)
+                    else:
+                        resp = await c.post(target_url, headers=headers, params=query_params, timeout=timeout_sec)
+                elif request.method == "GET":
+                    resp = await c.get(target_url, headers=headers, params=query_params, timeout=timeout_sec)
+                else:
+                    resp = await c.request(request.method, target_url, headers=headers, json=body if isinstance(body, dict) else None, params=query_params, timeout=timeout_sec)
+
+                # Retry / failover logic
+                if resp.status_code == 401 and not is_last:
+                    logger.warning("[%s] Got 401 Unauthorized on %s. Refreshing token...", acc_label, route_desc)
+                    try:
+                        await acc.refresh_access_token(force=True)
+                    except Exception:
+                        pass
+                    continue
+
+                if resp.status_code == 429 and not is_last:
+                    logger.warning("[%s] Quota reached (429) on %s. Failing over to next account...", acc_label, route_desc)
+                    acc.mark_rate_limited(req_model if is_generation else "default", duration=60.0)
+                    continue
+
+                if resp.status_code in (500, 502, 503, 504) and is_generation and not is_last:
+                    logger.warning("[%s] CloudCode error %d on %s (%s). Failing over to next account in pool...", acc_label, resp.status_code, route_desc, resp.text[:200])
+                    continue
+
+                if resp.status_code >= 400:
+                    logger.error(f"CloudCode Error {resp.status_code}: {resp.text}")
+
+                # Success tracking
+                if resp.status_code == 200 and is_generation:
+                    acc.total_requests = getattr(acc, "total_requests", 0) + 1
+                    acc.last_used_timestamp = time.time()
+                    acc.last_used_model = req_model
+
+                try:
+                    data = resp.json()
+                    # Enable boolean experimental flags
+                    if action == "listExperiments" or action_path == "listExperiments":
+                        for flag in data.get("flags", []):
+                            if "boolValue" in flag:
+                                flag["boolValue"] = True
+                    elif action == "fetchAvailableModels" or action_path == "fetchAvailableModels":
+                        for model_id, model_data in data.get("models", {}).items():
+                            for section in model_data.get("capabilities", {}).values():
+                                if isinstance(section, dict):
+                                    for k, v in section.items():
+                                        if isinstance(v, dict) and "boolValue" in v:
+                                            v["boolValue"] = True
+                            experiments = model_data.get("modelExperiments", {}).get("experiments", {})
+                            for exp_name, exp_val in experiments.items():
+                                if isinstance(exp_val, dict) and "boolValue" in exp_val:
+                                    exp_val["boolValue"] = True
+
+                    return JSONResponse(status_code=resp.status_code, content=data)
+                except Exception:
+                    return Response(
+                        content=resp.content,
+                        status_code=resp.status_code,
+                        media_type=resp.headers.get("content-type", "application/json"),
+                    )
+
+            except Exception as e:
+                logger.warning("[%s] CloudCode internal passthrough error (%s): %s", acc_label, route_desc, e)
+                if not is_last:
+                    continue
 
         return JSONResponse(status_code=200, content={})
 

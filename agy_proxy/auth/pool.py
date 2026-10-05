@@ -282,6 +282,7 @@ class AccountPool:
                 "auth_method": getattr(a, "auth_method", "consumer"),
                 "email": (getattr(a, "email", "") or "").strip().lower(),
                 "psid": str(getattr(a, "_cookies", {}).get("__Secure-1PSID", "")).strip() if hasattr(a, "_cookies") else "",
+                "proxy_url": getattr(a, "proxy_url", None),
             }
             for aid, a in self.accounts.items()
         }
@@ -460,6 +461,7 @@ class AccountPool:
                     
                     _load_sensitive_data(acc_id, item)
                     
+                    proxy_val = item.get("proxy_url") or item.get("proxy") or existing_stats.get(acc_id, {}).get("proxy_url")
                     acc = AccountSession(
                         account_id=acc_id,
                         refresh_token=item.get("refresh_token", ""),
@@ -475,6 +477,7 @@ class AccountPool:
                         enabled=bool(item.get("enabled", True)),
                         on_token_refreshed=self.save_accounts,
                         id_token=item.get("id_token"),
+                        proxy_url=proxy_val,
                     )
 
                     _restore_stats(acc, item)
@@ -500,6 +503,7 @@ class AccountPool:
                     _load_sensitive_data(acc_id, item)
                     raw_key = item.get("api_key") or item.get("refresh_token") or item.get("access_token") or raw_key
                     
+                    proxy_val = item.get("proxy_url") or item.get("proxy") or existing_stats.get(acc_id, {}).get("proxy_url")
                     acc = AIStudioApiKeySession(
                         account_id=acc_id,
                         api_key=raw_key,
@@ -511,6 +515,7 @@ class AccountPool:
                         is_primary=bool(item.get("is_primary", False)),
                         enabled=bool(item.get("enabled", True)),
                         on_token_refreshed=self.save_accounts,
+                        proxy_url=proxy_val,
                     )
                     _restore_stats(acc, item)
                     self.accounts[acc_id] = acc
@@ -578,6 +583,7 @@ class AccountPool:
                         continue
 
                     # No existing account in self.accounts yet
+                    proxy_val = item.get("proxy_url") or item.get("proxy") or existing_stats.get(acc_id, {}).get("proxy_url")
                     acc = GeminiWebSession(
                         account_id=acc_id,
                         name=item.get("name"),
@@ -588,6 +594,7 @@ class AccountPool:
                         is_primary=bool(item.get("is_primary", False)),
                         enabled=item_enabled,
                         on_token_refreshed=self.save_accounts,
+                        proxy_url=proxy_val,
                     )
                     _restore_stats(acc, item)
                     self.accounts[acc_id] = acc
@@ -781,6 +788,7 @@ class AccountPool:
                         "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
+                        "proxy_url": getattr(acc, "proxy_url", None),
                     }
                     sensitive = {
                         "refresh_token": acc.refresh_token,
@@ -801,6 +809,7 @@ class AccountPool:
                         "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
+                        "proxy_url": getattr(acc, "proxy_url", None),
                     }
                     sensitive = {"api_key": raw_key}
                     _save_sensitive_data(acc.account_id, sensitive, entry_dict)
@@ -815,6 +824,7 @@ class AccountPool:
                         "cdp_port": getattr(acc, "cdp_port", 9222),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
+                        "proxy_url": getattr(acc, "proxy_url", None),
                         "total_requests": getattr(acc, "total_requests", 0),
                         "last_used_timestamp": getattr(acc, "last_used_timestamp", 0.0),
                         "last_used_model": getattr(acc, "last_used_model", None),
@@ -974,13 +984,27 @@ class AccountPool:
             await asyncio.gather(*tasks, return_exceptions=True)
         return True
 
-    def rename_account(self, account_id: str, new_name: str) -> bool:
-        """Renames an account display name and persists to accounts.json."""
+    def rename_account(
+        self,
+        account_id: str,
+        new_name: str | None = None,
+        proxy_url: str | None = None,
+        update_proxy: bool = False,
+    ) -> bool:
+        """Renames an account display name and/or proxy_url and persists to disk."""
         with self._save_lock:
             if account_id in self.accounts:
-                self.accounts[account_id].name = new_name.strip()
+                acc = self.accounts[account_id]
+                if new_name and new_name.strip():
+                    acc.name = new_name.strip()
+                if update_proxy:
+                    clean_proxy = proxy_url.strip() if (proxy_url and isinstance(proxy_url, str) and proxy_url.strip()) else None
+                    if hasattr(acc, "set_proxy_url"):
+                        acc.set_proxy_url(clean_proxy)
+                    else:
+                        acc.proxy_url = clean_proxy
                 self.save_accounts()
-                logger.info("Account %s renamed to '%s'", account_id, new_name.strip())
+                logger.info("Account %s updated (name='%s', proxy='%s')", account_id, acc.name, getattr(acc, "proxy_url", None))
                 return True
             return False
 
@@ -1217,7 +1241,13 @@ class AccountPool:
             "code_verifier": verifier,
         }
 
-    async def complete_oauth_flow(self, code_or_url: str, verifier: str | None = None, state: str | None = None) -> AccountSession:
+    async def complete_oauth_flow(
+        self,
+        code_or_url: str,
+        verifier: str | None = None,
+        state: str | None = None,
+        proxy_url: str | None = None,
+    ) -> AccountSession:
         """Exchanges auth code for tokens and registers new AccountSession."""
         code = code_or_url.strip()
 
@@ -1242,6 +1272,7 @@ class AccountPool:
                         auth_method=parsed_tok.get("auth_method", "consumer"),
                         is_primary=len(self.accounts) == 0,
                         on_token_refreshed=self.save_accounts,
+                        proxy_url=proxy_url,
                     )
                     try:
                         await acc.refresh_access_token()
@@ -1262,6 +1293,8 @@ class AccountPool:
                         matched_acc.refresh_token = rf
                         matched_acc.access_token = acc.access_token
                         matched_acc.expiry_timestamp = acc.expiry_timestamp
+                        if proxy_url:
+                            matched_acc.set_proxy_url(proxy_url)
                         if acc.email and acc.email != "unknown@gmail.com":
                             matched_acc.email = acc.email
                         if acc.name:
@@ -1290,6 +1323,7 @@ class AccountPool:
                 auth_method="consumer",
                 is_primary=len(self.accounts) == 0,
                 on_token_refreshed=self.save_accounts,
+                proxy_url=proxy_url,
             )
             try:
                 await acc.refresh_access_token()
@@ -1379,6 +1413,7 @@ class AccountPool:
                 id_token=id_token,
                 is_primary=len(self.accounts) == 0,
                 on_token_refreshed=self.save_accounts,
+                proxy_url=proxy_url,
             )
 
             try:
@@ -1402,6 +1437,8 @@ class AccountPool:
                 matched_acc.refresh_token = refresh_token
                 matched_acc.access_token = access_token
                 matched_acc.expiry_timestamp = time.time() + float(expires_in)
+                if proxy_url:
+                    matched_acc.set_proxy_url(proxy_url)
                 if id_token:
                     matched_acc.id_token = id_token
                 matched_acc.name = acc.name
@@ -1420,7 +1457,7 @@ class AccountPool:
             logger.info("Successfully added new account %s (%s) to pool!", acc_id, acc.email)
             return acc
 
-    async def add_api_key_account(self, api_key: str, name: str | None = None) -> AccountSession:
+    async def add_api_key_account(self, api_key: str, name: str | None = None, proxy_url: str | None = None) -> AccountSession:
         """Adds a Google AI Studio / Gemini API Key to the pool."""
         key_clean = api_key.strip()
         if not key_clean:
@@ -1436,6 +1473,7 @@ class AccountPool:
             name=display_name,
             is_primary=len(self.accounts) == 0,
             on_token_refreshed=self.save_accounts,
+            proxy_url=proxy_url,
         )
 
         self.accounts[acc_id] = acc
@@ -1449,6 +1487,7 @@ class AccountPool:
         cdp_port: int = 9222,
         raw_cookies: str | None = None,
         cookies: dict[str, str] | None = None,
+        proxy_url: str | None = None,
     ) -> "GeminiWebSession":
         """
         Adds a Gemini Web (gemini.google.com browser session) to the pool.
@@ -1483,6 +1522,7 @@ class AccountPool:
             on_token_refreshed=self.save_accounts,
             cookies=extracted,
             cdp_port=cdp_port,
+            proxy_url=proxy_url,
         )
 
         if acc._cookies.get("__Secure-1PSID"):

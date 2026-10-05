@@ -490,6 +490,53 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pool2.accounts["oa1"].auth_method, "consumer")
         self.assertEqual(pool2.accounts["ak1"].auth_method, "api_key")
 
+    def test_proxy_url_persistence_across_pool_save_and_reload(self):
+        pool = AccountPool(accounts_file=self.accounts_file)
+        oa = AntigravityOAuthSession(
+            account_id="oa_proxy",
+            refresh_token="tok_p",
+            email="proxy_oauth@gmail.com",
+            proxy_url="http://user:pass@1.2.3.4:8080",
+        )
+        ak = AIStudioApiKeySession(
+            account_id="ak_proxy",
+            api_key="key_proxy",
+            email="proxy_key@gmail.com",
+            proxy_url="socks5://localhost:1080",
+        )
+        gw = GeminiWebSession(
+            account_id="gw_proxy",
+            name="GW Proxy",
+            cookies={"__Secure-1PSID": "mock_psid"},
+            proxy_url="http://10.0.0.1:3128",
+        )
+        pool.accounts["oa_proxy"] = oa
+        pool.accounts["ak_proxy"] = ak
+        pool.accounts["gw_proxy"] = gw
+
+        # Save accounts
+        pool.save_accounts()
+
+        # Check raw disk contents
+        with open(self.accounts_file, "r", encoding="utf-8") as f:
+            oa_data = json.load(f)
+        self.assertEqual(oa_data["accounts"][0]["proxy_url"], "http://user:pass@1.2.3.4:8080")
+
+        with open(self.api_keys_file, "r", encoding="utf-8") as f:
+            ak_data = json.load(f)
+        self.assertEqual(ak_data["api_keys"][0]["proxy_url"], "socks5://localhost:1080")
+
+        with open(self.web_sessions_file, "r", encoding="utf-8") as f:
+            gw_data = json.load(f)
+        self.assertEqual(gw_data["web_sessions"][0]["proxy_url"], "http://10.0.0.1:3128")
+
+        # Reload in a completely new pool instance
+        pool2 = AccountPool(accounts_file=self.accounts_file)
+        pool2.load_accounts()
+        self.assertEqual(pool2.accounts["oa_proxy"].proxy_url, "http://user:pass@1.2.3.4:8080")
+        self.assertEqual(pool2.accounts["ak_proxy"].proxy_url, "socks5://localhost:1080")
+        self.assertEqual(pool2.accounts["gw_proxy"].proxy_url, "http://10.0.0.1:3128")
+
     def test_split_files_auto_migration_from_unified(self):
         # Create legacy unified accounts.json containing both OAuth and API key
         self.accounts_file.write_text(json.dumps({

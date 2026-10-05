@@ -583,7 +583,7 @@ def main():
             print(f"Starting Antigravity auto-switcher (interval={args.interval}s, env={target_env})...")
             while True:
                 pool.reload_if_modified()
-                cli_acc, standalone_acc = get_active_antigravity_accounts(pool)
+                cli_acc, ide_acc, standalone_acc = get_active_antigravity_accounts(pool)
                 needs_switch = False
                 
                 accs_to_check = []
@@ -615,8 +615,9 @@ def main():
 
         # Interactive or list mode
         if args.list or (not real_targets and not args.next):
-            cli_acc, standalone_acc = get_active_antigravity_accounts(pool)
+            cli_acc, ide_acc, standalone_acc = get_active_antigravity_accounts(pool)
             cli_id = cli_acc.account_id if cli_acc else None
+            ide_id = ide_acc.account_id if ide_acc else None
             standalone_id = standalone_acc.account_id if standalone_acc else None
 
             print("\nGoogle Antigravity Accounts in Pool")
@@ -629,6 +630,8 @@ def main():
                     statuses.append("Active (CLI & Standalone) ⭐")
                 elif acc.account_id == cli_id:
                     statuses.append("Active (CLI) ⭐")
+                elif acc.account_id == ide_id:
+                    statuses.append("Active (IDE) ⭐")
                 elif acc.account_id == standalone_id:
                     statuses.append("Active (Standalone) ⭐")
                 

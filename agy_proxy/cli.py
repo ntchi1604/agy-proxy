@@ -233,8 +233,9 @@ async def handle_switch_command(
 
     if list_only or (not target and not to_next):
         from agy_proxy.switcher import get_active_antigravity_accounts
-        cli_acc, standalone_acc = get_active_antigravity_accounts(pool)
+        cli_acc, ide_acc, standalone_acc = get_active_antigravity_accounts(pool)
         cli_id = cli_acc.account_id if cli_acc else None
+        ide_id = ide_acc.account_id if ide_acc else None
         standalone_id = standalone_acc.account_id if standalone_acc else None
 
         table = Table(title="Google Antigravity Accounts in Pool", show_header=True, header_style="bold cyan")
@@ -245,9 +246,11 @@ async def handle_switch_command(
 
         for idx, acc in enumerate(oauth_accounts, start=1):
             if acc.account_id == cli_id and acc.account_id == standalone_id:
-                status = "[bold green]Active (All) ⭐[/bold green]"
+                status = "[bold green]Active (CLI & Standalone) ⭐[/bold green]"
             elif acc.account_id == cli_id:
                 status = "[bold green]Active (CLI) ⭐[/bold green]"
+            elif acc.account_id == ide_id:
+                status = "[bold green]Active (IDE) ⭐[/bold green]"
             elif acc.account_id == standalone_id:
                 status = "[bold green]Active (Standalone) ⭐[/bold green]"
             else:

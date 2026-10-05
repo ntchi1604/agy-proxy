@@ -5,12 +5,13 @@ Unit tests for FastAPI endpoints, routing, and security middleware.
 import asyncio
 import json
 import unittest
+from unittest.mock import Mock, AsyncMock
 import httpx
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from pathlib import Path
 import tempfile
-from agy_proxy.auth import AccountPool
+from agy_proxy.auth import AccountPool, AccountSession
 from agy_proxy.compactor import compactor_settings
 from agy_proxy.server import create_app
 
@@ -424,6 +425,176 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
                 final_saved = json.load(f)
             self.assertEqual(len(final_saved["web_sessions"]), 1)
             self.assertIsInstance(final_saved["web_sessions"][0]["enabled"], bool)
+
+    async def test_rename_account_with_proxy_url(self):
+        oa = AccountSession(
+            account_id="acc_rename_test",
+            email="rename_test@gmail.com",
+            refresh_token="rf_rename",
+            name="Original Name",
+        )
+        self.pool.accounts["acc_rename_test"] = oa
+        self.pool.save_accounts()
+
+        resp = await self.client.post(
+            "/api/accounts/acc_rename_test/rename",
+            json={"name": "New Name", "proxy_url": "http://user:pass@proxy.example.com:8080"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["name"], "New Name")
+        self.assertEqual(data["proxy_url"], "http://user:pass@proxy.example.com:8080")
+        self.assertEqual(oa.name, "New Name")
+        self.assertEqual(oa.proxy_url, "http://user:pass@proxy.example.com:8080")
+
+        # Verify persisted to disk
+        with open(self.pool.accounts_file, "r", encoding="utf-8") as f:
+            disk_data = json.load(f)
+        saved_acc = next(a for a in disk_data["accounts"] if a["account_id"] == "acc_rename_test")
+        self.assertEqual(saved_acc["name"], "New Name")
+        self.assertEqual(saved_acc["proxy_url"], "http://user:pass@proxy.example.com:8080")
+
+    async def test_cloudcode_passthrough_sanitizes_uppercase_roles(self):
+        oa = AccountSession(
+            account_id="acc_role_test",
+            email="role_test@gmail.com",
+            refresh_token="rf_role",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_role_test"] = oa
+
+        captured_requests = []
+
+        class MockResponse:
+            status_code = 200
+            content = b'{"response": {}}'
+            text = '{"response": {}}'
+            headers = {"content-type": "application/json"}
+            def json(self):
+                return {"response": {}}
+
+        class MockHttpClient:
+            async def post(self, url, **kwargs):
+                captured_requests.append((url, kwargs))
+                return MockResponse()
+
+        oa.get_http_client = unittest.mock.AsyncMock(return_value=MockHttpClient())
+        oa.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer mock_tok"})
+
+        payload = {
+            "model": "claude-3-5-sonnet",
+            "request": {
+                "contents": [
+                    {"role": "USER", "parts": [{"text": "Hello"}]},
+                    {"role": "context", "parts": [{"text": "Context info"}]},
+                    {"role": "MODEL", "parts": [{"text": "Hi there"}]},
+                ]
+            }
+        }
+        resp = await self.client.post("/v1internal:streamGenerateContent", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(captured_requests), 1)
+
+        sent_json = captured_requests[0][1]["json"]
+        self.assertEqual(sent_json["model"], "claude-sonnet-4-6")
+        contents = sent_json["request"]["contents"]
+        self.assertEqual(contents[0]["role"], "user")
+        self.assertEqual(contents[1]["role"], "user")
+        self.assertEqual(contents[2]["role"], "model")
+
+    async def test_cloudcode_passthrough_failover_on_error(self):
+        acc1 = AccountSession(
+            account_id="acc_fail1",
+            email="fail1@gmail.com",
+            refresh_token="rf_1",
+            is_primary=True,
+        )
+        acc2 = AccountSession(
+            account_id="acc_ok2",
+            email="ok2@gmail.com",
+            refresh_token="rf_2",
+            is_primary=False,
+        )
+        self.pool.accounts["acc_fail1"] = acc1
+        self.pool.accounts["acc_ok2"] = acc2
+
+        class MockResp500:
+            status_code = 500
+            text = '{"error": {"code": 500, "message": "Unknown Error."}}'
+            content = text.encode("utf-8")
+            headers = {"content-type": "application/json"}
+            def json(self):
+                return {"error": {"code": 500, "message": "Unknown Error."}}
+
+        class MockResp200:
+            status_code = 200
+            text = '{"response": {"text": "Success from acc2"}}'
+            content = text.encode("utf-8")
+            headers = {"content-type": "application/json"}
+            def json(self):
+                return {"response": {"text": "Success from acc2"}}
+
+        class Client1:
+            async def post(self, url, **kwargs):
+                return MockResp500()
+
+        class Client2:
+            async def post(self, url, **kwargs):
+                return MockResp200()
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=Client1())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok1"})
+        acc2.get_http_client = unittest.mock.AsyncMock(return_value=Client2())
+        acc2.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok2"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={"model": "gemini-2.5-flash", "request": {"contents": [{"role": "user", "parts": [{"text": "test"}]}]}},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Success from acc2"}})
+        self.assertEqual(acc2.total_requests, 1)
+
+    async def test_cloudcode_passthrough_matches_authorization_token(self):
+        acc1 = AccountSession(
+            account_id="acc_a",
+            email="user_a@gmail.com",
+            access_token="token_a",
+            refresh_token="rf_a",
+            is_primary=True,
+        )
+        acc2 = AccountSession(
+            account_id="acc_b",
+            email="user_b@gmail.com",
+            access_token="token_b",
+            refresh_token="rf_b",
+            is_primary=False,
+        )
+        self.pool.accounts["acc_a"] = acc1
+        self.pool.accounts["acc_b"] = acc2
+
+        called_account = []
+
+        class MockUserClient:
+            def __init__(self, acc):
+                self.acc = acc
+            async def post(self, url, **kwargs):
+                called_account.append(self.acc.email)
+                return unittest.mock.Mock(status_code=200, json=lambda: {"user": self.acc.email})
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=MockUserClient(acc1))
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer token_a"})
+        acc2.get_http_client = unittest.mock.AsyncMock(return_value=MockUserClient(acc2))
+        acc2.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer token_b"})
+
+        # Call with Authorization matching acc2
+        resp = await self.client.post(
+            "/v1internal:retrieveUserQuotaSummary",
+            headers={"Authorization": "Bearer token_b"},
+            json={"project": "aicode-consumers"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(called_account, ["user_b@gmail.com"])
 
 
 if __name__ == "__main__":

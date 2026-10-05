@@ -36,7 +36,7 @@ class BaseAccountSession:
         self.is_primary = is_primary
         self.enabled = enabled
         self.on_token_refreshed = on_token_refreshed
-        self.proxy_url = proxy_url or kwargs.get("proxy_url")
+        self.proxy_url = proxy_url or kwargs.get("proxy_url") or kwargs.get("proxy")
 
         self.error_message: str | None = None
         self.total_requests: int = kwargs.get("total_requests", 0)
@@ -48,6 +48,21 @@ class BaseAccountSession:
         self._lock = asyncio.Lock()
         self._http_client: httpx.AsyncClient | None = None
 
+    def set_proxy_url(self, proxy_url: str | None):
+        """Updates proxy URL and automatically closes cached HTTP client so new connection uses proxy."""
+        clean = proxy_url.strip() if (proxy_url and isinstance(proxy_url, str) and proxy_url.strip()) else None
+        if clean != self.proxy_url:
+            self.proxy_url = clean
+            if self._http_client and not self._http_client.is_closed:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(self.close())
+                    else:
+                        loop.run_until_complete(self.close())
+                except Exception:
+                    self._http_client = None
+
     @property
     def disabled(self) -> bool:
         return not self.enabled
@@ -58,10 +73,11 @@ class BaseAccountSession:
 
     async def get_http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
+            effective_proxy = self.proxy_url or os.environ.get("AGY_UPSTREAM_PROXY") or os.environ.get("ALL_PROXY") or None
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout=300.0, connect=20.0, read=300.0, write=120.0, pool=30.0),
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0),
-                proxy=self.proxy_url,
+                proxy=effective_proxy,
             )
         return self._http_client
 

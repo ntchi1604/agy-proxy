@@ -576,7 +576,7 @@ class TestServerSwitcherRoutes(unittest.IsolatedAsyncioTestCase):
             mock_token_file.write_text(json.dumps(cli_tok_data), encoding="utf-8")
 
             with patch("agy_proxy.switcher.resolve_antigravity_destinations", return_value=[mock_token_file]):
-                cli_acc, ide_acc = get_active_antigravity_accounts(pool)
+                cli_acc, ide_acc, standalone_acc = get_active_antigravity_accounts(pool)
                 self.assertIsNotNone(cli_acc)
                 self.assertEqual(cli_acc.account_id, "acc_jwt_test")
                 self.assertEqual(cli_acc.email, "vitay200@gmail.com")

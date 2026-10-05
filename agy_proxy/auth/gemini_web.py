@@ -183,6 +183,7 @@ class GeminiWebSession(AccountSession):
         on_token_refreshed: Any | None = None,
         cookies: dict[str, str] | None = None,
         cdp_port: int = 9222,
+        proxy_url: str | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -194,6 +195,8 @@ class GeminiWebSession(AccountSession):
             is_primary=is_primary,
             enabled=enabled,
             on_token_refreshed=on_token_refreshed,
+            proxy_url=proxy_url or kwargs.get("proxy_url"),
+            **kwargs,
         )
         self._cookies: dict[str, str] = cookies or {}
         self._at_token: str | None = None
