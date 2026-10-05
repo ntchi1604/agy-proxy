@@ -183,6 +183,7 @@ def sanitize_gemini_schema(schema: Any) -> Any:
             "$schema",
             "$id",
             "$defs",
+            "$ref",
             "definitions",
             "title",
             "additionalProperties",
@@ -234,10 +235,42 @@ def sanitize_gemini_schema(schema: Any) -> Any:
             if "type" not in node:
                 node["type"] = "array"
 
-        # 4. Recursively normalize combinators
-        for comb in ("anyOf", "allOf", "oneOf"):
+        # 4. Flatten and normalize combinators (anyOf, oneOf, allOf) for Google Gemini proto compliance
+        for comb in ("anyOf", "oneOf"):
             if comb in node and isinstance(node[comb], list):
-                node[comb] = [_normalize_node(x) for x in node[comb]]
+                sub_options = node.pop(comb)
+                has_null = False
+                valid_options = []
+                for opt in sub_options:
+                    if isinstance(opt, dict):
+                        opt_norm = _normalize_node(opt)
+                        if opt_norm.get("type") == "null" or opt_norm.get("nullable") is True:
+                            has_null = True
+                        if opt_norm.get("type") != "null":
+                            valid_options.append(opt_norm)
+                if has_null:
+                    node["nullable"] = True
+                if valid_options:
+                    first = valid_options[0]
+                    for k, v in first.items():
+                        if k not in node:
+                            node[k] = v
+
+        if "allOf" in node and isinstance(node["allOf"], list):
+            sub_options = node.pop("allOf")
+            for opt in sub_options:
+                if isinstance(opt, dict):
+                    opt_norm = _normalize_node(opt)
+                    if "properties" in opt_norm and isinstance(opt_norm["properties"], dict):
+                        node.setdefault("properties", {}).update(opt_norm["properties"])
+                    if "required" in opt_norm and isinstance(opt_norm["required"], list):
+                        curr_req = node.setdefault("required", [])
+                        for r in opt_norm["required"]:
+                            if r not in curr_req:
+                                curr_req.append(r)
+                    for k in ("type", "description"):
+                        if k in opt_norm and k not in node:
+                            node[k] = opt_norm[k]
 
         # 5. Infer type if missing
         if not node.get("type"):

@@ -491,7 +491,42 @@ function convertMessagesToGemini(reqJson) {
       roleLower === "assistant" || roleLower === "model" ? "model" : "user";
     const parts = [];
 
-    if (typeof m.content === "string") {
+    // OpenAI tool calls on assistant message
+    if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+      for (const tc of m.tool_calls) {
+        const fnName = tc?.function?.name || tc?.name || "tool";
+        let fnArgs = tc?.function?.arguments || tc?.arguments || {};
+        if (typeof fnArgs === "string") {
+          try { fnArgs = JSON.parse(fnArgs); } catch (e) { fnArgs = {}; }
+        }
+        parts.push({
+          functionCall: {
+            name: fnName,
+            args: fnArgs,
+            id: tc?.id || `call_${Math.random().toString(36).substring(2, 9)}`,
+          },
+          thoughtSignature: "context_engineering_is_the_way_to_go",
+        });
+      }
+    }
+
+    // OpenAI tool response message (role == "tool")
+    if (roleLower === "tool") {
+      let respContent = m.content;
+      if (typeof respContent === "string") {
+        try { respContent = JSON.parse(respContent); } catch (e) { respContent = { result: respContent }; }
+      }
+      if (!respContent || typeof respContent !== "object") {
+        respContent = { result: String(respContent || "") };
+      }
+      parts.push({
+        functionResponse: {
+          name: m.name || "tool_call",
+          id: m.tool_call_id || "",
+          response: respContent,
+        },
+      });
+    } else if (typeof m.content === "string") {
       if (m.content) parts.push({ text: m.content });
     } else if (Array.isArray(m.content)) {
       for (const block of m.content) {
@@ -502,6 +537,23 @@ function convertMessagesToGemini(reqJson) {
           parts.push({ text: block.text });
         } else if (block.type === "thinking" && block.thinking) {
           parts.push({ thought: true, text: block.thinking });
+        } else if (block.type === "tool_use") {
+          parts.push({
+            functionCall: {
+              name: block.name || "tool",
+              args: block.input || {},
+              id: block.id || `call_${Math.random().toString(36).substring(2, 9)}`,
+            },
+            thoughtSignature: "context_engineering_is_the_way_to_go",
+          });
+        } else if (block.type === "tool_result") {
+          parts.push({
+            functionResponse: {
+              name: block.name || "tool",
+              id: block.tool_use_id || "",
+              response: { result: block.content },
+            },
+          });
         } else if (block.type === "image" && block.source) {
           parts.push({
             inlineData: {
@@ -537,6 +589,119 @@ function convertMessagesToGemini(reqJson) {
   return { systemText, contents };
 }
 
+function sanitizeGeminiSchema(schema) {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return schema;
+  }
+  const forbidden = [
+    "$schema", "$id", "$defs", "$ref", "definitions", "title",
+    "additionalProperties", "exclusiveMinimum", "exclusiveMaximum", "const",
+    "examples", "deprecated", "readOnly", "writeOnly", "contentMediaType",
+    "contentEncoding", "uniqueItems", "multipleOf", "propertyNames",
+    "prefixItems", "unevaluatedProperties", "unevaluatedItems", "minContains",
+    "maxContains", "patternProperties",
+  ];
+
+  function normalizeNode(node) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return node;
+    const res = { ...node };
+
+    if ("const" in res) {
+      const cVal = res.const;
+      delete res.const;
+      if (!res.enum) res.enum = [cVal];
+    }
+    if (typeof res.exclusiveMinimum === "number" && !("minimum" in res)) {
+      res.minimum = res.exclusiveMinimum;
+    }
+    if (typeof res.exclusiveMaximum === "number" && !("maximum" in res)) {
+      res.maximum = res.exclusiveMaximum;
+    }
+
+    for (const f of forbidden) delete res[f];
+
+    if (Array.isArray(res.type)) {
+      const nonNull = res.type.filter((t) => t !== "null");
+      res.type = nonNull.length > 0 ? String(nonNull[0]).toLowerCase() : "string";
+      if (res.type.includes("null")) res.nullable = true;
+    } else if (typeof res.type === "string") {
+      res.type = res.type.toLowerCase();
+    }
+
+    if (res.properties && typeof res.properties === "object" && !Array.isArray(res.properties)) {
+      const newProps = {};
+      for (const [k, v] of Object.entries(res.properties)) {
+        newProps[k] = normalizeNode(v);
+      }
+      res.properties = newProps;
+      if (!res.type) res.type = "object";
+    }
+
+    if (res.items) {
+      if (Array.isArray(res.items)) {
+        res.items = res.items.map(normalizeNode);
+      } else if (typeof res.items === "object") {
+        res.items = normalizeNode(res.items);
+      }
+      if (!res.type) res.type = "array";
+    }
+
+    for (const comb of ["anyOf", "oneOf"]) {
+      if (Array.isArray(res[comb])) {
+        const sub = res[comb];
+        delete res[comb];
+        let hasNull = false;
+        const valid = [];
+        for (const opt of sub) {
+          if (opt && typeof opt === "object") {
+            const nOpt = normalizeNode(opt);
+            if (nOpt.type === "null" || nOpt.nullable === true) hasNull = true;
+            if (nOpt.type !== "null") valid.push(nOpt);
+          }
+        }
+        if (hasNull) res.nullable = true;
+        if (valid.length > 0) {
+          const first = valid[0];
+          for (const [k, v] of Object.entries(first)) {
+            if (!(k in res)) res[k] = v;
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(res.allOf)) {
+      const sub = res.allOf;
+      delete res.allOf;
+      for (const opt of sub) {
+        if (opt && typeof opt === "object") {
+          const nOpt = normalizeNode(opt);
+          if (nOpt.properties && typeof nOpt.properties === "object") {
+            res.properties = { ...(res.properties || {}), ...nOpt.properties };
+          }
+          if (Array.isArray(nOpt.required)) {
+            res.required = Array.from(new Set([...(res.required || []), ...nOpt.required]));
+          }
+          if (nOpt.type && !res.type) res.type = nOpt.type;
+          if (nOpt.description && !res.description) res.description = nOpt.description;
+        }
+      }
+    }
+
+    if (!res.type) {
+      if (res.properties) res.type = "object";
+      else if (res.items) res.type = "array";
+      else if (res.enum) res.type = "string";
+      else res.type = "string";
+    }
+
+    return res;
+  }
+
+  const sanitized = normalizeNode(schema);
+  if (!sanitized.type) sanitized.type = "object";
+  return sanitized;
+}
+
 function buildCloudCodePayload(reqJson, backendModel, auth) {
   const { systemText, contents } = convertMessagesToGemini(reqJson);
   const innerRequest = { contents };
@@ -566,13 +731,26 @@ function buildCloudCodePayload(reqJson, backendModel, auth) {
   if (Array.isArray(reqJson.tools) && reqJson.tools.length > 0) {
     const decls = [];
     for (const t of reqJson.tools) {
-      const fn = t.function || t;
-      if (fn && fn.name) {
+      if (!t || typeof t !== "object") continue;
+      const custom = (t.custom && typeof t.custom === "object") ? t.custom : {};
+      const fn = (t.function && typeof t.function === "object") ? t.function : {};
+      const name = t.name || custom.name || fn.name;
+      if (name) {
+        const desc = t.description || custom.description || fn.description || "";
+        const rawParams =
+          t.input_schema ||
+          custom.input_schema ||
+          t.parameters ||
+          custom.parameters ||
+          fn.parameters ||
+          fn.input_schema;
         decls.push({
-          name: fn.name,
-          description: fn.description || "",
+          name: name,
+          description: desc,
           parameters:
-            fn.parameters || fn.input_schema || { type: "object", properties: {} },
+            rawParams && typeof rawParams === "object"
+              ? sanitizeGeminiSchema(rawParams)
+              : { type: "object", properties: {} },
         });
       }
     }

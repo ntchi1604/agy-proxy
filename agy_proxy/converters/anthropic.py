@@ -238,15 +238,18 @@ def anthropic_to_cloudcode_payload(
             if not isinstance(t_dict, dict):
                 continue
             t_custom = t_dict.get("custom") if isinstance(t_dict.get("custom"), dict) else {}
-            tool_name = t_dict.get("name") or t_custom.get("name")
+            fn = t_dict.get("function") if isinstance(t_dict.get("function"), dict) else {}
+            tool_name = t_dict.get("name") or t_custom.get("name") or fn.get("name")
             if not tool_name:
                 continue
-            tool_desc = t_dict.get("description") or t_custom.get("description", "")
+            tool_desc = t_dict.get("description") or t_custom.get("description") or fn.get("description", "")
             params = (
                 t_dict.get("input_schema")
                 or t_custom.get("input_schema")
                 or t_dict.get("parameters")
                 or t_custom.get("parameters")
+                or fn.get("parameters")
+                or fn.get("input_schema")
             )
             decl: dict[str, Any] = {
                 "name": tool_name,

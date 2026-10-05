@@ -93,30 +93,31 @@ def openai_to_cloudcode_payload(
         gemini_role = "model" if role == "assistant" else "user"
         parts: list[dict[str, Any]] = []
 
-        # Convert text / multimodal content
-        if isinstance(content, str) and content:
-            parts.append({"text": content})
-        elif isinstance(content, list):
-            for part in content:
-                if not isinstance(part, dict):
-                    continue
-                p_type = part.get("type")
-                if p_type == "text":
-                    txt = part.get("text", "")
-                    if txt:
-                        parts.append({"text": txt})
-                elif p_type == "image_url":
-                    img_url = part.get("image_url", {}).get("url", "")
-                    mime_type, b64_data = _extract_media_from_url(img_url)
-                    if b64_data:
-                        parts.append({
-                            "inlineData": {
-                                "mimeType": mime_type,
-                                "data": b64_data,
-                            }
-                        })
-                    else:
-                        parts.append({"text": f"[Image: {img_url}]"})
+        # Convert text / multimodal content (only for non-tool messages; tool responses are handled under role == "tool")
+        if role != "tool":
+            if isinstance(content, str) and content:
+                parts.append({"text": content})
+            elif isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    p_type = part.get("type")
+                    if p_type == "text":
+                        txt = part.get("text", "")
+                        if txt:
+                            parts.append({"text": txt})
+                    elif p_type == "image_url":
+                        img_url = part.get("image_url", {}).get("url", "")
+                        mime_type, b64_data = _extract_media_from_url(img_url)
+                        if b64_data:
+                            parts.append({
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": b64_data,
+                                }
+                            })
+                        else:
+                            parts.append({"text": f"[Image: {img_url}]"})
 
         # Handle tool calls made by assistant
         if tool_calls:
@@ -240,37 +241,43 @@ def openai_to_cloudcode_payload(
     if req.tools:
         function_declarations: list[dict[str, Any]] = []
         for t in req.tools:
-            if not isinstance(t, dict):
+            t_dict = to_dict(t) if not isinstance(t, dict) else t
+            if not isinstance(t_dict, dict):
                 continue
-            if t.get("type") == "function" and "function" in t:
-                fn = t.get("function", {})
-                tool_name = fn.get("name")
-                if not tool_name:
-                    continue
-                decl = {
-                    "name": tool_name,
-                    "description": fn.get("description", ""),
-                }
-                params = fn.get("parameters") or fn.get("input_schema")
-                if params and isinstance(params, dict):
-                    decl["parameters"] = sanitize_gemini_schema(params)
-                else:
-                    decl["parameters"] = {"type": "object", "properties": {}}
-                function_declarations.append(decl)
-            elif "name" in t:
-                tool_name = t.get("name")
-                if not tool_name:
-                    continue
-                decl = {
-                    "name": tool_name,
-                    "description": t.get("description", ""),
-                }
-                params = t.get("parameters") or t.get("input_schema")
-                if params and isinstance(params, dict):
-                    decl["parameters"] = sanitize_gemini_schema(params)
-                else:
-                    decl["parameters"] = {"type": "object", "properties": {}}
-                function_declarations.append(decl)
+
+            t_custom = t_dict.get("custom") if isinstance(t_dict.get("custom"), dict) else {}
+            fn = t_dict.get("function") if isinstance(t_dict.get("function"), dict) else {}
+
+            tool_name = (
+                fn.get("name")
+                or t_dict.get("name")
+                or t_custom.get("name")
+            )
+            if not tool_name:
+                continue
+
+            tool_desc = (
+                fn.get("description")
+                or t_dict.get("description")
+                or t_custom.get("description", "")
+            )
+            params = (
+                fn.get("parameters")
+                or fn.get("input_schema")
+                or t_dict.get("parameters")
+                or t_dict.get("input_schema")
+                or t_custom.get("parameters")
+                or t_custom.get("input_schema")
+            )
+            decl: dict[str, Any] = {
+                "name": tool_name,
+                "description": tool_desc or "",
+            }
+            if params and isinstance(params, dict):
+                decl["parameters"] = sanitize_gemini_schema(params)
+            else:
+                decl["parameters"] = {"type": "object", "properties": {}}
+            function_declarations.append(decl)
 
         if function_declarations:
             inner_request["tools"] = [{"functionDeclarations": function_declarations}]

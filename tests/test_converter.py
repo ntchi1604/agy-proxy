@@ -815,6 +815,108 @@ class TestModularConvertersPackage(unittest.TestCase):
         has_fr = any(p.get("functionResponse", {}).get("id") == "call_calc_1" for p in user_parts if "functionResponse" in p)
         self.assertTrue(has_fr)
 
+    def test_openai_tool_role_no_duplicate_text_part(self):
+        from agy_proxy.converters.openai import openai_to_cloudcode_payload
+        from agy_proxy.models import OpenAIChatRequest
+
+        req = OpenAIChatRequest(
+            model="claude-sonnet-4-6",
+            messages=[
+                {"role": "user", "content": "List files"},
+                {
+                    "role": "assistant",
+                    "content": "Running ls",
+                    "tool_calls": [
+                        {
+                            "id": "call_abc_1",
+                            "type": "function",
+                            "function": {"name": "ls", "arguments": "{}"},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call_abc_1",
+                    "content": "output.txt\nlog.txt",
+                },
+            ],
+        )
+        payload = openai_to_cloudcode_payload(req, project_id="test-p")
+        contents = payload["request"]["contents"]
+        # messages.2 (user turn responding with tool) must ONLY contain functionResponse, no duplicate text
+        self.assertEqual(len(contents), 3)
+        user_turn_parts = contents[2]["parts"]
+        self.assertEqual(len(user_turn_parts), 1)
+        self.assertIn("functionResponse", user_turn_parts[0])
+        self.assertNotIn("text", user_turn_parts[0])
+
+    def test_openai_custom_tool_schema_support(self):
+        from agy_proxy.converters.openai import openai_to_cloudcode_payload
+        from agy_proxy.models import OpenAIChatRequest
+
+        req = OpenAIChatRequest(
+            model="gemini-3.8-flash-high",
+            messages=[{"role": "user", "content": "Test"}],
+            tools=[
+                {
+                    "type": "custom",
+                    "custom": {
+                        "name": "cline_execute",
+                        "description": "Execute a command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": {
+                                    "type": "string",
+                                    "description": "The command",
+                                }
+                            },
+                            "required": ["command"],
+                        },
+                    },
+                }
+            ],
+        )
+        payload = openai_to_cloudcode_payload(req, project_id="test-p")
+        tools = payload["request"].get("tools")
+        self.assertIsNotNone(tools)
+        funcs = tools[0]["functionDeclarations"]
+        self.assertEqual(len(funcs), 1)
+        self.assertEqual(funcs[0]["name"], "cline_execute")
+        self.assertIn("command", funcs[0]["parameters"]["properties"])
+
+    def test_sanitize_gemini_schema_anyof_and_allof(self):
+        from agy_proxy.converters.common import sanitize_gemini_schema
+
+        raw_schema = {
+            "type": "object",
+            "properties": {
+                "optional_str": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}],
+                    "description": "Optional string param",
+                },
+                "composite": {
+                    "allOf": [
+                        {"properties": {"field_a": {"type": "string"}}, "required": ["field_a"]},
+                        {"properties": {"field_b": {"type": "integer"}}, "required": ["field_b"]},
+                    ]
+                },
+            },
+        }
+        clean = sanitize_gemini_schema(raw_schema)
+        self.assertEqual(clean["type"], "object")
+        opt = clean["properties"]["optional_str"]
+        self.assertEqual(opt["type"], "string")
+        self.assertTrue(opt["nullable"])
+        self.assertNotIn("anyOf", opt)
+
+        comp = clean["properties"]["composite"]
+        self.assertIn("field_a", comp["properties"])
+        self.assertIn("field_b", comp["properties"])
+        self.assertIn("field_a", comp["required"])
+        self.assertIn("field_b", comp["required"])
+        self.assertNotIn("allOf", comp)
+
 
 if __name__ == "__main__":
     unittest.main()
