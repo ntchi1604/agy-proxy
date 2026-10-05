@@ -43,3 +43,7 @@ scratch/
 *.bak.*
 *.mitm
 
+# Cloudflare
+.wrangler/
+worker-configuration.d.ts
+

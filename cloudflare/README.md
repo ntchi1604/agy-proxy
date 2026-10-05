@@ -45,7 +45,7 @@ agy-proxy --port 8000
 
 ### Mode 2: 100% Serverless Standalone Mode (No PC needed)
 
-In this mode, Cloudflare Worker runs the entire proxy logic and token refreshes in the cloud.
+In this mode, the Cloudflare Worker runs the entire proxy logic, token refreshes, and multi-account failover directly in the cloud.
 
 #### 1. Upload your accounts to Cloudflare Secrets
 Run this single command from your local machine to upload your existing account pool:
@@ -53,6 +53,7 @@ Run this single command from your local machine to upload your existing account 
 cd cloudflare
 npx wrangler secret put ACCOUNTS_JSON < ~/.config/agy-proxy/accounts.json
 ```
+*(Supports standard `accounts.json`, `api_keys.json`, or export files from `/api/accounts/export`)*
 
 #### 2. (Optional) Set an API Key for security
 ```bash
@@ -67,9 +68,22 @@ npx wrangler deploy
 
 #### 4. Use your Serverless URL in your IDE / CLI
 You can now directly use:
-- **Base URL**: `https://agy-proxy-edge.<your-subdomain>.workers.dev/v1`
+- **OpenAI Base URL**: `https://agy-proxy-edge.<your-subdomain>.workers.dev/v1`
+- **Anthropic Base URL**: `https://agy-proxy-edge.<your-subdomain>.workers.dev`
 - **API Key**: `dummy` (or your `PROXY_API_KEY`)
-- **Model**: `gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `claude-3-7-sonnet`, `gpt-4o`
+- **Default Model**: `gemini-3.8-flash-high`
+- **Supported Models**: `gemini-3.8-flash-high`, `gemini-3.8-flash-medium`, `claude-sonnet-4-6`, `claude-3-7-sonnet`, `claude-3-5-sonnet`, `gpt-4o`, `gpt-4o-mini`, `o1`, `deepseek-r1`
+
+---
+
+## 💡 Key Features in v2.2.0
+
+- **Upstream User-Agent**: Updated to `antigravity/hub/2.19.1` matching official client telemetry.
+- **Multi-Account Failover Loop**: Automatically rotates and fails over to healthy accounts on `429 Too Many Requests`, `401 Unauthorized` (with token refresh), or `5xx Server Error`.
+- **Role Sanitization**: Message roles are strictly mapped to `user` or `model` (lowercase) and system instructions are extracted into `systemInstruction`, preventing CloudCode Error 500 on Claude models.
+- **Claude Code CLI Compatibility**: Full support for Claude Code endpoints (`/api/hello`, `/api/claude_cli/bootstrap`, `/api/claude_code_penguin_mode`, `/api/web/domain_info`, `/v1/messages`).
+- **OpenAI Responses API**: Compatible with Codex CLI and OpenAI `/v1/responses` endpoints.
+- **Disabled Accounts Filter**: Ignores disabled accounts (`enabled: false`) when parsing credentials.
 
 ---
 

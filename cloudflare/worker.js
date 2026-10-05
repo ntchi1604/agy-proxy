@@ -3,11 +3,23 @@
  * Antigravity Cloudflare Edge Proxy & Serverless Worker (agy-proxy-edge)
  * =============================================================================
  * - Global Edge Geo-Bypass for Google CloudCode, Gemini & Anthropic Antigravity APIs
- * - Transparent Streaming (SSE) pass-through with zero buffering
- * - Dual Mode:
+ * - Transparent Streaming (SSE) pass-through with zero buffering in Gateway Mode
+ * - Full Dual Mode:
  *   1. Gateway / Upstream Mode (for agy-proxy)
- *   2. Standalone Serverless Mode (routes /v1/chat/completions using ACCOUNTS_JSON secret)
+ *   2. Standalone Serverless Mode (OpenAI / Anthropic / Responses APIs using ACCOUNTS_JSON)
+ * - Multi-account failover loop on 429/401/5xx errors
+ * - Role sanitization (user/model) preventing CloudCode 500 errors
+ * - Full model catalog & normalization matching agy-proxy v1.5.0+
  */
+
+const DEFAULT_USER_AGENT =
+  "antigravity/hub/2.19.1 (aidev_client; os_type=linux; arch=amd64; cl=991101027)";
+
+const DEFAULT_MODEL = "gemini-3.8-flash-high";
+
+const DEFAULT_CLIENT_ID =
+  "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const DEFAULT_CLIENT_SECRET = "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";
 
 const UPSTREAM_TARGETS = {
   cloudcode: "https://daily-cloudcode-pa.googleapis.com",
@@ -15,9 +27,6 @@ const UPSTREAM_TARGETS = {
   oauth: "https://oauth2.googleapis.com",
   userinfo: "https://www.googleapis.com/oauth2/v2",
 };
-
-const DEFAULT_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
-const DEFAULT_CLIENT_SECRET = "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";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -28,20 +37,372 @@ const CORS_HEADERS = {
   "Retry-After": "2",
 };
 
-// In-memory token cache across warm worker invocations
-const tokenCache = new Map();
+// -----------------------------------------------------------------------------
+// Model Definitions & Aliases (matches agy_proxy/models.py)
+// -----------------------------------------------------------------------------
 
-async function getAccessToken(account) {
+const VALID_CLOUDCODE_MODELS = new Set([
+  // Gemini 3.8
+  "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low",
+  "gemini-3.8-flash-tiered",
+  // Gemini 3.7
+  "gemini-3.7-flash-high",
+  "gemini-3.7-flash-medium",
+  "gemini-3.7-flash-low",
+  "gemini-3.7-flash-tiered",
+  // Gemini 3.6
+  "gemini-3.6-flash-high",
+  "gemini-3.6-flash-medium",
+  "gemini-3.6-flash-low",
+  "gemini-3.6-flash-tiered",
+  // Gemini 3.5 & earlier
+  "gemini-3.5-flash-low",
+  "gemini-3.5-flash-extra-low",
+  "gemini-3.5-flash-lite",
+  "gemini-pro-agent",
+  "gemini-3.1-pro-high",
+  "gemini-3.1-pro-low",
+  "gemini-3.1-flash-lite",
+  "gemini-3.1-flash-image",
+  "gemini-3-flash",
+  "gemini-3-flash-agent",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash-thinking",
+  // 3rd Party models
+  "claude-sonnet-4-6",
+  "claude-opus-4-6-thinking",
+  "gpt-oss-120b-medium",
+]);
+
+const MODEL_ALIASES = {
+  // Gemini 3.8
+  "gemini-3.8-flash": "gemini-3.8-flash-high",
+  "gemini-3.8-flash-high": "gemini-3.8-flash-high",
+  "gemini-3.8-flash-medium": "gemini-3.8-flash-medium",
+  "gemini-3.8-flash-low": "gemini-3.8-flash-low",
+  "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
+  "gemini-3.8": "gemini-3.8-flash-high",
+  "gemini-3-8": "gemini-3.8-flash-high",
+  "gemini-3.8-flash-preview": "gemini-3.8-flash-high",
+
+  // Generic Gemini Aliases
+  flash: "gemini-3.8-flash-high",
+  "flash-lite": "gemini-3.1-flash-lite",
+  pro: "gemini-3.1-pro-low",
+  "gemini-flash": "gemini-3.8-flash-high",
+  "gemini-flash-thinking": "gemini-3.8-flash-high",
+  "gemini-pro": "gemini-3.1-pro-low",
+
+  // Gemini 3.7
+  "gemini-3.7-flash": "gemini-3.7-flash-high",
+  "gemini-3.7-flash-high": "gemini-3.7-flash-high",
+  "gemini-3.7-flash-medium": "gemini-3.7-flash-medium",
+  "gemini-3.7-flash-low": "gemini-3.7-flash-low",
+  "gemini-3.7-flash-tiered": "gemini-3.7-flash-tiered",
+
+  // Gemini 3.6
+  "gemini-3.6-flash": "gemini-3.6-flash-tiered",
+  "gemini-3.6-flash-high": "gemini-3.6-flash-high",
+  "gemini-3.6-flash-medium": "gemini-3.6-flash-medium",
+  "gemini-3.6-flash-low": "gemini-3.6-flash-low",
+  "gemini-3.6-flash-tiered": "gemini-3.6-flash-tiered",
+
+  // Gemini 3.5 & earlier
+  "gemini-3.5-flash": "gemini-3.5-flash-low",
+  "gemini-3.5-flash-low": "gemini-3.5-flash-low",
+  "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
+  "gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
+  "gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
+  "gemini-3.5-lite": "gemini-3.5-flash-lite",
+  "gemini-3-flash": "gemini-3.8-flash-tiered",
+  "gemini-3-flash-agent": "gemini-3.8-flash-tiered",
+  "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
+  "gemini-3.1-flash-image": "gemini-3.1-flash-image",
+  "gemini-3.1-pro": "gemini-3.1-pro-low",
+  "gemini-3.1-pro-high": "gemini-3.1-pro-high",
+  "gemini-3.1-pro-low": "gemini-3.1-pro-low",
+  "gemini-pro-agent": "gemini-pro-agent",
+  "gemini-2.5-pro": "gemini-2.5-pro",
+  "gemini-2.5-flash": "gemini-2.5-flash",
+  "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
+  "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
+
+  // Claude Aliases
+  claude: "claude-sonnet-4-6",
+  "claude-sonnet-4-6": "claude-sonnet-4-6",
+  "claude-sonnet-4.6": "claude-sonnet-4-6",
+  "claude-opus-4-6-thinking": "claude-opus-4-6-thinking",
+  "claude-opus-4-6": "claude-opus-4-6-thinking",
+  "claude-opus-4.6": "claude-opus-4-6-thinking",
+  "claude-3-7-sonnet": "claude-sonnet-4-6",
+  "claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
+  "claude-3-5-sonnet": "claude-sonnet-4-6",
+  "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
+  "claude-3-5-sonnet-latest": "claude-sonnet-4-6",
+  "claude-3-opus": "claude-opus-4-6-thinking",
+  "claude-3-opus-20240229": "claude-opus-4-6-thinking",
+  "claude-3-5-haiku": "gemini-3.1-flash-lite",
+  "claude-3-haiku": "gemini-3.1-flash-lite",
+
+  // OpenAI Codex Models
+  "gpt-6-astra": "gemini-3.8-flash-high",
+  "gpt-6": "gemini-3.8-flash-high",
+  "gpt-5.6-sol": "gemini-3.8-flash-high",
+  "gpt-5.6-terra": "gemini-3.8-flash-medium",
+  "gpt-5.6-luna": "gemini-3.1-flash-lite",
+  "gpt-5.5": "gemini-3.8-flash-high",
+  "gpt-5.4": "gemini-3.8-flash-high",
+  "gpt-5.4-mini": "gemini-3.1-flash-lite",
+  "gpt-5.2": "gemini-3.7-flash-high",
+
+  // Standard OpenAI Models
+  "gpt-4o": "gemini-3.8-flash-high",
+  "gpt-4o-mini": "gemini-3.1-flash-lite",
+  "gpt-4-turbo": "gemini-3.8-flash-high",
+  "gpt-4": "gemini-3.8-flash-high",
+  "gpt-3.5-turbo": "gemini-3.1-flash-lite",
+  o1: "gemini-3.8-flash-high",
+  "o1-mini": "gemini-3.8-flash-high",
+  "o3-mini": "gemini-3.8-flash-high",
+  "gpt-oss-120b": "gpt-oss-120b-medium",
+  "gpt-oss-120b-medium": "gpt-oss-120b-medium",
+
+  // DeepSeek / Open Source Aliases
+  "deepseek-r1": "gemini-3.8-flash-high",
+  "deepseek-v3": "gemini-3.8-flash-high",
+};
+
+const PROXY_MODELS_LIST = [
+  // Flagship Gemini
+  { id: "gemini-3.8-flash-high", object: "model", owned_by: "google", description: "Google Gemini 3.8 Flash High Reasoning (Default)" },
+  { id: "gemini-3.8-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Medium Reasoning" },
+  { id: "gemini-3.8-flash-low", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Low Reasoning" },
+  { id: "gemini-3.8-flash-tiered", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Tiered" },
+  { id: "gemini-3.7-flash-high", object: "model", owned_by: "google", description: "Gemini 3.7 Flash High Reasoning" },
+  { id: "gemini-3.7-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.7 Flash Medium Reasoning" },
+  { id: "gemini-3.6-flash-tiered", object: "model", owned_by: "google", description: "Gemini 3.6 Flash Tiered" },
+  { id: "gemini-3.5-flash-lite", object: "model", owned_by: "google", description: "Gemini 3.5 Flash Lite" },
+  { id: "gemini-3.1-pro-high", object: "model", owned_by: "google", description: "Gemini 3.1 Pro High" },
+  { id: "gemini-3.1-pro-low", object: "model", owned_by: "google", description: "Gemini 3.1 Pro Low" },
+  { id: "gemini-3.1-flash-lite", object: "model", owned_by: "google", description: "Gemini 3.1 Flash Lite" },
+  { id: "gemini-2.5-pro", object: "model", owned_by: "google", description: "Gemini 2.5 Pro" },
+  { id: "gemini-2.5-flash", object: "model", owned_by: "google", description: "Gemini 2.5 Flash" },
+
+  // Anthropic Claude
+  { id: "claude-sonnet-4-6", object: "model", owned_by: "anthropic", description: "Claude Sonnet 4.6 (Extended Thinking)" },
+  { id: "claude-opus-4-6-thinking", object: "model", owned_by: "anthropic", description: "Claude Opus 4.6 (Extended Thinking)" },
+  { id: "claude-3-7-sonnet", object: "model", owned_by: "anthropic-alias", description: "Claude 3.7 Sonnet alias" },
+  { id: "claude-3-5-sonnet", object: "model", owned_by: "anthropic-alias", description: "Claude 3.5 Sonnet alias" },
+  { id: "claude-3-opus", object: "model", owned_by: "anthropic-alias", description: "Claude 3 Opus alias" },
+  { id: "claude-3-5-haiku", object: "model", owned_by: "anthropic-alias", description: "Claude 3.5 Haiku alias" },
+
+  // OpenAI Codex & Standards
+  { id: "gpt-6-astra", object: "model", owned_by: "openai-alias", description: "GPT-6 Astra Flagship Codex model" },
+  { id: "gpt-5.6-sol", object: "model", owned_by: "openai-alias", description: "GPT-5.6 Sol" },
+  { id: "gpt-5.4", object: "model", owned_by: "openai-alias", description: "GPT-5.4" },
+  { id: "gpt-4o", object: "model", owned_by: "openai-alias", description: "GPT-4o Omni alias" },
+  { id: "gpt-4o-mini", object: "model", owned_by: "openai-alias", description: "GPT-4o Mini alias" },
+  { id: "o1", object: "model", owned_by: "openai-alias", description: "OpenAI o1 alias" },
+  { id: "o3-mini", object: "model", owned_by: "openai-alias", description: "OpenAI o3-mini alias" },
+
+  // DeepSeek & Open Source
+  { id: "deepseek-r1", object: "model", owned_by: "deepseek-alias", description: "DeepSeek R1 reasoning alias" },
+  { id: "deepseek-v3", object: "model", owned_by: "deepseek-alias", description: "DeepSeek V3 alias" },
+  { id: "gpt-oss-120b-medium", object: "model", owned_by: "google", description: "Google GPT-OSS 120B Medium" },
+];
+
+// Add anthropic/ and anthropic. prefixed models
+const fullModelCards = [...PROXY_MODELS_LIST];
+for (const m of PROXY_MODELS_LIST) {
+  fullModelCards.push({
+    id: `anthropic/${m.id}`,
+    object: "model",
+    owned_by: m.owned_by,
+    description: m.description,
+  });
+  fullModelCards.push({
+    id: `anthropic.${m.id}`,
+    object: "model",
+    owned_by: m.owned_by,
+    description: m.description,
+  });
+}
+
+function normalizeModelName(rawModel) {
+  if (!rawModel || typeof rawModel !== "string") return DEFAULT_MODEL;
+
+  let cleaned = rawModel.trim().toLowerCase();
+
+  // Remove provider prefixes (anthropic/, openai/, google/, models/)
+  cleaned = cleaned.replace(/^(anthropic|openai|google|models)[./]/, "").trim();
+
+  // Remove context annotations like [1m], (1m context), [thinking]
+  cleaned = cleaned.replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "").trim();
+
+  if (VALID_CLOUDCODE_MODELS.has(cleaned)) {
+    return cleaned;
+  }
+
+  if (MODEL_ALIASES[cleaned]) {
+    return MODEL_ALIASES[cleaned];
+  }
+
+  // Version-specific keyword matches
+  if (cleaned.includes("3.8") || cleaned.includes("3-8")) {
+    if (cleaned.includes("low")) return "gemini-3.8-flash-low";
+    if (cleaned.includes("med")) return "gemini-3.8-flash-medium";
+    return "gemini-3.8-flash-high";
+  }
+  if (cleaned.includes("3.7") || cleaned.includes("3-7")) {
+    if (cleaned.includes("low")) return "gemini-3.7-flash-low";
+    if (cleaned.includes("med")) return "gemini-3.7-flash-medium";
+    return "gemini-3.7-flash-high";
+  }
+  if (cleaned.includes("3.6") || cleaned.includes("3-6")) {
+    if (cleaned.includes("low")) return "gemini-3.6-flash-low";
+    if (cleaned.includes("med")) return "gemini-3.6-flash-medium";
+    return "gemini-3.6-flash-tiered";
+  }
+  if (cleaned.includes("3.5") || cleaned.includes("3-5")) {
+    if (cleaned.includes("lite")) return "gemini-3.5-flash-lite";
+    if (cleaned.includes("extra-low") || cleaned.includes("extra_low")) {
+      return "gemini-3.5-flash-extra-low";
+    }
+    return "gemini-3.5-flash-low";
+  }
+  if (cleaned.includes("3.1-pro") || cleaned.includes("3-1-pro")) {
+    return "gemini-3.1-pro-low";
+  }
+  if (cleaned.includes("2.5-pro") || cleaned.includes("2-5-pro")) {
+    return "gemini-2.5-pro";
+  }
+
+  // Family-specific keyword matches
+  if (cleaned.includes("opus")) return "claude-opus-4-6-thinking";
+  if (cleaned.includes("sonnet")) return "claude-sonnet-4-6";
+  if (
+    cleaned.includes("haiku") ||
+    cleaned.includes("flash-lite") ||
+    cleaned.includes("lite") ||
+    cleaned.includes("mini") ||
+    cleaned.includes("small")
+  ) {
+    return "gemini-3.1-flash-lite";
+  }
+  if (cleaned.includes("flash")) return "gemini-3.8-flash-high";
+  if (cleaned.includes("claude")) return "claude-sonnet-4-6";
+
+  for (const [k, v] of Object.entries(MODEL_ALIASES)) {
+    if (cleaned.startsWith(k)) return v;
+  }
+
+  return DEFAULT_MODEL;
+}
+
+// -----------------------------------------------------------------------------
+// Account Management & Token Refresh
+// -----------------------------------------------------------------------------
+
+const tokenCache = new Map();
+const rateLimitMap = new Map();
+
+function isAccountRateLimited(acc, model) {
+  const is3p = model.includes("claude") || model.includes("gpt-oss");
+  const key = `${acc.account_id || acc.email || "acc"}:${is3p ? "3p" : "gemini"}`;
+  const expiry = rateLimitMap.get(key);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    rateLimitMap.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function markAccountRateLimited(acc, model, durationMs = 60000) {
+  const is3p = model.includes("claude") || model.includes("gpt-oss");
+  const key = `${acc.account_id || acc.email || "acc"}:${is3p ? "3p" : "gemini"}`;
+  rateLimitMap.set(key, Date.now() + durationMs);
+}
+
+function parseAccounts(env) {
+  if (!env || !env.ACCOUNTS_JSON) return [];
+  try {
+    const raw =
+      typeof env.ACCOUNTS_JSON === "string"
+        ? JSON.parse(env.ACCOUNTS_JSON)
+        : env.ACCOUNTS_JSON;
+
+    let list = [];
+    if (Array.isArray(raw)) {
+      list = raw;
+    } else if (raw && typeof raw === "object") {
+      if (Array.isArray(raw.accounts)) list.push(...raw.accounts);
+      if (Array.isArray(raw.api_keys)) list.push(...raw.api_keys);
+      if (list.length === 0) {
+        for (const v of Object.values(raw)) {
+          if (Array.isArray(v)) list.push(...v);
+          else if (v && typeof v === "object") list.push(v);
+        }
+      }
+    }
+
+    return list.filter(
+      (acc) =>
+        acc &&
+        typeof acc === "object" &&
+        acc.enabled !== false &&
+        (acc.refresh_token || acc.api_key || acc.access_token)
+    );
+  } catch (e) {
+    return [];
+  }
+}
+
+async function getAccessToken(account, forceRefresh = false) {
   if (account.auth_method === "api_key" || account.api_key) {
     return { token: account.api_key || account.refresh_token, type: "api_key" };
   }
 
   const cacheKey = account.account_id || account.email || "primary";
-  const cached = tokenCache.get(cacheKey);
   const now = Date.now();
 
-  if (cached && cached.expires_at > now + 60000) {
-    return { token: cached.token, type: "oauth", project_id: account.project_id };
+  if (!forceRefresh) {
+    const cached = tokenCache.get(cacheKey);
+    if (cached && cached.expires_at > now + 60000) {
+      return { token: cached.token, type: "oauth", project_id: account.project_id };
+    }
+
+    if (account.access_token && account.expiry_timestamp) {
+      const expMs =
+        account.expiry_timestamp > 1e11
+          ? account.expiry_timestamp
+          : account.expiry_timestamp * 1000;
+      if (expMs > now + 60000) {
+        tokenCache.set(cacheKey, { token: account.access_token, expires_at: expMs });
+        return {
+          token: account.access_token,
+          type: "oauth",
+          project_id: account.project_id,
+        };
+      }
+    }
+  }
+
+  if (!account.refresh_token) {
+    if (account.access_token) {
+      return {
+        token: account.access_token,
+        type: "oauth",
+        project_id: account.project_id,
+      };
+    }
+    throw new Error(
+      `Account ${account.email || account.account_id} has no refresh_token or access_token`
+    );
   }
 
   const body = new URLSearchParams({
@@ -53,12 +414,16 @@ async function getAccessToken(account) {
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": DEFAULT_USER_AGENT,
+    },
     body: body.toString(),
   });
 
   if (!res.ok) {
     const err = await res.text();
+    tokenCache.delete(cacheKey);
     throw new Error(`Google OAuth refresh failed: ${err}`);
   }
 
@@ -69,30 +434,310 @@ async function getAccessToken(account) {
   return { token: data.access_token, type: "oauth", project_id: account.project_id };
 }
 
-function parseAccounts(env) {
-  if (!env || !env.ACCOUNTS_JSON) return [];
-  try {
-    const parsed = JSON.parse(env.ACCOUNTS_JSON);
-    return Array.isArray(parsed) ? parsed : Object.values(parsed);
-  } catch (e) {
-    return [];
+// -----------------------------------------------------------------------------
+// Message Conversion & Role Sanitization
+// -----------------------------------------------------------------------------
+
+function convertMessagesToGemini(reqJson) {
+  let systemText = "";
+
+  // Anthropic format: system prompt
+  if (typeof reqJson.system === "string") {
+    systemText = reqJson.system;
+  } else if (Array.isArray(reqJson.system)) {
+    systemText = reqJson.system
+      .map((s) => (typeof s === "string" ? s : s?.text || ""))
+      .filter(Boolean)
+      .join("\n\n");
+  } else if (typeof reqJson.instructions === "string") {
+    // OpenAI Responses API format
+    systemText = reqJson.instructions;
   }
+
+  let rawMsgs = reqJson.messages || [];
+  if (!Array.isArray(rawMsgs) && reqJson.input) {
+    if (typeof reqJson.input === "string") {
+      rawMsgs = [{ role: "user", content: reqJson.input }];
+    } else if (Array.isArray(reqJson.input)) {
+      rawMsgs = reqJson.input;
+    }
+  }
+
+  const contents = [];
+
+  for (const m of rawMsgs) {
+    if (!m) continue;
+    const roleLower = String(m.role || "user").toLowerCase();
+
+    // Extract system messages into systemInstruction
+    if (roleLower === "system" || roleLower === "developer") {
+      let sysContent = "";
+      if (typeof m.content === "string") {
+        sysContent = m.content;
+      } else if (Array.isArray(m.content)) {
+        sysContent = m.content
+          .map((p) => (typeof p === "string" ? p : p?.text || ""))
+          .filter(Boolean)
+          .join("\n");
+      }
+      if (sysContent) {
+        systemText = systemText ? `${systemText}\n\n${sysContent}` : sysContent;
+      }
+      continue;
+    }
+
+    // Role sanitization: CloudCode strictly requires 'model' or 'user' (lowercase)
+    const geminiRole =
+      roleLower === "assistant" || roleLower === "model" ? "model" : "user";
+    const parts = [];
+
+    if (typeof m.content === "string") {
+      if (m.content) parts.push({ text: m.content });
+    } else if (Array.isArray(m.content)) {
+      for (const block of m.content) {
+        if (!block) continue;
+        if (typeof block === "string") {
+          parts.push({ text: block });
+        } else if (block.type === "text" && block.text) {
+          parts.push({ text: block.text });
+        } else if (block.type === "thinking" && block.thinking) {
+          parts.push({ thought: true, text: block.thinking });
+        } else if (block.type === "image" && block.source) {
+          parts.push({
+            inlineData: {
+              mimeType: block.source.media_type || "image/jpeg",
+              data: block.source.data || "",
+            },
+          });
+        } else if (block.type === "image_url" && block.image_url?.url) {
+          const u = block.image_url.url;
+          const match = u.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+          } else {
+            parts.push({ text: `[Image: ${u}]` });
+          }
+        } else if (block.text) {
+          parts.push({ text: block.text });
+        }
+      }
+    }
+
+    if (parts.length === 0) {
+      parts.push({ text: "" });
+    }
+
+    contents.push({ role: geminiRole, parts });
+  }
+
+  if (contents.length === 0) {
+    contents.push({ role: "user", parts: [{ text: "" }] });
+  }
+
+  return { systemText, contents };
 }
+
+function buildCloudCodePayload(reqJson, backendModel, auth) {
+  const { systemText, contents } = convertMessagesToGemini(reqJson);
+  const innerRequest = { contents };
+
+  if (systemText) {
+    innerRequest.systemInstruction = {
+      role: "user",
+      parts: [{ text: systemText }],
+    };
+  }
+
+  const generationConfig = {};
+  if (reqJson.max_tokens || reqJson.max_completion_tokens) {
+    generationConfig.maxOutputTokens =
+      reqJson.max_tokens || reqJson.max_completion_tokens;
+  }
+  if (typeof reqJson.temperature === "number") {
+    generationConfig.temperature = reqJson.temperature;
+  }
+  if (typeof reqJson.top_p === "number") {
+    generationConfig.topP = reqJson.top_p;
+  }
+  if (Object.keys(generationConfig).length > 0) {
+    innerRequest.generationConfig = generationConfig;
+  }
+
+  if (Array.isArray(reqJson.tools) && reqJson.tools.length > 0) {
+    const decls = [];
+    for (const t of reqJson.tools) {
+      const fn = t.function || t;
+      if (fn && fn.name) {
+        decls.push({
+          name: fn.name,
+          description: fn.description || "",
+          parameters:
+            fn.parameters || fn.input_schema || { type: "object", properties: {} },
+        });
+      }
+    }
+    if (decls.length > 0) {
+      innerRequest.tools = [{ functionDeclarations: decls }];
+    }
+  }
+
+  return {
+    project: auth.project_id || "default",
+    requestId: `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    model: backendModel,
+    userAgent: "antigravity",
+    requestType: "agent",
+    request: innerRequest,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Stream Parsers and Chunk Creators
+// -----------------------------------------------------------------------------
+
+function extractCandidateDelta(chunkJson) {
+  const cand = (chunkJson.response?.candidates || chunkJson.candidates || [])[0];
+  if (!cand) return { text: "", thought: "", finishReason: null };
+
+  let text = "";
+  let thought = "";
+  const parts = cand.content?.parts || [];
+  for (const p of parts) {
+    if (p.thought === true) {
+      thought += p.text || "";
+    } else if (p.text) {
+      text += p.text;
+    }
+  }
+  return {
+    text,
+    thought,
+    finishReason: cand.finishReason || null,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Main Worker Fetch Handler
+// -----------------------------------------------------------------------------
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. Handle CORS Preflight
+    // 1. CORS Preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // 2. Optional Edge API Key Protection
+    // 2. Health & Diagnostic Endpoints (Bypass PROXY_API_KEY check)
+    const publicPaths = [
+      "/",
+      "/health",
+      "/api/hello",
+      "/hello",
+      "/v1/hello",
+      "/v1/api/hello",
+      "/v1/oauth/hello",
+      "/oauth/hello",
+      "/api/claude_cli/bootstrap",
+      "/api/claude_code_penguin_mode",
+      "/api/web/domain_info",
+      "/otlp/v1/metrics",
+      "/otlp/v1/traces",
+      "/otlp/v1/logs",
+      "/log",
+      "/api/client/metrics",
+    ];
+
+    if (publicPaths.includes(url.pathname)) {
+      if (
+        url.pathname === "/api/hello" ||
+        url.pathname === "/hello" ||
+        url.pathname === "/v1/hello" ||
+        url.pathname === "/v1/api/hello" ||
+        url.pathname === "/v1/oauth/hello" ||
+        url.pathname === "/oauth/hello"
+      ) {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            message: "hello",
+            proxy: "agy-proxy-edge",
+            version: "2.2.0",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+        );
+      }
+
+      if (url.pathname === "/" || url.pathname === "/health") {
+        const accounts = parseAccounts(env);
+        const info = {
+          name: "Antigravity Cloudflare Edge Proxy",
+          status: "active",
+          mode:
+            accounts.length > 0
+              ? "Serverless Standalone & Gateway"
+              : "Upstream Gateway",
+          geo_edge: request.cf?.country || "Cloudflare Edge",
+          accounts_loaded: accounts.length,
+          default_model: DEFAULT_MODEL,
+          endpoints: {
+            openai_chat: `${url.origin}/v1/chat/completions`,
+            anthropic_messages: `${url.origin}/v1/messages`,
+            responses: `${url.origin}/v1/responses`,
+            models: `${url.origin}/v1/models`,
+            gateway_cloudcode: `${url.origin}/cloudcode/v1internal:streamGenerateContent`,
+            gateway_genai: `${url.origin}/genai/v1beta/models`,
+          },
+          version: "2.2.0",
+        };
+        return new Response(JSON.stringify(info, null, 2), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      if (url.pathname === "/api/claude_cli/bootstrap") {
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            features: { fast_mode: true, extended_context: true },
+            model_configs: {},
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+        );
+      }
+
+      if (url.pathname === "/api/claude_code_penguin_mode") {
+        return new Response(
+          JSON.stringify({ enabled: false, status: "disabled" }),
+          { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+        );
+      }
+
+      if (url.pathname === "/api/web/domain_info") {
+        return new Response(
+          JSON.stringify({ allowed: true }),
+          { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+        );
+      }
+
+      // Telemetry absorb endpoints
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+
+    // 3. Optional Edge API Key Protection
     if (env && env.PROXY_API_KEY) {
       const authHeader = request.headers.get("Authorization") || "";
-      const xApiKey = request.headers.get("x-proxy-key") || request.headers.get("x-api-key") || "";
-      const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      const xApiKey =
+        request.headers.get("x-proxy-key") ||
+        request.headers.get("x-api-key") ||
+        "";
+      const bearerToken = authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7).trim()
+        : "";
 
       if (bearerToken !== env.PROXY_API_KEY && xApiKey !== env.PROXY_API_KEY) {
         return new Response(
@@ -102,129 +747,230 @@ export default {
       }
     }
 
-    // 3. Health & Info page on root
-    if (url.pathname === "/" || url.pathname === "/health") {
-      const accounts = parseAccounts(env);
-      const info = {
-        name: "Antigravity Cloudflare Edge Proxy",
-        status: "active",
-        mode: accounts.length > 0 ? "Serverless Standalone & Gateway" : "Upstream Gateway",
-        geo_edge: request.cf?.country || "Cloudflare Edge",
-        accounts_loaded: accounts.length,
-        endpoints: {
-          openai_chat: `${url.origin}/v1/chat/completions`,
-          anthropic_messages: `${url.origin}/v1/messages`,
-          models: `${url.origin}/v1/models`,
-          gateway_cloudcode: `${url.origin}/cloudcode/v1internal:streamGenerateContent`,
-          gateway_genai: `${url.origin}/genai/v1beta/models`,
-        },
-        version: "2.0.0",
-      };
-      return new Response(JSON.stringify(info, null, 2), {
-        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-      });
+    // 4. Standalone Mode: GET /v1/models & /models
+    if (
+      (url.pathname === "/v1/models" ||
+        url.pathname === "/models" ||
+        url.pathname.startsWith("/v1/models/")) &&
+      request.method === "GET"
+    ) {
+      if (url.pathname.startsWith("/v1/models/")) {
+        const reqModelId = url.pathname.replace(/^\/v1\/models\//, "");
+        const normalized = normalizeModelName(reqModelId);
+        const card =
+          fullModelCards.find((m) => m.id === reqModelId) ||
+          fullModelCards.find((m) => m.id === normalized) || {
+            id: reqModelId,
+            object: "model",
+            owned_by: "antigravity",
+          };
+        return new Response(JSON.stringify(card), {
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ object: "list", data: fullModelCards }),
+        { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+      );
     }
 
-    // 4. Standalone Mode: GET /v1/models
-    if (url.pathname === "/v1/models" && request.method === "GET") {
-      const modelList = [
-        { id: "gemini-3.7-flash-high", object: "model", owned_by: "google" },
-        { id: "gemini-3.1-pro-high", object: "model", owned_by: "google" },
-        { id: "gemini-3.1-flash-lite", object: "model", owned_by: "google" },
-        { id: "claude-sonnet-4-6", object: "model", owned_by: "anthropic" },
-        { id: "claude-opus-4-6-thinking", object: "model", owned_by: "anthropic" },
-        { id: "gpt-4o", object: "model", owned_by: "openai-alias" },
-        { id: "claude-3-7-sonnet", object: "model", owned_by: "anthropic-alias" },
-      ];
-      return new Response(JSON.stringify({ object: "list", data: modelList }), {
-        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-      });
-    }
+    // 5. Standalone Serverless Mode: Chat Completions, Messages & Responses
+    const isChatRoute =
+      url.pathname === "/v1/chat/completions" ||
+      url.pathname === "/chat/completions" ||
+      url.pathname === "/v1/v1/chat/completions";
+    const isMessagesRoute =
+      url.pathname === "/v1/messages" ||
+      url.pathname === "/messages" ||
+      url.pathname === "/v1/v1/messages";
+    const isResponsesRoute =
+      url.pathname === "/v1/responses" ||
+      url.pathname === "/responses" ||
+      url.pathname === "/v1/v1/responses";
 
-    // 5. Standalone Mode: POST /v1/chat/completions (OpenAI compatible) & POST /v1/messages (Anthropic compatible)
-    if ((url.pathname === "/v1/chat/completions" || url.pathname === "/v1/messages" || url.pathname === "/messages" || url.pathname === "/chat/completions") && request.method === "POST") {
+    if (
+      (isChatRoute || isMessagesRoute || isResponsesRoute) &&
+      request.method === "POST"
+    ) {
       const accounts = parseAccounts(env);
       if (accounts.length === 0) {
         return new Response(
           JSON.stringify({
-            error: "No ACCOUNTS_JSON secret configured. Run `npx wrangler secret put ACCOUNTS_JSON` or use this Worker as an upstream proxy.",
+            error: {
+              message:
+                "No valid accounts found in ACCOUNTS_JSON secret. Upload your accounts using `npx wrangler secret put ACCOUNTS_JSON < ~/.config/agy-proxy/accounts.json` or route through this Worker as an upstream proxy.",
+              type: "configuration_error",
+            },
           }),
           { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
         );
       }
 
-      // Pick healthy account (round-robin / random)
-      const acc = accounts[Math.floor(Math.random() * accounts.length)];
       const reqJson = await request.json();
-      const model = reqJson.model || "gemini-3.7-flash-high";
+      const rawModel = reqJson.model || DEFAULT_MODEL;
+      const backendModel = normalizeModelName(rawModel);
       const isStream = Boolean(reqJson.stream);
 
-      try {
-        const auth = await getAccessToken(acc);
-
-        if (auth.type === "api_key") {
-          // Google AI Studio endpoint
-          let targetModel = "gemini-2.5-flash";
-          if (model.includes("3.7") || model.includes("3-flash")) targetModel = "gemini-2.5-flash";
-          else if (model.includes("pro")) targetModel = "gemini-2.5-pro";
-          else if (model.includes("lite")) targetModel = "gemini-2.5-flash-lite";
-
-          const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${auth.token}`;
-          const rawMsgs = reqJson.messages || [];
-          const contents = rawMsgs.map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
-          }));
-
-          const gRes = await fetch(targetUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents }),
-          });
-
-          return new Response(gRes.body, {
-            status: gRes.status,
-            headers: { "Content-Type": isStream ? "text/event-stream" : "application/json", ...CORS_HEADERS },
-          });
-        } else {
-          // Google CloudCode / Antigravity endpoint
-          const targetUrl = "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
-          const rawMsgs = reqJson.messages || [];
-          const contents = rawMsgs.map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: typeof m.content === "string" ? m.content : JSON.stringify(m.content) }],
-          }));
-
-          const payload = {
-            project: auth.project_id || "default",
-            model: model,
-            request: { contents },
-          };
-
-          const gRes = await fetch(targetUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${auth.token}`,
-              "User-Agent": "antigravity/cli/1.2.7 (cl=984112147)",
-            },
-            body: JSON.stringify(payload),
-          });
-
-          return new Response(gRes.body, {
-            status: gRes.status,
-            headers: { "Content-Type": isStream ? "text/event-stream" : "application/json", ...CORS_HEADERS },
-          });
-        }
-      } catch (err) {
-        return new Response(JSON.stringify({ error: { message: err.message, type: "serverless_error" } }), {
-          status: 500,
-          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-        });
+      // Prioritize non-rate-limited accounts
+      let candidates = accounts.filter(
+        (a) => !isAccountRateLimited(a, backendModel)
+      );
+      if (candidates.length === 0) {
+        candidates = [...accounts];
       }
+
+      // Shuffle candidate pool for load balancing
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+
+      let lastError = null;
+
+      for (let idx = 0; idx < candidates.length; idx++) {
+        const acc = candidates[idx];
+        const isLastCandidate = idx === candidates.length - 1;
+
+        try {
+          const auth = await getAccessToken(acc);
+
+          if (auth.type === "api_key") {
+            // Google AI Studio endpoint
+            let targetModel = "gemini-2.5-flash";
+            if (backendModel.includes("pro")) targetModel = "gemini-2.5-pro";
+            else if (backendModel.includes("lite")) targetModel = "gemini-2.5-flash-lite";
+
+            const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${auth.token}`;
+            const { systemText, contents } = convertMessagesToGemini(reqJson);
+            const genAiBody = { contents };
+            if (systemText) {
+              genAiBody.systemInstruction = { parts: [{ text: systemText }] };
+            }
+
+            const gRes = await fetch(targetUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "User-Agent": DEFAULT_USER_AGENT,
+              },
+              body: JSON.stringify(genAiBody),
+            });
+
+            if (gRes.status === 429 && !isLastCandidate) {
+              markAccountRateLimited(acc, backendModel, 60000);
+              continue;
+            }
+            if (gRes.status === 401 && !isLastCandidate) {
+              tokenCache.delete(acc.account_id || acc.email || "primary");
+              continue;
+            }
+            if (gRes.status >= 500 && gRes.status <= 504 && !isLastCandidate) {
+              continue;
+            }
+
+            if (!gRes.ok) {
+              const errBody = await gRes.text();
+              if (!isLastCandidate) continue;
+              return new Response(
+                JSON.stringify({
+                  error: {
+                    message: `Google GenAI upstream error: ${errBody}`,
+                    code: gRes.status,
+                  },
+                }),
+                {
+                  status: gRes.status,
+                  headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+                }
+              );
+            }
+
+            return handleStreamOrJsonResponse(
+              gRes,
+              isStream,
+              isMessagesRoute,
+              rawModel,
+              backendModel
+            );
+          } else {
+            // Google CloudCode endpoint
+            const targetUrl =
+              "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
+            const payload = buildCloudCodePayload(reqJson, backendModel, auth);
+
+            const gRes = await fetch(targetUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${auth.token}`,
+                "User-Agent": DEFAULT_USER_AGENT,
+              },
+              body: JSON.stringify(payload),
+            });
+
+            if (gRes.status === 401 && !isLastCandidate) {
+              tokenCache.delete(acc.account_id || acc.email || "primary");
+              try {
+                await getAccessToken(acc, true);
+              } catch (_) {}
+              continue;
+            }
+
+            if (gRes.status === 429 && !isLastCandidate) {
+              markAccountRateLimited(acc, backendModel, 60000);
+              continue;
+            }
+
+            if (gRes.status >= 500 && gRes.status <= 504 && !isLastCandidate) {
+              continue;
+            }
+
+            if (!gRes.ok) {
+              const errBody = await gRes.text();
+              if (!isLastCandidate) continue;
+              return new Response(
+                JSON.stringify({
+                  error: {
+                    message: `CloudCode upstream error: ${errBody}`,
+                    code: gRes.status,
+                  },
+                }),
+                {
+                  status: gRes.status,
+                  headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+                }
+              );
+            }
+
+            return handleStreamOrJsonResponse(
+              gRes,
+              isStream,
+              isMessagesRoute,
+              rawModel,
+              backendModel
+            );
+          }
+        } catch (err) {
+          lastError = err;
+          if (!isLastCandidate) continue;
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          error: {
+            message:
+              lastError?.message ||
+              "All accounts in pool were exhausted or failed.",
+            type: "failover_exhausted",
+          },
+        }),
+        { status: 502, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+      );
     }
 
-    // 6. Upstream Gateway Mode (Transparent Forwarder for agy-proxy)
+    // 6. Upstream Gateway Mode (Transparent Forwarder for local agy-proxy)
     let targetBase = UPSTREAM_TARGETS.cloudcode;
     let targetPath = url.pathname;
 
@@ -240,7 +986,12 @@ export default {
     } else if (url.pathname.startsWith("/userinfo/")) {
       targetBase = UPSTREAM_TARGETS.userinfo;
       targetPath = url.pathname.replace(/^\/userinfo/, "");
-    } else if (url.pathname.includes("v1internal:") || url.pathname.includes("loadCodeAssist")) {
+    } else if (
+      url.pathname.includes("v1internal:") ||
+      url.pathname.includes("v1internal/") ||
+      url.pathname.includes("loadCodeAssist") ||
+      url.pathname.includes("fetchAvailableModels")
+    ) {
       targetBase = UPSTREAM_TARGETS.cloudcode;
     } else if (url.pathname.startsWith("/v1beta/")) {
       targetBase = UPSTREAM_TARGETS.genai;
@@ -257,8 +1008,12 @@ export default {
     reqHeaders.delete("x-forwarded-for");
     reqHeaders.delete("x-proxy-key");
 
-    if (!reqHeaders.has("User-Agent")) {
-      reqHeaders.set("User-Agent", "antigravity/cli/1.2.7 (cl=984112147)");
+    if (
+      !reqHeaders.has("User-Agent") ||
+      reqHeaders.get("User-Agent").includes("cloudflare") ||
+      reqHeaders.get("User-Agent").includes("curl")
+    ) {
+      reqHeaders.set("User-Agent", DEFAULT_USER_AGENT);
     }
 
     try {
@@ -293,3 +1048,228 @@ export default {
     }
   },
 };
+
+// -----------------------------------------------------------------------------
+// Stream & Response Handlers
+// -----------------------------------------------------------------------------
+
+async function handleStreamOrJsonResponse(
+  upstreamRes,
+  isStream,
+  isAnthropic,
+  rawModel,
+  backendModel
+) {
+  const reqId = isAnthropic
+    ? `msg_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    : `chatcmpl-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const createdTime = Math.floor(Date.now() / 1000);
+
+  if (!isStream) {
+    // Non-streaming: Read all SSE lines, assemble full text and return JSON
+    const textBuffer = await upstreamRes.text();
+    let accumulatedText = "";
+    let finishReason = "stop";
+
+    const lines = textBuffer.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr || jsonStr === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const delta = extractCandidateDelta(parsed);
+        if (delta.text) accumulatedText += delta.text;
+        if (delta.finishReason) finishReason = delta.finishReason;
+      } catch (_) {}
+    }
+
+    if (isAnthropic) {
+      const respPayload = {
+        id: reqId,
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: accumulatedText }],
+        model: rawModel,
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      };
+      return new Response(JSON.stringify(respPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    } else {
+      const respPayload = {
+        id: reqId,
+        object: "chat.completion",
+        created: createdTime,
+        model: rawModel,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: accumulatedText },
+            finish_reason: finishReason.toLowerCase() === "stop" ? "stop" : finishReason,
+          },
+        ],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      };
+      return new Response(JSON.stringify(respPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
+    }
+  }
+
+  // Streaming Mode: Transform SSE stream from CloudCode to OpenAI / Anthropic format
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const { readable, writable } = new TransformStream({
+    start(controller) {
+      if (isAnthropic) {
+        controller.enqueue(
+          encoder.encode(
+            `event: message_start\ndata: ${JSON.stringify({
+              type: "message_start",
+              message: {
+                id: reqId,
+                type: "message",
+                role: "assistant",
+                content: [],
+                model: rawModel,
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: 0, output_tokens: 0 },
+              },
+            })}\n\n`
+          )
+        );
+        controller.enqueue(
+          encoder.encode(
+            `event: content_block_start\ndata: ${JSON.stringify({
+              type: "content_block_start",
+              index: 0,
+              content_block: { type: "text", text: "" },
+            })}\n\n`
+          )
+        );
+      }
+    },
+    transform(chunk, controller) {
+      const text = typeof chunk === "string" ? chunk : decoder.decode(chunk);
+      const lines = text.split("\n");
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const delta = extractCandidateDelta(parsed);
+
+          if (isAnthropic) {
+            if (delta.text) {
+              controller.enqueue(
+                encoder.encode(
+                  `event: content_block_delta\ndata: ${JSON.stringify({
+                    type: "content_block_delta",
+                    index: 0,
+                    delta: { type: "text_delta", text: delta.text },
+                  })}\n\n`
+                )
+              );
+            }
+          } else {
+            if (delta.text || delta.thought) {
+              const deltaObj = {};
+              if (delta.text) deltaObj.content = delta.text;
+              if (delta.thought) deltaObj.reasoning_content = delta.thought;
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    id: reqId,
+                    object: "chat.completion.chunk",
+                    created: createdTime,
+                    model: rawModel,
+                    choices: [
+                      {
+                        index: 0,
+                        delta: deltaObj,
+                        finish_reason: null,
+                      },
+                    ],
+                  })}\n\n`
+                )
+              );
+            }
+          }
+        } catch (_) {}
+      }
+    },
+    flush(controller) {
+      if (isAnthropic) {
+        controller.enqueue(
+          encoder.encode(
+            `event: content_block_stop\ndata: ${JSON.stringify({
+              type: "content_block_stop",
+              index: 0,
+            })}\n\n`
+          )
+        );
+        controller.enqueue(
+          encoder.encode(
+            `event: message_delta\ndata: ${JSON.stringify({
+              type: "message_delta",
+              delta: { stop_reason: "end_turn", stop_sequence: null },
+              usage: { output_tokens: 0 },
+            })}\n\n`
+          )
+        );
+        controller.enqueue(
+          encoder.encode(
+            `event: message_stop\ndata: ${JSON.stringify({
+              type: "message_stop",
+            })}\n\n`
+          )
+        );
+      } else {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              id: reqId,
+              object: "chat.completion.chunk",
+              created: createdTime,
+              model: rawModel,
+              choices: [
+                {
+                  index: 0,
+                  delta: {},
+                  finish_reason: "stop",
+                },
+              ],
+            })}\n\n`
+          )
+        );
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      }
+    },
+  });
+
+  upstreamRes.body.pipeTo(writable).catch(() => {});
+
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      ...CORS_HEADERS,
+    },
+  });
+}
