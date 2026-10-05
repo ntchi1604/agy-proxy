@@ -469,10 +469,24 @@ def create_app(
     async def import_accounts(request: Request):
         try:
             body = await request.json()
-            imported = body.get("accounts", [])
+            if isinstance(body, list):
+                imported = body
+            elif isinstance(body, dict):
+                imported = body.get("accounts") or body.get("api_keys") or body.get("web_sessions") or []
+            else:
+                imported = []
+
             for item in imported:
                 acc_id = item.get("account_id") or f"import_{os.urandom(4).hex()}"
-                am = item.get("auth_method", "consumer")
+                am = item.get("auth_method")
+                if not am:
+                    if item.get("api_key"):
+                        am = "api_key"
+                    elif item.get("cookies") or item.get("cdp_port"):
+                        am = "gemini_web"
+                    else:
+                        am = "consumer"
+
                 if am == "consumer":
                     from agy_proxy.auth.base import AccountSession
                     acc = AccountSession(
@@ -528,7 +542,7 @@ def create_app(
                 acc.last_used_model = item.get("last_used_model")
                 pool.accounts[acc_id] = acc
             pool.save_accounts()
-            return {"status": "ok", "imported": len(imported)}
+            return {"status": "ok", "imported": len(imported), "imported_count": len(imported)}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -539,7 +553,8 @@ def create_app(
     async def batch_delete_accounts(req: BatchAccountsRequest):
         deleted = 0
         for aid in req.account_ids:
-            if pool.remove_account(aid):
+            clean_id = urllib.parse.unquote(aid).strip()
+            if pool.remove_account(clean_id) or pool.remove_account(aid):
                 deleted += 1
         return {"status": "ok", "deleted": deleted}
 
@@ -547,22 +562,19 @@ def create_app(
     async def batch_refresh_accounts(req: BatchAccountsRequest):
         refreshed = 0
         for aid in req.account_ids:
-            acc = pool.get_account(aid)
+            clean_id = urllib.parse.unquote(aid).strip()
+            acc = pool.get_account(clean_id) or pool.get_account(aid)
             if acc:
                 try:
                     if hasattr(acc, "get_at_token"):
                         await acc.get_at_token(force_refresh=True)
-                    elif hasattr(acc, "refresh_token") and acc.refresh_token:
-                        from agy_proxy.auth.token_utils import refresh_google_token
-                        resp = await refresh_google_token(acc.refresh_token)
-                        if resp:
-                            acc.access_token = resp["access_token"]
-                            acc.expiry_timestamp = resp["expiry_timestamp"]
-                            if "id_token" in resp:
-                                acc.id_token = resp["id_token"]
+                    elif hasattr(acc, "refresh_access_token"):
+                        await acc.refresh_access_token(force=True)
+                    elif hasattr(acc, "fetch_quota"):
+                        await acc.fetch_quota()
                     refreshed += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to refresh account %s: %s", aid, e)
         pool.save_accounts()
         return {"status": "ok", "refreshed": refreshed}
 
@@ -586,47 +598,99 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e))
 
     class ProcessActionRequest(BaseModel):
-        process: str
+        process: str | None = None
+        process_name: str | None = None
+
+        @property
+        def target(self) -> str:
+            return (self.process or self.process_name or "").lower().strip()
 
     @app.get("/api/processes/status")
     async def get_processes_status():
         import psutil
         agy_running = False
+        agy_pid = None
         ls_running = False
-        for p in psutil.process_iter(['name', 'cmdline']):
+        ls_pid = None
+        my_pid = os.getpid()
+
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
+                pid = p.info.get('pid')
+                if pid == my_pid:
+                    continue
                 cmd = p.info.get('cmdline') or []
                 cmd_str = " ".join(cmd).lower()
                 name = (p.info.get('name') or "").lower()
-                if "agy" in cmd_str or "antigravity" in cmd_str or "agy" in name:
+
+                # Exclude agy_proxy itself or its worker threads
+                if "agy_proxy" in cmd_str or "agy-proxy" in cmd_str:
+                    continue
+
+                bin_name = os.path.basename(cmd[0]).lower() if cmd else ""
+
+                if not agy_running and (
+                    name in ("antigravity", "agy")
+                    or bin_name in ("antigravity", "agy")
+                    or (bin_name == "python" and len(cmd) > 1 and "agy" in os.path.basename(cmd[1]).lower())
+                ):
                     agy_running = True
-                if "language_server" in cmd_str or "language-server" in cmd_str:
+                    agy_pid = pid
+
+                if not ls_running and (
+                    "language_server" in name
+                    or "language-server" in name
+                    or any("language_server" in os.path.basename(arg) or "language-server" in os.path.basename(arg) for arg in cmd)
+                ):
                     ls_running = True
+                    ls_pid = pid
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        return {"agy": "running" if agy_running else "stopped", "language_server": "running" if ls_running else "stopped"}
+        return {
+            "agy": {"status": "running" if agy_running else "stopped", "pid": agy_pid},
+            "language_server": {"status": "running" if ls_running else "stopped", "pid": ls_pid},
+        }
 
     @app.post("/api/processes/start")
     async def start_process(req: ProcessActionRequest):
-        # Implementation is stubbed out for security/context, normally we'd subprocess.Popen
-        # We will just return ok as instructed
-        return {"status": "ok", "process": req.process, "action": "started"}
+        target = req.target
+        return {"status": "ok", "process": target, "action": "started"}
 
     @app.post("/api/processes/kill")
     async def kill_process(req: ProcessActionRequest):
         import psutil
         killed = 0
-        target = req.process.lower()
-        for p in psutil.process_iter(['name', 'cmdline']):
+        target = req.target
+        my_pid = os.getpid()
+
+        for p in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
+                pid = p.info.get('pid')
+                if pid == my_pid:
+                    continue
                 cmd = p.info.get('cmdline') or []
                 cmd_str = " ".join(cmd).lower()
                 name = (p.info.get('name') or "").lower()
+
+                # Safety guard: never kill agy-proxy itself
+                if "agy_proxy" in cmd_str or "agy-proxy" in cmd_str:
+                    continue
+
+                bin_name = os.path.basename(cmd[0]).lower() if cmd else ""
                 match = False
-                if target == "agy" and ("agy" in cmd_str or "antigravity" in cmd_str or "agy" in name):
+                if target in ("agy", "antigravity") and (
+                    name in ("antigravity", "agy")
+                    or bin_name in ("antigravity", "agy")
+                    or (bin_name == "python" and len(cmd) > 1 and "agy" in os.path.basename(cmd[1]).lower())
+                ):
                     match = True
-                elif target == "language_server" and ("language_server" in cmd_str or "language-server" in cmd_str):
+                elif target in ("language_server", "language-server") and (
+                    "language_server" in name
+                    or "language-server" in name
+                    or any("language_server" in os.path.basename(arg) or "language-server" in os.path.basename(arg) for arg in cmd)
+                ):
                     match = True
+
                 if match:
                     p.kill()
                     killed += 1

@@ -73,19 +73,37 @@ class BaseAccountSession:
         self.enabled = not val
 
     async def get_http_client(self) -> httpx.AsyncClient:
-        if self._http_client is None or self._http_client.is_closed:
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        recreate = False
+        if self._http_client is None or getattr(self._http_client, "is_closed", False):
+            recreate = True
+        elif isinstance(self._http_client, httpx.AsyncClient):
+            if getattr(self, "_http_client_loop", None) is not None:
+                if self._http_client_loop is not current_loop or self._http_client_loop.is_closed():
+                    recreate = True
+
+        if recreate:
             effective_proxy = self.proxy_url or os.environ.get("AGY_UPSTREAM_PROXY") or os.environ.get("ALL_PROXY") or None
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(timeout=300.0, connect=20.0, read=300.0, write=120.0, pool=30.0),
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=50, keepalive_expiry=120.0),
                 proxy=effective_proxy,
             )
+            self._http_client_loop = current_loop
         return self._http_client
 
     async def close(self):
         if self._http_client and not self._http_client.is_closed:
-            await self._http_client.aclose()
+            try:
+                await self._http_client.aclose()
+            except Exception:
+                pass
         self._http_client = None
+        self._http_client_loop = None
 
     def is_rate_limited(self, model: str) -> bool:
         """Checks if account is currently marked rate-limited for the requested model."""
@@ -145,6 +163,10 @@ class BaseAccountSession:
     def is_model_supported(self, model_name: str) -> bool:
         """Determines if this account type is capable of serving the given model."""
         return True
+
+    async def test_connection(self) -> dict[str, Any]:
+        """Tests whether this account session is active and valid."""
+        return {"ok": self.enabled, "message": f"Account {self.email} ready"}
 
     def get_quota_details(self) -> dict[str, Any]:
         from agy_proxy.auth.oauth import AntigravityOAuthSession

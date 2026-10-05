@@ -276,29 +276,6 @@
           </button>
           <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importAccounts(event)">
 
-          
-          <!-- Batch Operations -->
-          <button id="batchDeleteBtn" onclick="batchDeleteAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 font-medium transition flex items-center space-x-1" title="Delete Selected">
-            <i class="fa-solid fa-trash text-[10px]"></i>
-            <span>Delete Selected</span>
-          </button>
-          <button id="batchRefreshBtn" onclick="batchRefreshAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800 text-indigo-300 border border-indigo-800 font-medium transition flex items-center space-x-1" title="Refresh Selected">
-            <i class="fa-solid fa-rotate text-[10px]"></i>
-            <span>Refresh Selected</span>
-          </button>
-
-          <!-- Export/Import -->
-          <div class="h-4 border-l border-slate-700"></div>
-          <button onclick="exportAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Export Accounts">
-            <i class="fa-solid fa-download text-indigo-400 text-[10px]"></i>
-            <span>Export</span>
-          </button>
-          <button onclick="document.getElementById('importFileInput').click()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Import Accounts">
-            <i class="fa-solid fa-upload text-emerald-400 text-[10px]"></i>
-            <span>Import</span>
-          </button>
-          <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importAccounts(event)">
-
           <button onclick="toggleAllAccounts(true)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Enable all accounts">
             <i class="fa-solid fa-play text-emerald-400 text-[10px]"></i>
             <span>Enable All</span>
@@ -2817,6 +2794,7 @@ ightarrow$ v1.0.3</p>
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-900/80 text-slate-400 border-b border-dark-border uppercase font-mono text-[10px]">
                 <tr>
+                  <th class="w-8 px-3 py-3 text-center"><input type="checkbox" onchange="toggleSelectAllBatch(this)" class="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" title="Select All"></th>
                   <th class="px-4 py-3">Account / Identity</th>
                   <th class="px-3 py-3">Type</th>
                   <th class="px-3 py-3">Last Active Model</th>
@@ -3063,7 +3041,8 @@ ightarrow$ v1.0.3</p>
                         : 'bg-slate-900/40 border-slate-800/80 opacity-60')))
         }">
           <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center space-x-2.5 sm:space-x-3 min-w-0 flex-1">
+            <div class="flex items-center space-x-2 sm:space-x-2.5 min-w-0 flex-1">
+              <input type="checkbox" class="account-batch-checkbox w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer shrink-0" value="${acc.account_id}" onchange="updateBatchButtons()">
               ${renderAvatar(acc, 'w-8 h-8 sm:w-9 sm:h-9', 'text-xs sm:text-sm')}
               <div class="min-w-0 flex-1">
                 <div class="font-bold text-white text-xs sm:text-sm flex items-center flex-wrap gap-1">
@@ -3179,6 +3158,9 @@ ightarrow$ v1.0.3</p>
 
       return `
         <tr class="hover:bg-slate-800/40 transition ${!isEnabled ? 'opacity-50' : ''} ${isBothActive || isCliActive ? 'bg-emerald-500/[0.03]' : (isStandaloneActive ? 'bg-cyan-500/[0.03]' : '')}">
+          <td class="w-8 px-3 py-3 text-center">
+            <input type="checkbox" class="account-batch-checkbox w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" value="${acc.account_id}" onchange="updateBatchButtons()">
+          </td>
           <td class="px-4 py-3">
             <div class="flex items-center space-x-2.5">
               ${renderAvatar(acc, 'w-7 h-7', 'text-xs')}
@@ -4772,7 +4754,7 @@ ${data.stderr || data.stdout || data.error}`;
     }
 
     
-    // === NEW SHARD 2 FUNCTIONS ===
+    // === SHARD 2 FUNCTIONS ===
 
     // Export Accounts
     async function exportAccounts() {
@@ -4810,7 +4792,8 @@ ${data.stderr || data.stdout || data.error}`;
           });
           if (!res.ok) throw new Error('Failed to import');
           const data = await res.json();
-          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
+          const count = data.imported_count || data.imported || 'accounts';
+          showToast(`Imported ${count} successfully`, 'success');
           loadAccounts();
         } catch (err) {
           showToast('Import failed: ' + err.message, 'error');
@@ -4831,12 +4814,14 @@ ${data.stderr || data.stdout || data.error}`;
           const pLs = document.getElementById('processStatus-ls');
           
           if (pAgy && data.agy) {
-            const isUp = data.agy.status === 'running';
-            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
+            const isUp = typeof data.agy === 'object' ? data.agy.status === 'running' : data.agy === 'running';
+            const pid = typeof data.agy === 'object' ? data.agy.pid : null;
+            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${pid || 'N/A'}</span>`;
           }
           if (pLs && data.language_server) {
-            const isUp = data.language_server.status === 'running';
-            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
+            const isUp = typeof data.language_server === 'object' ? data.language_server.status === 'running' : data.language_server === 'running';
+            const pid = typeof data.language_server === 'object' ? data.language_server.pid : null;
+            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${pid || 'N/A'}</span>`;
           }
         }
       } catch (err) {
@@ -4847,88 +4832,13 @@ ${data.stderr || data.stdout || data.error}`;
     // Start polling automatically
     setInterval(pollProcessStatus, 5000);
     setTimeout(pollProcessStatus, 1000); 
-    // === NEW SHARD 2 FUNCTIONS ===
-
-    // Export Accounts
-    async function exportAccounts() {
-      try {
-        const res = await fetch('/api/accounts/export');
-        if (!res.ok) throw new Error('Failed to export');
-        const data = await res.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'agy_accounts_backup.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('Accounts exported successfully', 'success');
-      } catch (err) {
-        showToast('Export failed: ' + err.message, 'error');
-      }
-    }
-
-    // Import Accounts
-    async function importAccounts(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const json = JSON.parse(e.target.result);
-          const res = await fetch('/api/accounts/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(json)
-          });
-          if (!res.ok) throw new Error('Failed to import');
-          const data = await res.json();
-          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
-          loadAccounts();
-        } catch (err) {
-          showToast('Import failed: ' + err.message, 'error');
-        } finally {
-          event.target.value = ''; // Reset file input
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    // Process Control
-    async function pollProcessStatus() {
-      try {
-        const res = await fetch('/api/processes/status');
-        if (res.ok) {
-          const data = await res.json();
-          const pAgy = document.getElementById('processStatus-agy');
-          const pLs = document.getElementById('processStatus-ls');
-          
-          if (pAgy && data.agy) {
-            const isUp = data.agy.status === 'running';
-            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
-          }
-          if (pLs && data.language_server) {
-            const isUp = data.language_server.status === 'running';
-            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to poll process status:', err);
-      }
-    }
-    
-    // Start polling automatically
-    setInterval(pollProcessStatus, 5000);
-    setTimeout(pollProcessStatus, 1000); // Initial poll
 
     async function controlProcess(procName, action) {
       try {
         const res = await fetch(`/api/processes/${action}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ process_name: procName })
+          body: JSON.stringify({ process: procName, process_name: procName })
         });
         if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
         showToast(`Process ${procName} ${action} command sent`, 'success');
@@ -4944,246 +4854,32 @@ ${data.stderr || data.stdout || data.error}`;
       return Array.from(boxes).map(b => b.value);
     }
 
-    function updateBatchButtons() {
-      const selected = getSelectedBatchAccounts();
-      const delBtn = document.getElementById('batchDeleteBtn');
-      const refBtn = document.getElementById('batchRefreshBtn');
-      if (selected.length > 0) {
-        delBtn.classList.remove('hidden');
-        refBtn.classList.remove('hidden');
-      } else {
-        delBtn.classList.add('hidden');
-        refBtn.classList.add('hidden');
-      }
-    }
-
-    async function batchDeleteAccounts() {
-      const selected = getSelectedBatchAccounts();
-      if (selected.length === 0) return;
-      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
-
-      try {
-        const res = await fetch('/api/accounts/batch-delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_ids: selected })
-        });
-        if (!res.ok) throw new Error('Batch delete failed');
-        showToast(`Deleted ${selected.length} accounts`, 'success');
-        loadAccounts();
-        updateBatchButtons(); // hide buttons
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
-    async function batchRefreshAccounts() {
-      const selected = getSelectedBatchAccounts();
-      if (selected.length === 0) return;
-
-      try {
-        const res = await fetch('/api/accounts/batch-refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_ids: selected })
-        });
-        if (!res.ok) throw new Error('Batch refresh failed');
-        showToast(`Refreshing ${selected.length} accounts...`, 'success');
-        setTimeout(loadAccounts, 2000);
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
-    // Initial poll
-
-    async function controlProcess(procName, action) {
-      try {
-        const res = await fetch(`/api/processes/${action}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ process_name: procName })
-        });
-        if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
-        showToast(`Process ${procName} ${action} command sent`, 'success');
-        pollProcessStatus();
-      } catch (err) {
-        showToast(`Process control error: ${err.message}`, 'error');
-      }
-    }
-
-    // Batch Operations
-    function getSelectedBatchAccounts() {
-      const boxes = document.querySelectorAll('.account-batch-checkbox:checked');
-      return Array.from(boxes).map(b => b.value);
+    function toggleSelectAllBatch(master) {
+      document.querySelectorAll('.account-batch-checkbox').forEach(cb => {
+        cb.checked = master.checked;
+      });
+      updateBatchButtons();
     }
 
     function updateBatchButtons() {
       const selected = getSelectedBatchAccounts();
       const delBtn = document.getElementById('batchDeleteBtn');
       const refBtn = document.getElementById('batchRefreshBtn');
-      if (selected.length > 0) {
-        delBtn.classList.remove('hidden');
-        refBtn.classList.remove('hidden');
-      } else {
-        delBtn.classList.add('hidden');
-        refBtn.classList.add('hidden');
-      }
-    }
-
-    async function batchDeleteAccounts() {
-      const selected = getSelectedBatchAccounts();
-      if (selected.length === 0) return;
-      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
-
-      try {
-        const res = await fetch('/api/accounts/batch-delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_ids: selected })
-        });
-        if (!res.ok) throw new Error('Batch delete failed');
-        showToast(`Deleted ${selected.length} accounts`, 'success');
-        loadAccounts();
-        updateBatchButtons(); // hide buttons
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
-    async function batchRefreshAccounts() {
-      const selected = getSelectedBatchAccounts();
-      if (selected.length === 0) return;
-
-      try {
-        const res = await fetch('/api/accounts/batch-refresh', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ account_ids: selected })
-        });
-        if (!res.ok) throw new Error('Batch refresh failed');
-        showToast(`Refreshing ${selected.length} accounts...`, 'success');
-        setTimeout(loadAccounts, 2000);
-      } catch (err) {
-        showToast(err.message, 'error');
-      }
-    }
-
-    
-    // === NEW SHARD 2 FUNCTIONS ===
-
-    // Export Accounts
-    async function exportAccounts() {
-      try {
-        const res = await fetch('/api/accounts/export');
-        if (!res.ok) throw new Error('Failed to export');
-        const data = await res.json();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'agy_accounts_backup.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast('Accounts exported successfully', 'success');
-      } catch (err) {
-        showToast('Export failed: ' + err.message, 'error');
-      }
-    }
-
-    // Import Accounts
-    async function importAccounts(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const json = JSON.parse(e.target.result);
-          const res = await fetch('/api/accounts/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(json)
-          });
-          if (!res.ok) throw new Error('Failed to import');
-          const data = await res.json();
-          showToast(`Imported ${data.imported_count || 'accounts'} successfully`, 'success');
-          loadAccounts();
-        } catch (err) {
-          showToast('Import failed: ' + err.message, 'error');
-        } finally {
-          event.target.value = ''; // Reset file input
+      if (delBtn && refBtn) {
+        if (selected.length > 0) {
+          delBtn.classList.remove('hidden');
+          refBtn.classList.remove('hidden');
+        } else {
+          delBtn.classList.add('hidden');
+          refBtn.classList.add('hidden');
         }
-      };
-      reader.readAsText(file);
-    }
-
-    // Process Control
-    async function pollProcessStatus() {
-      try {
-        const res = await fetch('/api/processes/status');
-        if (res.ok) {
-          const data = await res.json();
-          const pAgy = document.getElementById('processStatus-agy');
-          const pLs = document.getElementById('processStatus-ls');
-          
-          if (pAgy && data.agy) {
-            const isUp = data.agy.status === 'running';
-            pAgy.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.agy.pid || 'N/A'}</span>`;
-          }
-          if (pLs && data.language_server) {
-            const isUp = data.language_server.status === 'running';
-            pLs.innerHTML = `<span class="w-2 h-2 rounded-full ${isUp ? 'bg-emerald-500' : 'bg-red-500'}"></span> <span>${isUp ? 'Running' : 'Stopped'}</span> <span class="ml-2 text-[10px]">PID: ${data.language_server.pid || 'N/A'}</span>`;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to poll process status:', err);
-      }
-    }
-    
-    // Start polling automatically
-    setInterval(pollProcessStatus, 5000);
-    setTimeout(pollProcessStatus, 1000); // Initial poll
-
-    async function controlProcess(procName, action) {
-      try {
-        const res = await fetch(`/api/processes/${action}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ process_name: procName })
-        });
-        if (!res.ok) throw new Error(`Failed to ${action} ${procName}`);
-        showToast(`Process ${procName} ${action} command sent`, 'success');
-        pollProcessStatus();
-      } catch (err) {
-        showToast(`Process control error: ${err.message}`, 'error');
-      }
-    }
-
-    // Batch Operations
-    function getSelectedBatchAccounts() {
-      const boxes = document.querySelectorAll('.account-batch-checkbox:checked');
-      return Array.from(boxes).map(b => b.value);
-    }
-
-    function updateBatchButtons() {
-      const selected = getSelectedBatchAccounts();
-      const delBtn = document.getElementById('batchDeleteBtn');
-      const refBtn = document.getElementById('batchRefreshBtn');
-      if (selected.length > 0) {
-        delBtn.classList.remove('hidden');
-        refBtn.classList.remove('hidden');
-      } else {
-        delBtn.classList.add('hidden');
-        refBtn.classList.add('hidden');
       }
     }
 
     async function batchDeleteAccounts() {
       const selected = getSelectedBatchAccounts();
       if (selected.length === 0) return;
-      if (!confirm(`Are you sure you want to delete ${selected.length} accounts?`)) return;
+      if (!confirm(`Are you sure you want to delete ${selected.length} account(s)?`)) return;
 
       try {
         const res = await fetch('/api/accounts/batch-delete', {
@@ -5194,7 +4890,7 @@ ${data.stderr || data.stdout || data.error}`;
         if (!res.ok) throw new Error('Batch delete failed');
         showToast(`Deleted ${selected.length} accounts`, 'success');
         loadAccounts();
-        updateBatchButtons(); // hide buttons
+        updateBatchButtons();
       } catch (err) {
         showToast(err.message, 'error');
       }

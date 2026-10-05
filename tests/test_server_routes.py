@@ -5,7 +5,7 @@ Unit tests for FastAPI endpoints, routing, and security middleware.
 import asyncio
 import json
 import unittest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 import httpx
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -595,6 +595,202 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(called_account, ["user_b@gmail.com"])
+
+    async def test_export_and_import_accounts(self):
+        oa = AccountSession(
+            account_id="acc_export_test",
+            email="export_test@gmail.com",
+            refresh_token="rf_export",
+            name="Export Account",
+        )
+        self.pool.accounts["acc_export_test"] = oa
+        self.pool.save_accounts()
+
+        # 1. Export
+        resp = await self.client.get("/api/accounts/export")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("accounts", data)
+        self.assertTrue(any(a["account_id"] == "acc_export_test" for a in data["accounts"]))
+
+        # 2. Import
+        import_payload = {
+            "accounts": [
+                {
+                    "account_id": "imported_oa",
+                    "email": "imported_oa@gmail.com",
+                    "refresh_token": "rf_imp",
+                    "auth_method": "consumer",
+                },
+                {
+                    "account_id": "imported_key",
+                    "api_key": "AIzaSyImportedKey",
+                    "name": "Imported Key",
+                },
+            ]
+        }
+        imp_resp = await self.client.post("/api/accounts/import", json=import_payload)
+        self.assertEqual(imp_resp.status_code, 200)
+        imp_data = imp_resp.json()
+        self.assertEqual(imp_data["status"], "ok")
+        self.assertEqual(imp_data["imported_count"], 2)
+        self.assertIn("imported_oa", self.pool.accounts)
+        self.assertIn("imported_key", self.pool.accounts)
+        self.assertEqual(self.pool.accounts["imported_key"].auth_method, "api_key")
+
+    async def test_batch_delete_and_refresh(self):
+        acc1 = AccountSession(
+            account_id="acc_batch_1",
+            email="b1@gmail.com",
+            refresh_token="rf_b1",
+        )
+        acc2 = AccountSession(
+            account_id="acc_batch_2",
+            email="b2@gmail.com",
+            refresh_token="rf_b2",
+        )
+        self.pool.accounts["acc_batch_1"] = acc1
+        self.pool.accounts["acc_batch_2"] = acc2
+        self.pool.save_accounts()
+
+        # Mock refresh_access_token
+        acc1.refresh_access_token = AsyncMock(return_value="new_tok1")
+        acc2.refresh_access_token = AsyncMock(return_value="new_tok2")
+
+        # Test batch refresh
+        ref_resp = await self.client.post(
+            "/api/accounts/batch-refresh",
+            json={"account_ids": ["acc_batch_1", "acc_batch_2"]},
+        )
+        self.assertEqual(ref_resp.status_code, 200)
+        self.assertEqual(ref_resp.json()["refreshed"], 2)
+
+        # Test batch delete
+        del_resp = await self.client.post(
+            "/api/accounts/batch-delete",
+            json={"account_ids": ["acc_batch_1"]},
+        )
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertEqual(del_resp.json()["deleted"], 1)
+        self.assertNotIn("acc_batch_1", self.pool.accounts)
+        self.assertIn("acc_batch_2", self.pool.accounts)
+
+    async def test_process_control_endpoints(self):
+        # 1. Process status
+        status_resp = await self.client.get("/api/processes/status")
+        self.assertEqual(status_resp.status_code, 200)
+        st_data = status_resp.json()
+        self.assertIn("agy", st_data)
+        self.assertIn("language_server", st_data)
+        self.assertIn("status", st_data["agy"])
+        self.assertIn("status", st_data["language_server"])
+
+        # 2. Process start (accepts process or process_name)
+        start_resp1 = await self.client.post("/api/processes/start", json={"process": "agy"})
+        self.assertEqual(start_resp1.status_code, 200)
+        self.assertEqual(start_resp1.json()["action"], "started")
+
+        start_resp2 = await self.client.post("/api/processes/start", json={"process_name": "language_server"})
+        self.assertEqual(start_resp2.status_code, 200)
+        self.assertEqual(start_resp2.json()["action"], "started")
+
+        # 3. Process kill (supports process or process_name)
+        kill_resp = await self.client.post("/api/processes/kill", json={"process_name": "nonexistent_proc_test"})
+        self.assertEqual(kill_resp.status_code, 200)
+        self.assertEqual(kill_resp.json()["killed_count"], 0)
+
+    async def test_account_test_connection_endpoint(self):
+        acc = AccountSession(
+            account_id="acc_test_conn",
+            email="test_conn@gmail.com",
+            refresh_token="rf_tc",
+        )
+        acc.test_connection = AsyncMock(return_value={"ok": True, "message": "Connection verified"})
+        self.pool.accounts["acc_test_conn"] = acc
+
+        resp = await self.client.post("/api/accounts/acc_test_conn/test")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["account_id"], "acc_test_conn")
+        self.assertIn("latency_ms", data)
+
+    async def test_editor_endpoints_openai_chat_completions(self):
+        acc = AccountSession(
+            account_id="acc_editor",
+            email="editor@gmail.com",
+            refresh_token="rf_ed",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_editor"] = acc
+
+        # Non-streaming chat completion mock
+        with patch("agy_proxy.client.CloudCodeClient.generate_openai_chat", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "choices": [{"message": {"role": "assistant", "content": "Hello editor!"}}],
+            }
+
+            resp = await self.client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "gemini-2.5-flash",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "stream": False,
+                },
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["choices"][0]["message"]["content"], "Hello editor!")
+
+    async def test_editor_endpoints_anthropic_messages(self):
+        acc = AccountSession(
+            account_id="acc_editor_claude",
+            email="claude_editor@gmail.com",
+            refresh_token="rf_cl",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_editor_claude"] = acc
+
+        with patch("agy_proxy.client.CloudCodeClient.generate_anthropic_messages", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = {
+                "id": "msg_test",
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Hello Claude Code!"}],
+            }
+
+            resp = await self.client.post(
+                "/v1/messages",
+                json={
+                    "model": "claude-3-7-sonnet",
+                    "messages": [{"role": "user", "content": "Hi Claude"}],
+                    "max_tokens": 100,
+                },
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["content"][0]["text"], "Hello Claude Code!")
+
+    async def test_editor_endpoints_gemini_native(self):
+        acc = AccountSession(
+            account_id="acc_gem_native",
+            email="gemini_native@gmail.com",
+            refresh_token="rf_gn",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_gem_native"] = acc
+
+        with patch("agy_proxy.client.CloudCodeClient.generate_gemini_native", new_callable=AsyncMock) as mock_gen:
+            mock_gen.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "Hello Gemini Native!"}], "role": "model"}}],
+            }
+
+            resp = await self.client.post(
+                "/v1beta/models/gemini-2.5-flash:generateContent",
+                json={"contents": [{"parts": [{"text": "Hi"}]}]},
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["candidates"][0]["content"]["parts"][0]["text"], "Hello Gemini Native!")
 
 
 if __name__ == "__main__":
