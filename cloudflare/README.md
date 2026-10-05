@@ -3,7 +3,7 @@
 This directory contains everything you need to run **Antigravity Proxy** through **Cloudflare** for:
 1. 🌍 **Geo-Bypass**: Bypass regional IP blocks on Google CloudCode & Gemini APIs with 0% VPN overhead.
 2. ☁️ **100% Serverless Mode**: Run the proxy 24/7 on Cloudflare Edge without keeping your PC or server turned on.
-3. 🔒 **Public HTTPS Access**: Connect from Cursor, Windsurf, Claude Code, or mobile devices anywhere via Cloudflare Tunnels or Worker URLs.
+3. 🔒 **Public HTTPS Access**: Connect from Cursor, Windsurf, Claude Code, Cline, Roo Code, or mobile devices anywhere via Cloudflare Tunnels or Worker URLs.
 
 ---
 
@@ -72,18 +72,29 @@ You can now directly use:
 - **Anthropic Base URL**: `https://agy-proxy-edge.<your-subdomain>.workers.dev`
 - **API Key**: `dummy` (or your `PROXY_API_KEY`)
 - **Default Model**: `gemini-3.8-flash-high`
-- **Supported Models**: `gemini-3.8-flash-high`, `gemini-3.8-flash-medium`, `claude-sonnet-4-6`, `claude-3-7-sonnet`, `claude-3-5-sonnet`, `gpt-4o`, `gpt-4o-mini`, `o1`, `deepseek-r1`
+- **Supported Models**:
+  - `gemini-3.8-flash-high`, `gemini-3.8-flash-medium`, `gemini-3.8-flash-low`
+  - `gemini-3.7-flash-high`, `gemini-3.7-flash-medium`, `gemini-3.7-flash-low`
+  - `gemini-3.1-pro-high`, `gemini-3.1-pro-low`
+  - `gemini-3.1-flash-lite` (`gpt-4o-mini`)
+  - `claude-sonnet-4-6` (`claude-3-7-sonnet`, `claude-3-5-sonnet`)
+  - `claude-opus-4-6-thinking` (`claude-3-opus`)
+  - `gpt-oss-120b-medium`, `gpt-4o`, `o1`, `deepseek-r1`
 
 ---
 
 ## 💡 Key Features in v2.2.0
 
-- **Upstream User-Agent**: Updated to `antigravity/hub/2.19.1` matching official client telemetry.
-- **Multi-Account Failover Loop**: Automatically rotates and fails over to healthy accounts on `429 Too Many Requests`, `401 Unauthorized` (with token refresh), or `5xx Server Error`.
-- **Role Sanitization**: Message roles are strictly mapped to `user` or `model` (lowercase) and system instructions are extracted into `systemInstruction`, preventing CloudCode Error 500 on Claude models.
-- **Claude Code CLI Compatibility**: Full support for Claude Code endpoints (`/api/hello`, `/api/claude_cli/bootstrap`, `/api/claude_code_penguin_mode`, `/api/web/domain_info`, `/v1/messages`).
-- **OpenAI Responses API**: Compatible with Codex CLI and OpenAI `/v1/responses` endpoints.
-- **Disabled Accounts Filter**: Ignores disabled accounts (`enabled: false`) when parsing credentials.
+- **Upstream User-Agent Alignment**: Uses `antigravity/hub/2.19.1` matching official client telemetry.
+- **Multi-Account Failover Loop**: Automatically iterates through pooled accounts on `429 Too Many Requests`, `401 Unauthorized` (with automatic token refresh), or `5xx Server Error` (500, 502, 503, 504), preventing interrupted requests.
+- **Role Sanitization for Claude Models**: Message roles are strictly sanitized to lowercase `user` (for `user`, `context`) or `model` (for `model`, `assistant`), and system instructions are extracted to `systemInstruction`, preventing CloudCode Error 500 when using Claude Sonnet 4.6 or Claude Opus 4.6.
+- **Roo Code & Cline Optimization**:
+  - Full tool conversion (`tools`, `tool_use`, `tool_result`, `functionCall`, `functionResponse`).
+  - Supports `custom.input_schema`, `custom.parameters`, `custom.name`, and `custom.description`.
+  - Advanced schema sanitization (`sanitizeGeminiSchema`): flattens `anyOf`, `oneOf`, `allOf`, converts nullable types (`["string", "null"]` -> `type: "string", nullable: true`), and strips unsupported metadata (`$schema`, `definitions`, `additionalProperties`) to prevent Gemini 400 errors.
+- **Claude Code CLI Compatibility**: Full endpoint support for Claude Code CLI bootstrap (`/api/hello`, `/api/claude_cli/bootstrap`, `/api/claude_code_penguin_mode`, `/api/web/domain_info`, `/v1/messages`).
+- **OpenAI Responses API**: Native compatibility with OpenAI Codex CLI (`/v1/responses`) and Chat Completions (`/v1/chat/completions`).
+- **Disabled Accounts Filter**: Automatically skips accounts marked `enabled: false` during pool initialization and rotation.
 
 ---
 
@@ -99,7 +110,7 @@ cloudflared tunnel --url http://127.0.0.1:8000
 `cloudflared` will generate a public URL like:
 `https://random-name.trycloudflare.com`
 
-You can use `https://random-name.trycloudflare.com/v1` in Cursor, Windsurf, or Claude Code on any external device!
+You can use `https://random-name.trycloudflare.com/v1` in Cursor, Windsurf, Claude Code, Cline, or Roo Code on any external device!
 
 ---
 
@@ -107,7 +118,8 @@ You can use `https://random-name.trycloudflare.com/v1` in Cursor, Windsurf, or C
 
 | Variable | Scope | Description |
 |---|---|---|
-| `CLOUDFLARE_UPSTREAM_URL` | Local `agy-proxy` | URL of your deployed Cloudflare Worker to route traffic through. |
+| `CLOUDFLARE_UPSTREAM_URL` | Local `agy-proxy` | URL of your deployed Cloudflare Worker to route traffic through for Geo-Bypass. |
 | `ACCOUNTS_JSON` | Cloudflare Worker Secret | JSON string of account credentials for 100% serverless edge mode. |
 | `PROXY_API_KEY` | Local or Worker | Secret key required in client request headers (`Authorization: Bearer <key>`). |
-| `HTTP_PROXY` / `HTTPS_PROXY` | Local `agy-proxy` | Standard proxy URL for Python `httpx`. |
+| `AGY_UPSTREAM_PROXY` / `ALL_PROXY` | Local `agy-proxy` | Corporate/SOCKS/HTTP proxy URL applied to all upstream Google API sessions. |
+| `HTTP_PROXY` / `HTTPS_PROXY` | Local `agy-proxy` | Standard HTTP/HTTPS proxy URL for Python `httpx` client sessions. |
