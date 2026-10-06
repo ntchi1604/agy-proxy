@@ -61,6 +61,28 @@ class TestDnsFallback(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(len(res_b) > 0)
         self.assertEqual(res_b[0][4][0], "127.0.0.1")
 
+    def test_patched_getaddrinfo_stale_fallback_on_system_failure(self):
+        """Tests that when system getaddrinfo fails with gaierror -3, last known good stale IP is returned."""
+        import unittest.mock
+        from agy_proxy import dns_fallback
+
+        test_host = "daily-cloudcode-pa.googleapis.com"
+        orig_fn = dns_fallback._ORIG_GETADDRINFO
+
+        def fake_getaddrinfo(h, port, family=0, type=0, proto=0, flags=0):
+            if h == test_host:
+                raise socket.gaierror(-3, "Temporary failure in name resolution")
+            # If resolved IP is passed, succeed:
+            return orig_fn(h, port, family, type, proto, flags)
+
+        with unittest.mock.patch("agy_proxy.dns_fallback._ORIG_GETADDRINFO", side_effect=fake_getaddrinfo):
+            # Clear fresh cache for this host to force error path
+            with dns_fallback._CACHE_LOCK:
+                dns_fallback._DNS_CACHE.pop(test_host, None)
+            res = patched_getaddrinfo(test_host, 443, family=socket.AF_INET)
+            self.assertTrue(len(res) > 0)
+            self.assertIn(res[0][4][0], dns_fallback._LAST_KNOWN_IPS[test_host])
+
 
 if __name__ == "__main__":
     unittest.main()

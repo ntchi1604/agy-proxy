@@ -5,10 +5,12 @@ Multi-Account Pool Management, and Web UI Dashboard.
 """
 
 import asyncio
+import copy
 import json
 import logging
 import os
 import random
+import socket
 import time
 from contextlib import asynccontextmanager
 from typing import Any
@@ -59,6 +61,141 @@ class OAuthCallbackRequest(BaseModel):
     proxy_url: str | None = None
 
 
+# -----------------------------------------------------------------------------
+# Resilient CloudCode Passthrough Metadata Cache
+# Prevents model list wiping, UI resets, and IDE project detachment on network failure
+# -----------------------------------------------------------------------------
+_PASSTHROUGH_CACHE_FILE = Path.home() / ".config" / "agy-proxy" / "passthrough_cache.json"
+_PASSTHROUGH_METADATA_CACHE: dict[str, Any] = {}
+
+
+def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
+    if action_key == "fetchAvailableModels":
+        models_dict = {}
+        for m in sorted(list(VALID_CLOUDCODE_MODELS)):
+            meta = PROXY_CATALOG_MODELS.get(m, {})
+            disp = meta.get("displayName", m)
+            max_tok = meta.get("maxTokens", 1048576)
+            models_dict[m] = {
+                "displayName": disp,
+                "maxTokens": max_tok,
+                "capabilities": {
+                    "chat": {"boolValue": True},
+                    "code": {"boolValue": True},
+                    "streaming": {"boolValue": True},
+                    "toolCalling": {"boolValue": True},
+                },
+                "modelExperiments": {
+                    "experiments": {
+                        "extended_context": {"boolValue": True},
+                        "reasoning": {"boolValue": True},
+                    }
+                },
+            }
+        return {
+            "models": models_dict,
+            "defaultAgentModelId": "gemini-3.8-flash-high",
+            "agentModelSorts": list(models_dict.keys()),
+            "commandModelIds": [m for m in models_dict.keys() if "flash" in m],
+            "tabModelIds": [m for m in models_dict.keys() if "flash" in m],
+            "experimentIds": ["exp-antigravity-models"],
+            "tieredModelIds": [m for m in models_dict.keys() if "tiered" in m],
+        }
+    elif action_key == "loadCodeAssist":
+        return {
+            "currentTier": {
+                "id": "free-tier",
+                "name": "Antigravity",
+                "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+                "privacyNotice": {"showNotice": False},
+            },
+            "allowedTiers": [
+                {
+                    "id": "free-tier",
+                    "name": "Antigravity",
+                    "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+                    "isDefault": True,
+                }
+            ],
+            "cloudaicompanionProject": "aicode-consumers",
+            "gcpManaged": False,
+        }
+    elif action_key == "listExperiments":
+        return {
+            "experimentIds": ["exp-antigravity-enabled"],
+            "flags": [
+                {"name": "enable_reasoning", "boolValue": True},
+                {"name": "enable_tools", "boolValue": True},
+                {"name": "enable_multi_turn", "boolValue": True},
+            ],
+        }
+    elif action_key == "fetchUserInfo":
+        return {
+            "user": {
+                "email": "user@antigravity",
+                "name": "Antigravity User",
+            }
+        }
+    return {}
+
+
+def _init_passthrough_cache():
+    global _PASSTHROUGH_METADATA_CACHE
+    _PASSTHROUGH_METADATA_CACHE = {}
+    if _PASSTHROUGH_CACHE_FILE.exists():
+        try:
+            with open(_PASSTHROUGH_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    _PASSTHROUGH_METADATA_CACHE.update(data)
+        except Exception as e:
+            logger.debug("Could not load passthrough cache: %s", e)
+    for k in ("fetchAvailableModels", "loadCodeAssist", "listExperiments"):
+        if k not in _PASSTHROUGH_METADATA_CACHE:
+            _PASSTHROUGH_METADATA_CACHE[k] = _get_default_passthrough_response(k)
+
+
+def _save_passthrough_cache():
+    try:
+        _PASSTHROUGH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_PASSTHROUGH_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(_PASSTHROUGH_METADATA_CACHE, f, indent=2)
+    except Exception as e:
+        logger.debug("Could not save passthrough cache: %s", e)
+
+
+def _get_cached_or_default_passthrough(action_key: str) -> dict[str, Any]:
+    if action_key in _PASSTHROUGH_METADATA_CACHE:
+        return copy.deepcopy(_PASSTHROUGH_METADATA_CACHE[action_key])
+    return _get_default_passthrough_response(action_key)
+
+
+def _process_passthrough_metadata(action_key: str, data: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+    if action_key == "listExperiments":
+        for flag in data.get("flags", []):
+            if isinstance(flag, dict) and "boolValue" in flag:
+                flag["boolValue"] = True
+    elif action_key == "fetchAvailableModels":
+        for model_id, model_data in data.get("models", {}).items():
+            if isinstance(model_data, dict):
+                for section in model_data.get("capabilities", {}).values():
+                    if isinstance(section, dict):
+                        for k, v in section.items():
+                            if isinstance(v, dict) and "boolValue" in v:
+                                v["boolValue"] = True
+                experiments = model_data.get("modelExperiments", {}).get("experiments", {})
+                if isinstance(experiments, dict):
+                    for exp_name, exp_val in experiments.items():
+                        if isinstance(exp_val, dict) and "boolValue" in exp_val:
+                            exp_val["boolValue"] = True
+    return data
+
+
+_init_passthrough_cache()
+
+
 def create_app(
     auth_manager: AuthManager | None = None,
     account_pool: AccountPool | None = None,
@@ -66,6 +203,11 @@ def create_app(
     allowed_origins: list[str] | None = None,
 ) -> FastAPI:
     """Creates and configures the FastAPI application."""
+
+    global _PASSTHROUGH_CACHE_FILE
+    if account_pool and getattr(account_pool, "accounts_file", None):
+        _PASSTHROUGH_CACHE_FILE = account_pool.accounts_file.parent / "passthrough_cache.json"
+        _init_passthrough_cache()
 
     effective_api_key = (
         api_key
@@ -1747,11 +1889,25 @@ def create_app(
                 else:
                     candidates = [a for a in pool.accounts.values() if getattr(a, "enabled", True)]
 
+        # Action key normalized
+        action_key = (action or action_path or "").split("?")[0].strip(":")
+        route_desc = f"/v1internal:{action}" if action else f"/v1internal/{action_path}"
+        is_metadata = action_key in (
+            "fetchAvailableModels",
+            "loadCodeAssist",
+            "listExperiments",
+            "fetchUserInfo",
+            "retrieveUserQuotaSummary",
+        )
+
         if not candidates:
+            if is_metadata:
+                cached_data = _get_cached_or_default_passthrough(action_key)
+                cached_data = _process_passthrough_metadata(action_key, cached_data)
+                return JSONResponse(status_code=200, content=cached_data)
             return JSONResponse(status_code=200, content={})
 
-        route_desc = f"/v1internal:{action}" if action else f"/v1internal/{action_path}"
-        timeout_sec = 180.0 if is_generation else 25.0
+        timeout_sec = 180.0 if is_generation else 8.0
         query_params = dict(request.query_params)
         from agy_proxy.auth import CLOUDCODE_BASE_URL
         if action:
@@ -1759,12 +1915,24 @@ def create_app(
         else:
             target_url = f"{CLOUDCODE_BASE_URL}/v1internal/{action_path}"
 
+        last_error = ""
+
         # 4. Multi-candidate failover loop
         for acc_idx, acc in enumerate(candidates):
             is_last = (acc_idx == len(candidates) - 1)
             acc_label = getattr(acc, "email", acc.account_id)
             if is_generation:
                 logger.info(f"[{acc_label}] Handling CloudCode generation: {route_desc}")
+
+            # Ensure candidate uses its own project ID to avoid 404 permissions error across accounts
+            candidate_body = copy.deepcopy(body) if isinstance(body, dict) else body
+            if isinstance(candidate_body, dict):
+                acc_proj = getattr(acc, "project_id", None) or "aicode-consumers"
+                if "project" in candidate_body:
+                    candidate_body["project"] = acc_proj
+                if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                    if "project" in candidate_body["request"]:
+                        candidate_body["request"]["project"] = acc_proj
 
             try:
                 headers = await acc.get_auth_headers()
@@ -1774,16 +1942,16 @@ def create_app(
                 c = await acc.get_http_client()
 
                 if request.method == "POST":
-                    if isinstance(body, dict):
-                        resp = await c.post(target_url, headers=headers, json=body, params=query_params, timeout=timeout_sec)
-                    elif body is not None:
-                        resp = await c.post(target_url, headers=headers, content=str(body).encode("utf-8"), params=query_params, timeout=timeout_sec)
+                    if isinstance(candidate_body, dict):
+                        resp = await c.post(target_url, headers=headers, json=candidate_body, params=query_params, timeout=timeout_sec)
+                    elif candidate_body is not None:
+                        resp = await c.post(target_url, headers=headers, content=str(candidate_body).encode("utf-8"), params=query_params, timeout=timeout_sec)
                     else:
                         resp = await c.post(target_url, headers=headers, params=query_params, timeout=timeout_sec)
                 elif request.method == "GET":
                     resp = await c.get(target_url, headers=headers, params=query_params, timeout=timeout_sec)
                 else:
-                    resp = await c.request(request.method, target_url, headers=headers, json=body if isinstance(body, dict) else None, params=query_params, timeout=timeout_sec)
+                    resp = await c.request(request.method, target_url, headers=headers, json=candidate_body if isinstance(candidate_body, dict) else None, params=query_params, timeout=timeout_sec)
 
                 # Retry / failover logic
                 if resp.status_code == 401 and not is_last:
@@ -1799,9 +1967,24 @@ def create_app(
                     acc.mark_rate_limited(req_model if is_generation else "default", duration=60.0)
                     continue
 
-                if resp.status_code in (500, 502, 503, 504) and is_generation and not is_last:
+                if resp.status_code in (404, 500, 502, 503, 504) and is_generation and not is_last:
                     logger.warning("[%s] CloudCode error %d on %s (%s). Failing over to next account in pool...", acc_label, resp.status_code, route_desc, resp.text[:200])
                     continue
+
+                # Last candidate got 404 for generation - try automatic fallback to DEFAULT_MODEL if different model was requested
+                if resp.status_code == 404 and is_generation and is_last and req_model != DEFAULT_MODEL:
+                    logger.warning("[%s] Model %s returned 404. Attempting automatic fallback to %s...", acc_label, req_model, DEFAULT_MODEL)
+                    fallback_body = copy.deepcopy(candidate_body)
+                    if isinstance(fallback_body, dict):
+                        fallback_body["model"] = DEFAULT_MODEL
+                        if "request" in fallback_body and isinstance(fallback_body["request"], dict):
+                            fallback_body["request"]["model"] = DEFAULT_MODEL
+                    try:
+                        fb_resp = await c.post(target_url, headers=headers, json=fallback_body, params=query_params, timeout=timeout_sec)
+                        if fb_resp.status_code == 200:
+                            resp = fb_resp
+                    except Exception:
+                        pass
 
                 if resp.status_code >= 400:
                     logger.error(f"CloudCode Error {resp.status_code}: {resp.text}")
@@ -1814,23 +1997,12 @@ def create_app(
 
                 try:
                     data = resp.json()
-                    # Enable boolean experimental flags
-                    if action == "listExperiments" or action_path == "listExperiments":
-                        for flag in data.get("flags", []):
-                            if "boolValue" in flag:
-                                flag["boolValue"] = True
-                    elif action == "fetchAvailableModels" or action_path == "fetchAvailableModels":
-                        for model_id, model_data in data.get("models", {}).items():
-                            for section in model_data.get("capabilities", {}).values():
-                                if isinstance(section, dict):
-                                    for k, v in section.items():
-                                        if isinstance(v, dict) and "boolValue" in v:
-                                            v["boolValue"] = True
-                            experiments = model_data.get("modelExperiments", {}).get("experiments", {})
-                            for exp_name, exp_val in experiments.items():
-                                if isinstance(exp_val, dict) and "boolValue" in exp_val:
-                                    exp_val["boolValue"] = True
+                    # Cache successful metadata responses
+                    if resp.status_code == 200 and is_metadata and isinstance(data, dict) and data:
+                        _PASSTHROUGH_METADATA_CACHE[action_key] = data
+                        _save_passthrough_cache()
 
+                    data = _process_passthrough_metadata(action_key, data)
                     return JSONResponse(status_code=resp.status_code, content=data)
                 except Exception:
                     return Response(
@@ -1840,9 +2012,48 @@ def create_app(
                     )
 
             except Exception as e:
+                last_error = str(e)
                 logger.warning("[%s] CloudCode internal passthrough error (%s): %s", acc_label, route_desc, e)
+                is_net_error = isinstance(e, (httpx.ConnectError, httpx.ConnectTimeout, socket.gaierror, OSError))
+
+                # If non-generation metadata call hit network failure, serve cached metadata immediately
+                if not is_generation and is_metadata and is_net_error:
+                    logger.info("[%s] Network unreachable for %s. Serving cached metadata immediately.", acc_label, route_desc)
+                    cached_data = _get_cached_or_default_passthrough(action_key)
+                    cached_data = _process_passthrough_metadata(action_key, cached_data)
+                    return JSONResponse(status_code=200, content=cached_data)
+
+                # If generation hit transient network error on last account, try one brief retry
+                if is_generation and is_last and is_net_error:
+                    try:
+                        await asyncio.sleep(1.0)
+                        fb_resp = await c.post(target_url, headers=headers, json=candidate_body, params=query_params, timeout=timeout_sec)
+                        if fb_resp.status_code == 200:
+                            return JSONResponse(status_code=200, content=fb_resp.json())
+                    except Exception:
+                        pass
+
                 if not is_last:
                     continue
+
+        # All candidates failed
+        if not is_generation and is_metadata:
+            logger.info("All candidates failed for %s. Serving cached metadata.", route_desc)
+            cached_data = _get_cached_or_default_passthrough(action_key)
+            cached_data = _process_passthrough_metadata(action_key, cached_data)
+            return JSONResponse(status_code=200, content=cached_data)
+
+        if is_generation:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": {
+                        "code": 503,
+                        "message": f"CloudCode upstream generation failed across all accounts ({last_error})",
+                        "status": "UNAVAILABLE",
+                    }
+                },
+            )
 
         return JSONResponse(status_code=200, content={})
 

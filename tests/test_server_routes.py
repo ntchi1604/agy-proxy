@@ -596,6 +596,177 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(called_account, ["user_b@gmail.com"])
 
+    async def test_cloudcode_passthrough_serves_cached_models_on_network_failure(self):
+        """Tests that when network drops, fetchAvailableModels returns full cached models rather than empty dict."""
+        acc1 = AccountSession(
+            account_id="acc_net_fail",
+            email="fail_net@gmail.com",
+            refresh_token="rf_net",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_net_fail"] = acc1
+
+        class NetFailClient:
+            async def post(self, url, **kwargs):
+                raise httpx.ConnectError("Network unreachable")
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=NetFailClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok"})
+
+        resp = await self.client.post("/v1internal:fetchAvailableModels", json={})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("models", data)
+        self.assertTrue(len(data["models"]) > 0)
+        self.assertIn("gemini-3.8-flash-high", data["models"])
+        # Verify model entry structure
+        model_entry = data["models"]["gemini-3.8-flash-high"]
+        self.assertIn("displayName", model_entry)
+        if "capabilities" in model_entry:
+            self.assertTrue(model_entry["capabilities"]["chat"]["boolValue"])
+        elif "modelExperiments" in model_entry:
+            self.assertIsInstance(model_entry["modelExperiments"], dict)
+
+    async def test_cloudcode_passthrough_serves_cached_codeassist_on_network_failure(self):
+        """Tests that when upstream fails, loadCodeAssist returns project info rather than empty dict."""
+        acc1 = AccountSession(
+            account_id="acc_ca_fail",
+            email="fail_ca@gmail.com",
+            refresh_token="rf_ca",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_ca_fail"] = acc1
+
+        class NetFailClient:
+            async def post(self, url, **kwargs):
+                raise httpx.ConnectTimeout("Connection timed out")
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=NetFailClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok"})
+
+        resp = await self.client.post("/v1internal:loadCodeAssist", json={"metadata": {"ideType": "ANTIGRAVITY"}})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("currentTier", data)
+        self.assertIn("cloudaicompanionProject", data)
+        self.assertEqual(data["cloudaicompanionProject"], "aicode-consumers")
+
+    async def test_cloudcode_passthrough_failover_on_404(self):
+        """Tests that generation requests fail over to next candidate when receiving HTTP 404."""
+        acc1 = AccountSession(
+            account_id="acc_404",
+            email="user_404@gmail.com",
+            refresh_token="rf_404",
+            is_primary=True,
+        )
+        acc2 = AccountSession(
+            account_id="acc_200",
+            email="user_200@gmail.com",
+            refresh_token="rf_200",
+            is_primary=False,
+        )
+        self.pool.accounts["acc_404"] = acc1
+        self.pool.accounts["acc_200"] = acc2
+
+        class Client404:
+            async def post(self, url, **kwargs):
+                return unittest.mock.Mock(
+                    status_code=404,
+                    text='{"error": {"code": 404, "message": "Requested entity was not found."}}',
+                    content=b'{"error": {"code": 404, "message": "Requested entity was not found."}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"error": {"code": 404, "message": "Requested entity was not found."}},
+                )
+
+        class Client200:
+            async def post(self, url, **kwargs):
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Recovered turn"}}',
+                    content=b'{"response": {"text": "Recovered turn"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Recovered turn"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=Client404())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok1"})
+        acc2.get_http_client = unittest.mock.AsyncMock(return_value=Client200())
+        acc2.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok2"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={"model": "gemini-2.5-flash", "request": {"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Recovered turn"}})
+        self.assertEqual(acc2.total_requests, 1)
+
+    async def test_cloudcode_passthrough_isolates_candidate_project_id(self):
+        """Tests that each account sends its own project_id rather than a cross-account project_id."""
+        acc1 = AccountSession(
+            account_id="acc_proj1",
+            email="proj1@gmail.com",
+            project_id="project-alpha",
+            refresh_token="rf_1",
+            is_primary=False,
+        )
+        self.pool.accounts["acc_proj1"] = acc1
+
+        posted_bodies = []
+
+        class InspectClient:
+            async def post(self, url, **kwargs):
+                posted_bodies.append(kwargs.get("json"))
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"ok": true}',
+                    content=b'{"ok": true}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"ok": True},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=InspectClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok1"})
+
+        # Request arrives with an old/different project
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "project": "project-from-prior-account",
+                "model": "gemini-2.5-flash",
+                "request": {"project": "project-from-prior-account", "contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(posted_bodies), 1)
+        self.assertEqual(posted_bodies[0]["project"], "project-alpha")
+        self.assertEqual(posted_bodies[0]["request"]["project"], "project-alpha")
+
+    async def test_cloudcode_passthrough_generation_error_returns_503(self):
+        """Tests that when generation fails across all accounts, it returns 503 instead of 200 empty dict."""
+        acc1 = AccountSession(
+            account_id="acc_dead",
+            email="dead@gmail.com",
+            refresh_token="rf_dead",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_dead"] = acc1
+
+        class DeadClient:
+            async def post(self, url, **kwargs):
+                raise httpx.ConnectError("Service unreachable")
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=DeadClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={"model": "gemini-2.5-flash", "request": {"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}},
+        )
+        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(resp.json()["error"]["code"], 503)
+        self.assertEqual(resp.json()["error"]["status"], "UNAVAILABLE")
+
     async def test_export_and_import_accounts(self):
         oa = AccountSession(
             account_id="acc_export_test",

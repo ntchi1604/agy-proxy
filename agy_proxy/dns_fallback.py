@@ -22,6 +22,21 @@ _DNS_CACHE: dict[str, tuple[list[str], float]] = {}
 _CACHE_LOCK = threading.Lock()
 _DEFAULT_TTL = 300.0  # 5 minutes
 
+# Permanent Last-Known-Good IP store (RFC 8767 Serve-Stale pattern).
+# Populated with Google Anycast seed IPs and dynamically updated on every successful resolution.
+_LAST_KNOWN_IPS: dict[str, list[str]] = {
+    "daily-cloudcode-pa.googleapis.com": ["172.217.115.4", "172.217.116.4", "172.217.112.4", "172.217.114.4", "172.217.118.4"],
+    "cloudcode-pa.googleapis.com": ["172.217.115.4", "172.217.116.4", "172.217.112.4", "172.217.114.4", "172.217.118.4"],
+    "oauth2.googleapis.com": ["142.251.127.95", "142.250.180.10"],
+    "generativelanguage.googleapis.com": ["172.217.115.4", "172.217.116.4", "172.217.112.4", "172.217.114.4"],
+    "accounts.google.com": ["142.250.180.13", "172.217.16.205"],
+    "gemini.google.com": ["142.250.180.14", "172.217.16.206"],
+    "www.googleapis.com": ["142.250.180.10", "172.217.16.202"],
+}
+
+# Negative backoff tracker: hostname -> last_failure_timestamp
+_RECENT_FAILED_QUERIES: dict[str, float] = {}
+
 # Flag indicating system resolver is dropping/failing DNS requests
 _SYSTEM_DNS_BROKEN = False
 
@@ -51,10 +66,11 @@ def _build_dns_query(hostname: str, qtype: int = 1) -> bytes:
     return header + qname + struct.pack("!HH", qtype, 1)  # Class 1 = IN
 
 
-def query_public_dns_a(hostname: str, timeout: float = 1.5) -> list[str]:
-    """Queries public DNS over UDP directly for A records."""
+def query_public_dns_a(hostname: str, timeout: float = 0.8) -> list[str]:
+    """Queries public DNS over UDP directly for A records (fast timeout)."""
     packet = _build_dns_query(hostname, qtype=1)
-    for server in PUBLIC_DNS_SERVERS:
+    # Query primary fast servers first
+    for server in PUBLIC_DNS_SERVERS[:2]:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.settimeout(timeout)
@@ -101,8 +117,11 @@ def query_public_dns_a(hostname: str, timeout: float = 1.5) -> list[str]:
                 offset += rdlen
 
             if ips:
+                clean_host = hostname.strip().lower()
                 with _CACHE_LOCK:
-                    _DNS_CACHE[hostname.lower()] = (ips, time.time() + ttl_found)
+                    _DNS_CACHE[clean_host] = (ips, time.time() + ttl_found)
+                    _LAST_KNOWN_IPS[clean_host] = ips
+                    _RECENT_FAILED_QUERIES.pop(clean_host, None)
                 return ips
         except Exception:
             continue
@@ -111,7 +130,7 @@ def query_public_dns_a(hostname: str, timeout: float = 1.5) -> list[str]:
 
 
 def resolve_hostname_fallback(hostname: str) -> list[str]:
-    """Resolves a hostname using cache or public DNS query."""
+    """Resolves a hostname using cache, public DNS query, or last-known-good stale IP."""
     clean_host = hostname.strip().lower()
     now = time.time()
     with _CACHE_LOCK:
@@ -120,8 +139,22 @@ def resolve_hostname_fallback(hostname: str) -> list[str]:
             if exp > now:
                 return ips
 
+        # Negative backoff check: if public DNS failed within last 5 seconds, use stale IP immediately
+        last_failed = _RECENT_FAILED_QUERIES.get(clean_host, 0.0)
+        if now - last_failed < 5.0 and clean_host in _LAST_KNOWN_IPS:
+            return _LAST_KNOWN_IPS[clean_host]
+
     ips = query_public_dns_a(clean_host)
-    return ips
+    if ips:
+        return ips
+
+    # Record negative failure timestamp
+    with _CACHE_LOCK:
+        _RECENT_FAILED_QUERIES[clean_host] = now
+        if clean_host in _LAST_KNOWN_IPS:
+            return _LAST_KNOWN_IPS[clean_host]
+
+    return []
 
 
 def _is_ip_or_local(host: str | bytes | None) -> bool:
@@ -160,10 +193,12 @@ def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
     else:
         clean_host = str(host).strip().lower()
 
-    # If cached, use cached IP immediately to prevent hanging on broken system resolver
     now = time.time()
     with _CACHE_LOCK:
         cached = _DNS_CACHE.get(clean_host)
+        stale_ips = _LAST_KNOWN_IPS.get(clean_host)
+
+    # 1. Fresh cache hit: instant return
     if cached and cached[1] > now and cached[0]:
         resolved_ip = cached[0][0]
         try:
@@ -171,7 +206,7 @@ def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
         except Exception:
             pass
 
-    # If system DNS was already determined to be broken, try fallback directly
+    # 2. If system DNS was already determined broken, try fallback resolver first
     if _SYSTEM_DNS_BROKEN:
         fallback_ips = resolve_hostname_fallback(clean_host)
         if fallback_ips:
@@ -180,26 +215,64 @@ def patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
             except Exception:
                 pass
 
-    # Try original getaddrinfo
+    # 3. Try original system getaddrinfo
     try:
-        return _ORIG_GETADDRINFO(host, port, family, type, proto, flags)
+        res = _ORIG_GETADDRINFO(host, port, family, type, proto, flags)
+        # Learn resolved IP to keep last-known-good cache fresh
+        if res and isinstance(res, list):
+            resolved_ips = []
+            for item in res:
+                if len(item) > 4 and isinstance(item[4], tuple) and item[4]:
+                    resolved_ips.append(item[4][0])
+            if resolved_ips:
+                with _CACHE_LOCK:
+                    _LAST_KNOWN_IPS[clean_host] = resolved_ips
+                    _DNS_CACHE[clean_host] = (resolved_ips, now + _DEFAULT_TTL)
+                    _RECENT_FAILED_QUERIES.pop(clean_host, None)
+        return res
     except (socket.gaierror, socket.herror, TimeoutError, OSError) as exc:
         _SYSTEM_DNS_BROKEN = True
-        logger.debug("System DNS resolution failed for %s (%s). Attempting fallback...", host, exc)
+        logger.debug("System DNS resolution failed for %s (%s). Attempting resilient fallback...", host, exc)
+
+        # 4. Immediate serve-stale fallback if known IP exists (RFC 8767)
+        if stale_ips:
+            try:
+                return _ORIG_GETADDRINFO(stale_ips[0], port, family, type, proto, flags)
+            except Exception:
+                pass
+
+        # 5. Last resort: query public DNS
         fallback_ips = resolve_hostname_fallback(clean_host)
         if fallback_ips:
-            return _ORIG_GETADDRINFO(fallback_ips[0], port, family, type, proto, flags)
+            try:
+                return _ORIG_GETADDRINFO(fallback_ips[0], port, family, type, proto, flags)
+            except Exception:
+                pass
+
         raise
 
 
 def prewarm_critical_dns():
-    """Background worker to pre-populate DNS cache for critical Google endpoints."""
+    """Background worker to pre-populate and periodically refresh DNS cache for critical Google endpoints."""
     def _worker():
-        for h in CRITICAL_GOOGLE_HOSTS:
-            try:
-                query_public_dns_a(h)
-            except Exception:
-                pass
+        while True:
+            for h in CRITICAL_GOOGLE_HOSTS:
+                try:
+                    # Try system resolver first to update cache
+                    res = _ORIG_GETADDRINFO(h, 443, socket.AF_INET)
+                    ips = [x[4][0] for x in res if len(x) > 4 and x[4]]
+                    if ips:
+                        with _CACHE_LOCK:
+                            _LAST_KNOWN_IPS[h] = ips
+                            _DNS_CACHE[h] = (ips, time.time() + _DEFAULT_TTL)
+                except Exception:
+                    # Fall back to public DNS
+                    try:
+                        query_public_dns_a(h)
+                    except Exception:
+                        pass
+            time.sleep(180.0)  # Refresh every 3 minutes
+
     t = threading.Thread(target=_worker, daemon=True, name="dns_prewarm")
     t.start()
 
