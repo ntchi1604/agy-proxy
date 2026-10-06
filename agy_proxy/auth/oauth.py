@@ -276,13 +276,30 @@ class AntigravityOAuthSession(AccountSession):
             )
             if resp.status_code == 200:
                 self.available_models = resp.json().get("models", {})
+                if self.on_token_refreshed:
+                    try:
+                        import inspect
+                        if inspect.iscoroutinefunction(self.on_token_refreshed):
+                            await self.on_token_refreshed()
+                        else:
+                            self.on_token_refreshed()
+                    except Exception as cb_err:
+                        logger.debug("[%s] on_token_refreshed callback error in fetch_models: %s", self.email, cb_err)
                 return self.available_models
         except Exception as e:
             logger.debug("[%s] fetchAvailableModels error: %s", self.email, e)
         return self.available_models
 
     def is_model_supported(self, model_name: str) -> bool:
-        """Antigravity OAuth accounts support both Gemini and 3P models (Claude, Opus, GPT-OSS)."""
+        """Antigravity OAuth accounts support Gemini, Claude 4.6, and Claude 5.5 (if enabled)."""
+        from agy_proxy.models import normalize_model_name
+        norm = normalize_model_name(model_name)
+        if norm.startswith("claude-") and ("5-5" in norm or "5.5" in norm):
+            if hasattr(self, "unsupported_models") and norm in self.unsupported_models:
+                return False
+            if getattr(self, "available_models", None):
+                return norm in self.available_models
+            return True
         return True
 
     def get_quota_details(self) -> dict[str, Any]:

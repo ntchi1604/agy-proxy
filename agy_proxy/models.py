@@ -79,6 +79,34 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-3-5-haiku": "gemini-3.1-flash-lite",
     "claude-3-haiku": "gemini-3.1-flash-lite",
 
+    # Claude 5.5 Aliases
+    "claude-5-5": "claude-sonnet-5-5-high",
+    "claude-5.5": "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5": "claude-sonnet-5-5-high",
+    "claude-sonnet-5.5": "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5-high": "claude-sonnet-5-5-high",
+    "claude-sonnet-5.5-high": "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5-medium": "claude-sonnet-5-5-medium",
+    "claude-sonnet-5.5-medium": "claude-sonnet-5-5-medium",
+    "claude-sonnet-5-5-med": "claude-sonnet-5-5-medium",
+    "claude-sonnet-5.5-med": "claude-sonnet-5-5-medium",
+    "claude-sonnet-5-5-low": "claude-sonnet-5-5-low",
+    "claude-sonnet-5.5-low": "claude-sonnet-5-5-low",
+    "claude-5-5-sonnet": "claude-sonnet-5-5-high",
+    "claude-5.5-sonnet": "claude-sonnet-5-5-high",
+    "claude-opus-5-5": "claude-opus-5-5-high",
+    "claude-opus-5.5": "claude-opus-5-5-high",
+    "claude-opus-5-5-high": "claude-opus-5-5-high",
+    "claude-opus-5.5-high": "claude-opus-5-5-high",
+    "claude-opus-5-5-medium": "claude-opus-5-5-medium",
+    "claude-opus-5.5-medium": "claude-opus-5-5-medium",
+    "claude-opus-5-5-med": "claude-opus-5-5-medium",
+    "claude-opus-5.5-med": "claude-opus-5-5-medium",
+    "claude-opus-5-5-low": "claude-opus-5-5-low",
+    "claude-opus-5.5-low": "claude-opus-5-5-low",
+    "claude-5-5-opus": "claude-opus-5-5-high",
+    "claude-5.5-opus": "claude-opus-5-5-high",
+
     # OpenAI Codex CLI Model Aliases
     "gpt-6-astra": "gemini-3.8-flash-high",
     "gpt-6": "gemini-3.8-flash-high",
@@ -145,6 +173,12 @@ VALID_CLOUDCODE_MODELS = {
     # 3rd Party models
     "claude-sonnet-4-6",
     "claude-opus-4-6-thinking",
+    "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5-medium",
+    "claude-sonnet-5-5-low",
+    "claude-opus-5-5-high",
+    "claude-opus-5-5-medium",
+    "claude-opus-5-5-low",
     "gpt-oss-120b-medium",
 }
 
@@ -182,6 +216,15 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     # 3rd Party models
     "claude-sonnet-4-6": {"displayName": "Claude Sonnet 4.6 (Thinking)", "maxTokens": 200000},
     "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)", "maxTokens": 200000},
+    "claude-sonnet-5-5-high": {"displayName": "Claude Sonnet 5.5 (High)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-sonnet-5-5-medium": {"displayName": "Claude Sonnet 5.5 (Medium)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-sonnet-5-5-low": {"displayName": "Claude Sonnet 5.5 (Low)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-opus-5-5-high": {"displayName": "Claude Opus 5.5 (High)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-opus-5-5-medium": {"displayName": "Claude Opus 5.5 (Medium)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-opus-5-5-low": {"displayName": "Claude Opus 5.5 (Low)", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-5-5": {"displayName": "Claude 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-sonnet-5-5": {"displayName": "Claude Sonnet 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
+    "claude-opus-5-5": {"displayName": "Claude Opus 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
     "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)", "maxTokens": 131072},
     "gpt-oss-120b": {"displayName": "GPT-OSS 120B", "maxTokens": 131072},
     # OpenAI & Codex models available in agy-proxy
@@ -232,6 +275,15 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
     "o3-mini": {"displayName": "OpenAI o3 Mini", "maxTokens": 200000, "description": "Latest reasoning model with high performance", "category": "OpenAI"},
 
     # Anthropic Claude Models
+    "claude-sonnet-5-5-high": {"displayName": "Claude Sonnet 5.5 (High)", "maxTokens": 1000000, "description": "Anthropic Claude Sonnet 5.5 with high reasoning depth (1M context, 128k output)", "category": "Anthropic"},
+    "claude-sonnet-5-5-medium": {"displayName": "Claude Sonnet 5.5 (Medium)", "maxTokens": 1000000, "description": "Anthropic Claude Sonnet 5.5 with medium reasoning (1M context, 128k output)", "category": "Anthropic"},
+    "claude-sonnet-5-5-low": {"displayName": "Claude Sonnet 5.5 (Low)", "maxTokens": 1000000, "description": "Anthropic Claude Sonnet 5.5 with light reasoning (1M context, 128k output)", "category": "Anthropic"},
+    "claude-opus-5-5-high": {"displayName": "Claude Opus 5.5 (High)", "maxTokens": 1000000, "description": "Anthropic Claude Opus 5.5 flagship with deep reasoning (1M context, 128k output)", "category": "Anthropic"},
+    "claude-opus-5-5-medium": {"displayName": "Claude Opus 5.5 (Medium)", "maxTokens": 1000000, "description": "Anthropic Claude Opus 5.5 with medium reasoning (1M context, 128k output)", "category": "Anthropic"},
+    "claude-opus-5-5-low": {"displayName": "Claude Opus 5.5 (Low)", "maxTokens": 1000000, "description": "Anthropic Claude Opus 5.5 with light reasoning (1M context, 128k output)", "category": "Anthropic"},
+    "claude-5-5": {"displayName": "Claude 5.5", "maxTokens": 1000000, "description": "Claude 5.5 flagship default alias (Sonnet High)", "category": "Anthropic"},
+    "claude-sonnet-5-5": {"displayName": "Claude Sonnet 5.5", "maxTokens": 1000000, "description": "Claude Sonnet 5.5 standard alias", "category": "Anthropic"},
+    "claude-opus-5-5": {"displayName": "Claude Opus 5.5", "maxTokens": 1000000, "description": "Claude Opus 5.5 standard alias", "category": "Anthropic"},
     "claude-sonnet-4-6": {"displayName": "Claude 3.7 Sonnet (Thinking)", "maxTokens": 200000, "description": "Anthropic flagship hybrid model with extended thinking", "category": "Anthropic"},
     "claude-opus-4-6-thinking": {"displayName": "Claude 3 Opus (Thinking)", "maxTokens": 200000, "description": "Anthropic high-capability reasoning model", "category": "Anthropic"},
     "claude-3-7-sonnet": {"displayName": "Claude 3.7 Sonnet", "maxTokens": 200000, "description": "Claude 3.7 Sonnet standard alias", "category": "Anthropic"},
@@ -323,6 +375,15 @@ def normalize_model_name(model_name: str | None) -> str:
         return "gemini-3.1-pro-low"
     if "2.5-pro" in cleaned or "2_5-pro" in cleaned:
         return "gemini-2.5-pro"
+
+    # Claude 5.5 models
+    if "5.5" in cleaned or "5-5" in cleaned:
+        is_opus = "opus" in cleaned
+        if "low" in cleaned:
+            return "claude-opus-5-5-low" if is_opus else "claude-sonnet-5-5-low"
+        if "med" in cleaned:
+            return "claude-opus-5-5-medium" if is_opus else "claude-sonnet-5-5-medium"
+        return "claude-opus-5-5-high" if is_opus else "claude-sonnet-5-5-high"
 
     # Family specific checks
     if "opus" in cleaned:

@@ -491,9 +491,24 @@ def _apply_thinking_config(
         if effort_val in effort_map:
             thinking_config["thinkingLevel"] = effort_map[effort_val]
 
-    # For Google Gemini models using dynamic budget (-1), set appropriate thinkingLevel (HIGH, MEDIUM, LOW)
-    if "thinkingLevel" not in thinking_config and thinking_config.get("thinkingBudget") == -1:
-        if not backend_model.startswith("claude-"):
+    # For Claude 5.5 adaptive reasoning models (supportsAdaptiveThinking=True with Vertex)
+    is_c55 = backend_model.startswith("claude-") and ("5-5" in backend_model or "5.5" in backend_model)
+    if is_c55:
+        if thinking_config.get("includeThoughts") is not False:
+            if thinking_config.get("thinkingBudget") == -1:
+                thinking_config["thinkingBudget"] = 0
+            if "thinkingLevel" not in thinking_config:
+                if backend_model.endswith("-low") or "-low" in backend_model:
+                    thinking_config["thinkingLevel"] = "LOW"
+                elif backend_model.endswith("-medium") or "-medium" in backend_model or "-med" in backend_model:
+                    thinking_config["thinkingLevel"] = "MEDIUM"
+                else:
+                    thinking_config["thinkingLevel"] = "HIGH"
+        else:
+            thinking_config.pop("thinkingLevel", None)
+    elif not backend_model.startswith("claude-"):
+        # For Google Gemini models using dynamic budget (-1), set appropriate thinkingLevel (HIGH, MEDIUM, LOW)
+        if "thinkingLevel" not in thinking_config and thinking_config.get("thinkingBudget") == -1:
             if backend_model.endswith("-high") or "high" in backend_model:
                 thinking_config["thinkingLevel"] = "HIGH"
             elif backend_model.endswith("-medium") or "medium" in backend_model:

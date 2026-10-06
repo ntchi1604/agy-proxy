@@ -75,6 +75,12 @@ const VALID_CLOUDCODE_MODELS = new Set([
   // 3rd Party models
   "claude-sonnet-4-6",
   "claude-opus-4-6-thinking",
+  "claude-sonnet-5-5-high",
+  "claude-sonnet-5-5-medium",
+  "claude-sonnet-5-5-low",
+  "claude-opus-5-5-high",
+  "claude-opus-5-5-medium",
+  "claude-opus-5-5-low",
   "gpt-oss-120b-medium",
 ]);
 
@@ -148,6 +154,34 @@ const MODEL_ALIASES = {
   "claude-3-5-haiku": "gemini-3.1-flash-lite",
   "claude-3-haiku": "gemini-3.1-flash-lite",
 
+  // Claude 5.5 Aliases
+  "claude-5-5": "claude-sonnet-5-5-high",
+  "claude-5.5": "claude-sonnet-5-5-high",
+  "claude-sonnet-5-5": "claude-sonnet-5-5-high",
+  "claude-sonnet-5.5": "claude-sonnet-5-5-high",
+  "claude-sonnet-5-5-high": "claude-sonnet-5-5-high",
+  "claude-sonnet-5.5-high": "claude-sonnet-5-5-high",
+  "claude-sonnet-5-5-medium": "claude-sonnet-5-5-medium",
+  "claude-sonnet-5.5-medium": "claude-sonnet-5-5-medium",
+  "claude-sonnet-5-5-med": "claude-sonnet-5-5-medium",
+  "claude-sonnet-5.5-med": "claude-sonnet-5-5-medium",
+  "claude-sonnet-5-5-low": "claude-sonnet-5-5-low",
+  "claude-sonnet-5.5-low": "claude-sonnet-5-5-low",
+  "claude-5-5-sonnet": "claude-sonnet-5-5-high",
+  "claude-5.5-sonnet": "claude-sonnet-5-5-high",
+  "claude-opus-5-5": "claude-opus-5-5-high",
+  "claude-opus-5.5": "claude-opus-5-5-high",
+  "claude-opus-5-5-high": "claude-opus-5-5-high",
+  "claude-opus-5.5-high": "claude-opus-5-5-high",
+  "claude-opus-5-5-medium": "claude-opus-5-5-medium",
+  "claude-opus-5.5-medium": "claude-opus-5-5-medium",
+  "claude-opus-5-5-med": "claude-opus-5-5-medium",
+  "claude-opus-5.5-med": "claude-opus-5-5-medium",
+  "claude-opus-5-5-low": "claude-opus-5-5-low",
+  "claude-opus-5.5-low": "claude-opus-5-5-low",
+  "claude-5-5-opus": "claude-opus-5-5-high",
+  "claude-5.5-opus": "claude-opus-5-5-high",
+
   // OpenAI Codex Models
   "gpt-6-astra": "gemini-3.8-flash-high",
   "gpt-6": "gemini-3.8-flash-high",
@@ -193,6 +227,15 @@ const PROXY_MODELS_LIST = [
   { id: "gemini-2.5-flash", object: "model", owned_by: "google", description: "Gemini 2.5 Flash" },
 
   // Anthropic Claude
+  { id: "claude-sonnet-5-5-high", object: "model", owned_by: "anthropic", description: "Claude Sonnet 5.5 High Reasoning (1M Context)" },
+  { id: "claude-sonnet-5-5-medium", object: "model", owned_by: "anthropic", description: "Claude Sonnet 5.5 Medium Reasoning (1M Context)" },
+  { id: "claude-sonnet-5-5-low", object: "model", owned_by: "anthropic", description: "Claude Sonnet 5.5 Low Reasoning (1M Context)" },
+  { id: "claude-opus-5-5-high", object: "model", owned_by: "anthropic", description: "Claude Opus 5.5 High Reasoning (1M Context)" },
+  { id: "claude-opus-5-5-medium", object: "model", owned_by: "anthropic", description: "Claude Opus 5.5 Medium Reasoning (1M Context)" },
+  { id: "claude-opus-5-5-low", object: "model", owned_by: "anthropic", description: "Claude Opus 5.5 Low Reasoning (1M Context)" },
+  { id: "claude-5-5", object: "model", owned_by: "anthropic-alias", description: "Claude 5.5 alias" },
+  { id: "claude-sonnet-5-5", object: "model", owned_by: "anthropic-alias", description: "Claude Sonnet 5.5 alias" },
+  { id: "claude-opus-5-5", object: "model", owned_by: "anthropic-alias", description: "Claude Opus 5.5 alias" },
   { id: "claude-sonnet-4-6", object: "model", owned_by: "anthropic", description: "Claude Sonnet 4.6 (Extended Thinking)" },
   { id: "claude-opus-4-6-thinking", object: "model", owned_by: "anthropic", description: "Claude Opus 4.6 (Extended Thinking)" },
   { id: "claude-3-7-sonnet", object: "model", owned_by: "anthropic-alias", description: "Claude 3.7 Sonnet alias" },
@@ -279,6 +322,14 @@ function normalizeModelName(rawModel) {
   }
   if (cleaned.includes("2.5-pro") || cleaned.includes("2-5-pro")) {
     return "gemini-2.5-pro";
+  }
+
+  // Claude 5.5 models
+  if (cleaned.includes("5.5") || cleaned.includes("5-5")) {
+    const isOpus = cleaned.includes("opus");
+    if (cleaned.includes("low")) return isOpus ? "claude-opus-5-5-low" : "claude-sonnet-5-5-low";
+    if (cleaned.includes("med")) return isOpus ? "claude-opus-5-5-medium" : "claude-sonnet-5-5-medium";
+    return isOpus ? "claude-opus-5-5-high" : "claude-sonnet-5-5-high";
   }
 
   // Family-specific keyword matches

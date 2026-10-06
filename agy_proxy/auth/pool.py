@@ -445,6 +445,12 @@ class AccountPool:
             quota = prev.get("quota_summary") or item.get("quota_summary")
             if quota and not getattr(acc, "quota_summary", None):
                 acc.quota_summary = quota
+            models = prev.get("available_models") or item.get("available_models")
+            if models and not getattr(acc, "available_models", None):
+                if isinstance(models, list):
+                    acc.available_models = {m: {} for m in models}
+                elif isinstance(models, dict):
+                    acc.available_models = models
 
         # ── Step 4: load OAuth accounts (accounts.json) ───────────────────
         if self.accounts_file.exists():
@@ -789,6 +795,7 @@ class AccountPool:
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
                         "proxy_url": getattr(acc, "proxy_url", None),
+                        "available_models": list(getattr(acc, "available_models", {}).keys()),
                     }
                     sensitive = {
                         "refresh_token": acc.refresh_token,
@@ -1089,14 +1096,17 @@ class AccountPool:
         """Returns ordered list of candidate accounts for a request, prioritizing preferred (sticky) account."""
         self.reload_if_modified()
 
+        from agy_proxy.models import normalize_model_name
+        norm_model = normalize_model_name(model)
+
         if specific_account_id:
             if specific_account_id not in self.accounts:
                 raise RuntimeError(f"Requested account '{specific_account_id}' was not found in pool.")
             acc = self.accounts[specific_account_id]
             if not acc.enabled:
                 raise RuntimeError(f"Requested account {acc.email or acc.name or acc.account_id} is currently disabled/paused.")
-            if not acc.is_model_supported(model):
-                raise RuntimeError(f"Account {acc.email or acc.name or acc.account_id} ({acc.auth_method}) does not support model '{model}'.")
+            if not acc.is_model_supported(norm_model):
+                raise RuntimeError(f"Account {acc.email or acc.name or acc.account_id} ({acc.auth_method}) does not support model '{norm_model}'.")
             return [acc]
 
         if not self.accounts:
@@ -1106,22 +1116,30 @@ class AccountPool:
         if not active_pool:
             raise RuntimeError("All accounts in pool are currently disabled. Please enable at least one account in the dashboard.")
 
-        active_pool = [acc for acc in active_pool if acc.is_model_supported(model)]
+        active_pool = [acc for acc in active_pool if acc.is_model_supported(norm_model)]
+
+        # For Claude 5.5 models: if any accounts have explicitly confirmed access, restrict strictly to them
+        is_c55 = norm_model.startswith("claude-") and ("5-5" in norm_model or "5.5" in norm_model)
+        if is_c55:
+            confirmed = [acc for acc in active_pool if getattr(acc, "available_models", None) and norm_model in acc.available_models]
+            if confirmed:
+                active_pool = confirmed
+
         if not active_pool:
-            is_3p = is_3p_model(model)
+            is_3p = is_3p_model(norm_model)
             if is_3p:
                 raise RuntimeError("No active Google OAuth accounts available for Claude / 3P models.")
             else:
-                raise RuntimeError(f"No active accounts in pool support model {model}.")
+                raise RuntimeError(f"No active accounts in pool support model {norm_model}.")
 
         # Available candidates: accounts that are neither rate-limited nor quota-exhausted for the requested model
         available = [
             acc for acc in active_pool
-            if not acc.is_rate_limited(model) and not acc.is_quota_exhausted(model)
+            if not acc.is_rate_limited(norm_model) and not acc.is_quota_exhausted(norm_model)
         ]
         if not available:
             # Fall back to accounts that are at least not rate limited, or all active accounts to allow retry
-            not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(model)]
+            not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(norm_model)]
             available = not_rate_limited if not_rate_limited else list(active_pool)
 
         # Prioritize full API accounts (consumer OAuth, API key) over reverse-engineered browser sessions (gemini_web)

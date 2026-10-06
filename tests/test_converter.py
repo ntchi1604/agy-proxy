@@ -575,6 +575,46 @@ class TestModularConvertersPackage(unittest.TestCase):
         self.assertFalse(cfg["includeThoughts"])
         self.assertEqual(cfg["thinkingBudget"], 0)
 
+    def test_claude_5_5_thinking_config(self):
+        from agy_proxy.converters.common import _apply_thinking_config
+
+        # Default high model -> HIGH level, thinkingBudget 0
+        cfg_high = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_high, "claude-sonnet-5-5-high")
+        self.assertEqual(cfg_high["thinkingLevel"], "HIGH")
+        self.assertEqual(cfg_high["thinkingBudget"], 0)
+        self.assertTrue(cfg_high["includeThoughts"])
+
+        # Medium model -> MEDIUM level
+        cfg_med = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_med, "claude-sonnet-5-5-medium")
+        self.assertEqual(cfg_med["thinkingLevel"], "MEDIUM")
+        self.assertEqual(cfg_med["thinkingBudget"], 0)
+
+        # Low model -> LOW level
+        cfg_low = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_low, "claude-opus-5-5-low")
+        self.assertEqual(cfg_low["thinkingLevel"], "LOW")
+        self.assertEqual(cfg_low["thinkingBudget"], 0)
+
+        # Explicit reasoning_effort overrides model suffix
+        cfg_effort = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_effort, "claude-sonnet-5-5-high", reasoning_effort="low")
+        self.assertEqual(cfg_effort["thinkingLevel"], "LOW")
+        self.assertEqual(cfg_effort["thinkingBudget"], 0)
+
+        # Disabled thinking on Claude 5.5
+        cfg_disabled = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_disabled, "claude-sonnet-5-5-high", thinking_req={"type": "disabled"})
+        self.assertFalse(cfg_disabled["includeThoughts"])
+        self.assertEqual(cfg_disabled["thinkingBudget"], 0)
+        self.assertNotIn("thinkingLevel", cfg_disabled)
+
+        # Legacy Claude 4.6 must NOT have thinkingLevel set
+        cfg_legacy = {"includeThoughts": True, "thinkingBudget": -1}
+        _apply_thinking_config(cfg_legacy, "claude-sonnet-4-6")
+        self.assertNotIn("thinkingLevel", cfg_legacy)
+
     def test_streaming_candidate_none_and_string_args(self):
         from agy_proxy.converters.streaming import parse_gemini_sse_candidate
 

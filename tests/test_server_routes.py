@@ -167,6 +167,8 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIn("o1", model_ids)
         self.assertIn("o3-mini", model_ids)
         self.assertIn("deepseek-r1", model_ids)
+        self.assertIn("claude-5-5", model_ids)
+        self.assertIn("anthropic.claude-sonnet-5-5-high", model_ids)
 
         # Non-existent / fake models should NOT be advertised in /v1/models
         self.assertNotIn("claude-5-fable", model_ids)
@@ -185,6 +187,8 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIn("gemini-3.8-flash-high", models)
         self.assertIn("claude-sonnet-4-6", models)
         self.assertIn("claude-opus-4-6-thinking", models)
+        self.assertIn("claude-sonnet-5-5-high", models)
+        self.assertIn("claude-opus-5-5-high", models)
         self.assertIn("gpt-oss-120b-medium", models)
 
         # Internal completion or telemetry endpoints should NOT be present

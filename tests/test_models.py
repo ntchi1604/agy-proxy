@@ -43,6 +43,18 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(normalize_model_name("deepseek-r1"), "gemini-3.8-flash-high")
         self.assertEqual(normalize_model_name("gemini-3.5-flash-lite"), "gemini-3.5-flash-lite")
         self.assertEqual(normalize_model_name("gemini-3.5-lite"), "gemini-3.5-flash-lite")
+        # Claude 5.5 Aliases
+        self.assertEqual(normalize_model_name("claude-5-5"), "claude-sonnet-5-5-high")
+        self.assertEqual(normalize_model_name("claude-5.5"), "claude-sonnet-5-5-high")
+        self.assertEqual(normalize_model_name("claude-sonnet-5-5"), "claude-sonnet-5-5-high")
+        self.assertEqual(normalize_model_name("claude-sonnet-5.5"), "claude-sonnet-5-5-high")
+        self.assertEqual(normalize_model_name("claude-sonnet-5.5-low"), "claude-sonnet-5-5-low")
+        self.assertEqual(normalize_model_name("claude-sonnet-5.5-med"), "claude-sonnet-5-5-medium")
+        self.assertEqual(normalize_model_name("claude-sonnet-5.5-medium"), "claude-sonnet-5-5-medium")
+        self.assertEqual(normalize_model_name("claude-opus-5-5"), "claude-opus-5-5-high")
+        self.assertEqual(normalize_model_name("claude-opus-5.5"), "claude-opus-5-5-high")
+        self.assertEqual(normalize_model_name("claude-opus-5.5-low"), "claude-opus-5-5-low")
+        self.assertEqual(normalize_model_name("claude-opus-5.5-med"), "claude-opus-5-5-medium")
 
     def test_prefix_stripping(self):
         self.assertEqual(normalize_model_name("anthropic/claude-sonnet-4-6"), "claude-sonnet-4-6")
@@ -80,6 +92,9 @@ class TestModelNormalization(unittest.TestCase):
         self.assertTrue(is_3p_model("anthropic.claude-3-7-sonnet"))
         self.assertTrue(is_3p_model("claude-sonnet-4-6"))
         self.assertTrue(is_3p_model("claude-opus-4-6-thinking"))
+        self.assertTrue(is_3p_model("claude-sonnet-5-5-high"))
+        self.assertTrue(is_3p_model("claude-opus-5-5-low"))
+        self.assertTrue(is_3p_model("claude-5-5"))
         self.assertTrue(is_3p_model("claude"))
         self.assertTrue(is_3p_model("3p"))
         self.assertTrue(is_3p_model("anthropic"))

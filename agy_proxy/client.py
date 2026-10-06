@@ -867,6 +867,12 @@ class CloudCodeClient:
                             logger.warning("[%s] Stream interrupted mid-way: %s", acc.email, e)
                             raise
                         last_error = e
+                        if e.response.status_code == 404:
+                            if not hasattr(acc, "unsupported_models"):
+                                acc.unsupported_models = set()
+                            acc.unsupported_models.add(model_name)
+                            if getattr(acc, "available_models", None) and model_name in acc.available_models:
+                                acc.available_models.pop(model_name, None)
                         if e.response.status_code in (401, 403, 429, 500, 502, 503, 504, 404):
                             logger.warning("[%s] Account error [%d]. Failing over to next candidate account...", acc.email, e.response.status_code)
                             break

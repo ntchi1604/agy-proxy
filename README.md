@@ -616,6 +616,10 @@ Antigravity Proxy natively equips coding agents and IDEs (Cursor, Windsurf, Roo 
 | `gemini-3.1-pro-high`, `gemini-3.1-pro`, `pro` | `gemini-3.1-pro-high` | **HIGH** | 🧠 Flagship Pro model for complex logic & math |
 | `gemini-3.1-pro-low` | `gemini-3.1-pro-low` | **LOW** | 🧠 Gemini 3.1 Pro with minimal reasoning |
 | `gemini-3.1-flash-lite`, `gpt-4o-mini`, `flash-lite` | `gemini-3.1-flash-lite` | Disabled (0) | 💡 Ultra-fast lightweight model (Background tasks & Compactor) |
+| `claude-sonnet-5-5-high`, `claude-5-5`, `claude-sonnet-5-5` | `claude-sonnet-5-5-high` | **HIGH** | 🚀 Claude Sonnet 5.5 (1M context, 128k output, Vertex AI) |
+| `claude-sonnet-5-5-medium`, `claude-sonnet-5-5-low` | `claude-sonnet-5-5-*` | MEDIUM / LOW | ⚡ Claude Sonnet 5.5 with medium/light reasoning (1M context) |
+| `claude-opus-5-5-high`, `claude-opus-5-5` | `claude-opus-5-5-high` | **HIGH** | 🔬 Claude Opus 5.5 flagship deep reasoning (1M context) |
+| `claude-opus-5-5-medium`, `claude-opus-5-5-low` | `claude-opus-5-5-*` | MEDIUM / LOW | 🔬 Claude Opus 5.5 with medium/light reasoning (1M context) |
 | `claude-sonnet-4-6`, `claude-3-7-sonnet`, `claude-3-5-sonnet`, `claude` | `claude-sonnet-4-6` | Configurable | 🚀 Claude Sonnet 4.6 backend (with role sanitization) |
 | `claude-opus-4-6-thinking`, `claude-3-opus` | `claude-opus-4-6-thinking` | **HIGH** | 🔬 Claude Opus 4.6 with reasoning thinking process |
 | `gpt-oss-120b-medium`, `gpt-oss-120b` | `gpt-oss-120b-medium` | MEDIUM | 🌐 Open Source 120B model |

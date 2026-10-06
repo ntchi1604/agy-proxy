@@ -1990,6 +1990,12 @@ def create_app(
                     continue
 
                 if resp.status_code in (404, 500, 502, 503, 504) and is_generation and not is_last:
+                    if resp.status_code == 404:
+                        if not hasattr(acc, "unsupported_models"):
+                            acc.unsupported_models = set()
+                        acc.unsupported_models.add(req_model)
+                        if getattr(acc, "available_models", None) and req_model in acc.available_models:
+                            acc.available_models.pop(req_model, None)
                     err_hint = _extract_error_message(resp)
                     logger.warning("[%s] CloudCode error %d (%s). Failing over to next account in pool...", acc_label, resp.status_code, err_hint)
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)

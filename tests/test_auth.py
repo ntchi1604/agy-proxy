@@ -421,6 +421,50 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         candidates_anthropic_gemini = pool.get_candidate_accounts("anthropic.gemini-3.8-flash-high")
         self.assertEqual(len(candidates_anthropic_gemini), 2)
 
+    def test_claude_5_5_account_routing_and_isolation(self):
+        pool = AccountPool(accounts_file=self.accounts_file)
+        # Account A with confirmed Claude 5.5 access
+        acc_with_5_5 = AntigravityOAuthSession(
+            account_id="acc_mel",
+            refresh_token="r_mel",
+            email="mel@example.com",
+        )
+        acc_with_5_5.available_models = {
+            "claude-sonnet-5-5-high": {"displayName": "Claude Sonnet 5.5 (High)"},
+            "claude-opus-5-5-high": {"displayName": "Claude Opus 5.5 (High)"},
+        }
+
+        # Account B without Claude 5.5 access (standard catalog)
+        acc_without_5_5 = AntigravityOAuthSession(
+            account_id="acc_vit",
+            refresh_token="r_vit",
+            email="vit@example.com",
+        )
+        acc_without_5_5.available_models = {
+            "claude-sonnet-4-6": {"displayName": "Claude Sonnet 4.6"},
+            "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)"},
+        }
+
+        pool.accounts["acc_mel"] = acc_with_5_5
+        pool.accounts["acc_vit"] = acc_without_5_5
+
+        # 1. Requesting Claude 5.5 alias or model must route EXCLUSIVELY to acc_mel
+        cands_5_5 = pool.get_candidate_accounts("claude-5-5")
+        self.assertEqual(len(cands_5_5), 1)
+        self.assertEqual(cands_5_5[0].account_id, "acc_mel")
+
+        cands_sonnet_5_5 = pool.get_candidate_accounts("claude-sonnet-5-5-high")
+        self.assertEqual(len(cands_sonnet_5_5), 1)
+        self.assertEqual(cands_sonnet_5_5[0].account_id, "acc_mel")
+
+        # 2. Legacy Claude 4.6 remains accessible to both accounts
+        cands_4_6 = pool.get_candidate_accounts("claude-sonnet-4-6")
+        self.assertEqual(len(cands_4_6), 2)
+
+        # 3. Model support check directly on sessions
+        self.assertTrue(acc_with_5_5.is_model_supported("claude-sonnet-5-5-high"))
+        self.assertFalse(acc_without_5_5.is_model_supported("claude-sonnet-5-5-high"))
+
     def test_quota_exhausted_gemini_with_anthropic_prefix(self):
         # Account has 0% 3P quota (e.g. no Claude access) but 100% Gemini quota
         oa = AntigravityOAuthSession(
