@@ -224,33 +224,38 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 
 #### 🔹 How It Works
 1. Automatically detects candidate installation directories for both **Antigravity 2.0** and **Antigravity IDE (Standalone)** on Linux and macOS:
-   - `/opt/Antigravity/resources/bin`
-   - `/opt/Antigravity IDE/resources/app/extensions/antigravity/bin`
-   - `~/.local/share/Antigravity/resources/bin`
-   - `~/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin`
-   - `/Applications/Antigravity.app/Contents/Resources/app/resources/bin`
-   - `/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin`
-   - Custom paths via `-f, --file <PATH>` or `--dir <PATH>`
-2. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_linux_x64.real`).
-3. Installs a non-destructive wrapper script with **Auto-Fallback (Direct Bypass)**:
+   - `/opt/Antigravity` (and `/opt/Antigravity/resources/bin`)
+   - `/opt/Antigravity IDE` (and `resources/app/extensions/antigravity/bin`)
+   - `~/.local/share/Antigravity`
+   - `~/.local/share/Antigravity IDE`
+   - `/Applications/Antigravity.app`
+   - `/Applications/Antigravity IDE.app`
+   - Custom editor or binary paths via `-e, --editor <PATH>`, `-f, --file <PATH>`, `--dir <PATH>`, or positional argument
+2. **Smart Editor Discovery**: when you specify an editor root folder (e.g. `/opt/Antigravity`, `/opt/Antigravity IDE`, or `~/Downloads/Antigravity IDE`), the script automatically searches through known subpaths and directory hierarchy to find the exact `language_server` binary.
+3. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_linux_x64.real`).
+4. Installs a non-destructive wrapper script with **Auto-Fallback (Direct Bypass)**:
    - When `agy-proxy` is running: intercepts and routes completions/chats through the proxy.
    - When `agy-proxy` is stopped/offline: automatically runs the original binary in native direct mode (connecting directly to Google backend) without breaking or stalling the editor.
-4. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if an Antigravity language server is currently running in direct mode and gracefully signals it to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
-5. When you execute `restart`, it terminates the active process so the editor automatically respawns it using the wrapper.
+5. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if an Antigravity language server is currently running in direct mode and gracefully signals it to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
+6. When you execute `restart`, it terminates the active process so the editor automatically respawns it using the wrapper.
 
 #### 🔹 Quick Usage
 ```bash
 # Check current patching and process status (auto-detects Antigravity 2.0 or Antigravity IDE):
 ./patch_language_server.sh status
 
-# Check status for specific Antigravity IDE path:
-./patch_language_server.sh status -f "/path/to/Antigravity IDE/.../bin/language_server_linux_x64"
+# Check status by pointing to an editor installation directory (auto-searches for binary):
+./patch_language_server.sh status -e /opt/Antigravity
+./patch_language_server.sh status -e "/opt/Antigravity IDE"
+./patch_language_server.sh status "~/Downloads/Antigravity IDE"
 
 # Patch automatically (using default port 8000):
 ./patch_language_server.sh patch
 
-# Patch a specific Antigravity IDE standalone binary:
-./patch_language_server.sh patch -f "/home/qumhab/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_x64"
+# Patch by editor directory or specific binary:
+./patch_language_server.sh patch -e "/opt/Antigravity IDE"
+./patch_language_server.sh patch "/opt/Antigravity"
+./patch_language_server.sh patch -f "/path/to/.../bin/language_server_linux_x64"
 
 # Patch with custom port or URL:
 ./patch_language_server.sh patch --port 8080
@@ -261,6 +266,7 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 
 # Restore original unmodified binary (clean unpatch):
 ./patch_language_server.sh restore
+./patch_language_server.sh restore -e "/opt/Antigravity IDE"
 ```
 
 #### 🔹 Command & Flag Reference
@@ -271,8 +277,9 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 | `status` | Checks wrapper installation, binary integrity, PID, and tests proxy connectivity. |
 | `restart` | Sends `SIGTERM` to running `language_server` so Antigravity IDE respawns it. |
 | `kill` | Forcefully terminates running `language_server` processes. |
-| `-f, --file, --path <PATH>` | Explicit path to `language_server` binary or directory. |
-| `--dir <PATH>` | Directory containing the `language_server` executable. |
+| `-e, --editor <PATH>` | Editor installation root (e.g. `/opt/Antigravity`, auto-locates binary). |
+| `-f, --file, --path <PATH>` | Explicit path to `language_server` binary or editor directory. |
+| `--dir <PATH>` | Directory containing the `language_server` executable or editor root. |
 | `--port <PORT>` | Port where `agy-proxy` is listening (default: `8000` or `$PORT`). |
 | `--host <HOST>` | Host where `agy-proxy` is listening (default: `127.0.0.1` or `$HOST`). |
 | `--url <URL>` | Full proxy base URL (e.g. `http://127.0.0.1:8080` or Cloudflare Worker URL). |

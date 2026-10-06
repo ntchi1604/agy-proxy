@@ -20,7 +20,7 @@ PORT="${PORT:-8000}"
 HOST="${HOST:-127.0.0.1}"
 CUSTOM_URL="${AGY_PROXY_URL:-}"
 WAIT_TIMEOUT="${AGY_PROXY_WAIT:-2}"
-CUSTOM_TARGET="${ANTIGRAVITY_LS_PATH:-${ANTIGRAVITY_FILE:-${ANTIGRAVITY_BIN_DIR:-}}}"
+CUSTOM_TARGET="${ANTIGRAVITY_LS_PATH:-${ANTIGRAVITY_FILE:-${ANTIGRAVITY_BIN_DIR:-${ANTIGRAVITY_EDITOR_PATH:-${ANTIGRAVITY_EDITOR_DIR:-}}}}}"
 AUTO_CONFIRM=false
 COMMAND=""
 
@@ -28,18 +28,29 @@ COMMAND=""
 CANDIDATE_DIRS=(
     # Google Antigravity 2.0 (Hub / Desktop App)
     "/opt/Antigravity/resources/bin"
+    "/opt/Antigravity"
     "/opt/antigravity/resources/bin"
+    "/opt/antigravity"
     "${HOME}/.local/share/Antigravity/resources/bin"
+    "${HOME}/.local/share/Antigravity"
     "/usr/lib/antigravity/resources/bin"
+    "/usr/lib/antigravity"
     "/Applications/Antigravity.app/Contents/Resources/app/resources/bin"
     "/Applications/Antigravity.app/Contents/Resources/bin"
+    "/Applications/Antigravity.app"
 
     # Google Antigravity IDE (Standalone Dedicated Editor)
     "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "/opt/Antigravity IDE"
     "/opt/antigravity-ide/resources/app/extensions/antigravity/bin"
+    "/opt/antigravity-ide"
     "${HOME}/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "${HOME}/.local/share/Antigravity IDE"
     "${HOME}/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "${HOME}/Downloads/Antigravity IDE/Antigravity IDE"
+    "${HOME}/Downloads/Antigravity IDE"
     "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
+    "/Applications/Antigravity IDE.app"
 )
 
 KNOWN_BIN_NAMES=(
@@ -51,9 +62,19 @@ KNOWN_BIN_NAMES=(
     "language_server_windows_x64.exe"
 )
 
+# Known relative subpaths within editor installation root
+KNOWN_SUBPATHS=(
+    "resources/bin"
+    "resources/app/extensions/antigravity/bin"
+    "resources/app/resources/bin"
+    "Contents/Resources/bin"
+    "Contents/Resources/app/resources/bin"
+    "Contents/Resources/app/extensions/antigravity/bin"
+)
+
 # Print Help
 show_help() {
-    echo -e "${BOLD}Usage:${NC} $0 [COMMAND] [OPTIONS] [PATH_TO_FILE]"
+    echo -e "${BOLD}Usage:${NC} $0 [COMMAND] [OPTIONS] [PATH_OR_DIR]"
     echo ""
     echo -e "${BOLD}Commands:${NC}"
     echo -e "  ${CYAN}patch${NC}             Install wrapper script to route language_server through agy-proxy"
@@ -62,9 +83,10 @@ show_help() {
     echo -e "  ${CYAN}restart${NC}           Restart running language_server so Antigravity respawns it"
     echo ""
     echo -e "${BOLD}Path Specification:${NC}"
-    echo -e "  ${CYAN}-f, --file, --path PATH${NC} Direct path to language_server file or directory"
-    echo -e "  ${CYAN}--dir PATH${NC}              Directory containing language_server"
-    echo -e "  Or pass path directly as argument (e.g. $0 patch /opt/Antigravity/resources/bin/language_server)"
+    echo -e "  ${CYAN}-e, --editor PATH${NC}       Path to editor installation root (e.g. /opt/Antigravity, /opt/Antigravity IDE)"
+    echo -e "  ${CYAN}-f, --file, --path PATH${NC} Direct path to language_server file or editor directory"
+    echo -e "  ${CYAN}--dir PATH${NC}              Directory containing language_server or editor root"
+    echo -e "  Or pass path directly as argument (e.g. $0 patch /opt/Antigravity or $0 status \"/opt/Antigravity IDE\")"
     echo ""
     echo -e "${BOLD}Options:${NC}"
     echo -e "  --port PORT         Port where agy-proxy is running (default: 8000 or \$PORT)"
@@ -77,10 +99,12 @@ show_help() {
     echo ""
     echo -e "${BOLD}Examples:${NC}"
     echo -e "  $0 status                                                    # Check auto-detected status"
-    echo -e "  $0 status -f /opt/Antigravity/resources/bin/language_server  # Check status with custom file"
-    echo -e "  $0 patch -f /opt/Antigravity/resources/bin/language_server   # Patch specific file"
+    echo -e "  $0 status -e /opt/Antigravity                                # Auto-detects within editor directory"
+    echo -e "  $0 patch -e \"/opt/Antigravity IDE\"                           # Patch Antigravity IDE by editor root"
+    echo -e "  $0 patch -f /opt/Antigravity/resources/bin/language_server   # Patch specific binary directly"
+    echo -e "  $0 patch /opt/Antigravity                                    # Positional editor directory"
     echo -e "  $0 patch --port 8080                                         # Patch with custom port"
-    echo -e "  $0 restore -f /opt/Antigravity/resources/bin/language_server # Restore specific file"
+    echo -e "  $0 restore -e /opt/Antigravity                               # Restore editor original binary"
     echo -e "  $0 restart                                                   # Restart language_server process"
     echo ""
     exit 0
@@ -92,6 +116,15 @@ while [[ $# -gt 0 ]]; do
         patch|restore|unpatch|status|restart|kill)
             COMMAND="$1"
             shift
+            ;;
+        -e|--editor)
+            if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                CUSTOM_TARGET="$2"
+                shift 2
+            else
+                echo -e "${RED}Error: option $1 requires a path to editor directory${NC}"
+                exit 1
+            fi
             ;;
         -f|--file|--path)
             if [[ -n "$2" && ! "$2" =~ ^- ]]; then
@@ -179,65 +212,28 @@ else
     PROXY_URL="http://${HOST}:${PORT}"
 fi
 
-# Locate Target Directory & Binary Name
-resolve_target() {
-    local target="$1"
+# Search for language_server within a directory (direct check, known subpaths, or recursive search)
+find_ls_in_dir() {
+    local dir="$1"
+    [[ ! -d "$dir" ]] && return 1
 
-    if [[ -n "$target" ]]; then
-        # Expand leading tilde
-        target="${target/#\~/$HOME}"
-
-        if [[ -d "$target" ]]; then
-            BIN_DIR="$(cd "$target" && pwd)"
-            LS_NAME=""
-            for bname in "${KNOWN_BIN_NAMES[@]}"; do
-                if [[ -f "${BIN_DIR}/${bname}" || -f "${BIN_DIR}/${bname}.real" ]]; then
-                    LS_NAME="$bname"
-                    break
-                fi
-            done
-            if [[ -z "$LS_NAME" ]]; then
-                LS_NAME="language_server"
-            fi
+    # 1. Check directly inside dir (e.g. if target is already the bin directory)
+    for bname in "${KNOWN_BIN_NAMES[@]}"; do
+        if [[ -f "${dir}/${bname}" || -f "${dir}/${bname}.real" ]]; then
+            BIN_DIR="$(cd "$dir" && pwd)"
+            LS_NAME="$bname"
             LS_FILE="${BIN_DIR}/${LS_NAME}"
             REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
             return 0
-        elif [[ -f "$target" || -e "$target" ]]; then
-            BIN_DIR="$(cd "$(dirname "$target")" && pwd)"
-            local bname
-            bname="$(basename "$target")"
-            if [[ "$bname" == *.real ]]; then
-                LS_NAME="${bname%.real}"
-            else
-                LS_NAME="$bname"
-            fi
-            LS_FILE="${BIN_DIR}/${LS_NAME}"
-            REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
-            return 0
-        elif [[ -d "$(dirname "$target")" ]]; then
-            BIN_DIR="$(cd "$(dirname "$target")" && pwd)"
-            local bname
-            bname="$(basename "$target")"
-            if [[ "$bname" == *.real ]]; then
-                LS_NAME="${bname%.real}"
-            else
-                LS_NAME="$bname"
-            fi
-            LS_FILE="${BIN_DIR}/${LS_NAME}"
-            REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
-            return 0
-        else
-            echo -e "${RED}Error: Path does not exist: ${target}${NC}" >&2
-            return 1
         fi
-    fi
+    done
 
-    # Try candidate directories
-    for dir in "${CANDIDATE_DIRS[@]}"; do
-        if [[ -d "$dir" ]]; then
+    # 2. Check known relative subpaths within editor installation directory
+    for sub in "${KNOWN_SUBPATHS[@]}"; do
+        if [[ -d "${dir}/${sub}" ]]; then
             for bname in "${KNOWN_BIN_NAMES[@]}"; do
-                if [[ -f "${dir}/${bname}" || -f "${dir}/${bname}.real" ]]; then
-                    BIN_DIR="$dir"
+                if [[ -f "${dir}/${sub}/${bname}" || -f "${dir}/${sub}/${bname}.real" ]]; then
+                    BIN_DIR="$(cd "${dir}/${sub}" && pwd)"
                     LS_NAME="$bname"
                     LS_FILE="${BIN_DIR}/${LS_NAME}"
                     REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
@@ -247,10 +243,111 @@ resolve_target() {
         fi
     done
 
+    # 3. Fallback recursive search inside directory tree (up to depth 8)
+    local found=""
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        local fname
+        fname="$(basename "$f")"
+        fname="${fname%.real}"
+        for bname in "${KNOWN_BIN_NAMES[@]}"; do
+            if [[ "$fname" == "$bname" ]]; then
+                BIN_DIR="$(cd "$(dirname "$f")" && pwd)"
+                LS_NAME="$fname"
+                LS_FILE="${BIN_DIR}/${LS_NAME}"
+                REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
+                return 0
+            fi
+        done
+        if [[ -z "$found" && "$fname" == language_server* ]]; then
+            found="$f"
+        fi
+    done < <(find "$dir" -maxdepth 8 -type f \( -name "language_server*" \) ! -name "*.log" ! -name "*.txt" ! -name "*.md" ! -name "*.py" ! -name "*.sh" ! -name "*.json" 2>/dev/null)
+
+    if [[ -n "$found" ]]; then
+        local fname
+        fname="$(basename "$found")"
+        fname="${fname%.real}"
+        BIN_DIR="$(cd "$(dirname "$found")" && pwd)"
+        LS_NAME="$fname"
+        LS_FILE="${BIN_DIR}/${LS_NAME}"
+        REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
+        return 0
+    fi
+
+    return 1
+}
+
+# Locate Target Directory & Binary Name
+resolve_target() {
+    local target="$1"
+
+    if [[ -n "$target" ]]; then
+        # Expand leading tilde
+        target="${target/#\~/$HOME}"
+
+        # If target is an existing directory
+        if [[ -d "$target" ]]; then
+            if find_ls_in_dir "$target"; then
+                return 0
+            else
+                echo -e "${RED}Error: Could not locate language_server binary in directory: ${target}${NC}" >&2
+                return 1
+            fi
+        # If target is an existing file
+        elif [[ -f "$target" || -e "$target" ]]; then
+            local bname
+            bname="$(basename "$target")"
+            # If target itself is a language_server binary (or .real backup)
+            if [[ "$bname" == language_server* ]]; then
+                BIN_DIR="$(cd "$(dirname "$target")" && pwd)"
+                LS_NAME="${bname%.real}"
+                LS_FILE="${BIN_DIR}/${LS_NAME}"
+                REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
+                return 0
+            else
+                # Target might be the main editor executable (e.g. /opt/Antigravity/antigravity or antigravity-ide)
+                local parent_dir
+                parent_dir="$(cd "$(dirname "$target")" && pwd)"
+                if find_ls_in_dir "$parent_dir"; then
+                    return 0
+                else
+                    echo -e "${RED}Error: Could not locate language_server binary in: ${parent_dir}${NC}" >&2
+                    return 1
+                fi
+            fi
+        # If target does not exist yet but parent directory exists
+        elif [[ -d "$(dirname "$target")" ]]; then
+            local bname
+            bname="$(basename "$target")"
+            if [[ "$bname" == language_server* ]]; then
+                BIN_DIR="$(cd "$(dirname "$target")" && pwd)"
+                LS_NAME="${bname%.real}"
+                LS_FILE="${BIN_DIR}/${LS_NAME}"
+                REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
+                return 0
+            fi
+            echo -e "${RED}Error: Path does not exist: ${target}${NC}" >&2
+            return 1
+        else
+            echo -e "${RED}Error: Path does not exist: ${target}${NC}" >&2
+            return 1
+        fi
+    fi
+
+    # Try candidate directories
+    for dir in "${CANDIDATE_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            if find_ls_in_dir "$dir"; then
+                return 0
+            fi
+        fi
+    done
+
     # If interactive and not found, ask user directly
     if [[ -t 0 ]]; then
         echo -e "${YELLOW}⚠️  Could not auto-detect Antigravity language_server path.${NC}"
-        read -r -e -p "Enter path to language_server file: " user_path
+        read -r -e -p "Enter path to editor directory or language_server file: " user_path
         if [[ -n "$user_path" ]]; then
             resolve_target "$user_path"
             return $?
@@ -258,7 +355,7 @@ resolve_target() {
     fi
 
     echo -e "${RED}Error: Could not locate Antigravity language_server binary.${NC}" >&2
-    echo -e "Please specify the file manually using: ${BOLD}-f /path/to/language_server${NC}" >&2
+    echo -e "Please specify the editor or file manually using: ${BOLD}-e /opt/Antigravity${NC} or ${BOLD}-f /path/to/language_server${NC}" >&2
     return 1
 }
 
@@ -640,7 +737,7 @@ do_restore() {
 # Change Target File Path Interactively
 change_path_interactive() {
     echo ""
-    read -r -e -p "Enter new path to language_server file or directory: " new_path
+    read -r -e -p "Enter new path to editor directory or language_server file: " new_path
     if [[ -n "$new_path" ]]; then
         if resolve_target "$new_path"; then
             echo -e "${GREEN}✓ Target updated:${NC} ${LS_FILE}"
