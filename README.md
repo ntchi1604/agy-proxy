@@ -210,38 +210,53 @@ Open **`http://localhost:8000`** in your browser to access the Web Dashboard & A
 
 ---
 
-### 1. 🖥️ Google Antigravity IDE Integration
+### 1. 🖥️ Google Antigravity 2.0 & Antigravity IDE (Standalone) Integration
 
-Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh`](patch_language_server.sh), that patches the official **Antigravity IDE**'s internal `language_server` binary. This routes IDE completions, chats, and model queries through `agy-proxy`, granting Antigravity IDE access to pooled accounts, multi-candidate failover, and custom upstream proxies.
+Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh`](patch_language_server.sh), that patches the official **Google Antigravity 2.0** and **Antigravity IDE (Standalone)** internal `language_server` binary. This routes completions, chats, and model queries through `agy-proxy`, granting both applications access to pooled accounts, multi-candidate failover, custom upstream proxies, and Claude model routing.
+
+#### 🔹 Supported Applications
+- **Google Antigravity 2.0** (v2.19.1+ Desktop Application):
+  - Binary location: `/opt/Antigravity/resources/bin/language_server`
+- **Google Antigravity IDE (Standalone)** (v2.5.5+ Dedicated Editor):
+  - Binary location: `resources/app/extensions/antigravity/bin/language_server_linux_x64` (or macOS `language_server_darwin_*`)
+- **Antigravity for IDEs (Extensions)** (VS Code, JetBrains, Visual Studio, Zed, Xcode):
+  - Seamlessly supported via CloudCode internal passthrough (`/v1internal:*`) and automated OAuth token sync from `state.vscdb`.
 
 #### 🔹 How It Works
-1. Automatically detects candidate Antigravity installation directories on Linux and macOS:
+1. Automatically detects candidate installation directories for both **Antigravity 2.0** and **Antigravity IDE (Standalone)** on Linux and macOS:
    - `/opt/Antigravity/resources/bin`
-   - `/opt/antigravity/resources/bin`
+   - `/opt/Antigravity IDE/resources/app/extensions/antigravity/bin`
    - `~/.local/share/Antigravity/resources/bin`
-   - `/usr/lib/antigravity/resources/bin`
+   - `~/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin`
    - `/Applications/Antigravity.app/Contents/Resources/app/resources/bin`
-   - `/Applications/Antigravity.app/Contents/Resources/bin`
-2. Safely backs up the original binary to `language_server.real`.
-3. Installs a non-destructive wrapper script named `language_server` with **Auto-Fallback (Direct Bypass)**:
+   - `/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin`
+   - Custom paths via `-f, --file <PATH>` or `--dir <PATH>`
+2. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_linux_x64.real`).
+3. Installs a non-destructive wrapper script with **Auto-Fallback (Direct Bypass)**:
    - When `agy-proxy` is running: intercepts and routes completions/chats through the proxy.
    - When `agy-proxy` is stopped/offline: automatically runs the original binary in native direct mode (connecting directly to Google backend) without breaking or stalling the editor.
-4. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if Antigravity IDE is currently running in direct mode and gracefully signals the background language server to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
-5. When you execute `restart`, it terminates the active process so Antigravity IDE automatically respawns it using the wrapper.
+4. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if an Antigravity language server is currently running in direct mode and gracefully signals it to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
+5. When you execute `restart`, it terminates the active process so the editor automatically respawns it using the wrapper.
 
 #### 🔹 Quick Usage
 ```bash
-# Check current patching and process status:
+# Check current patching and process status (auto-detects Antigravity 2.0 or Antigravity IDE):
 ./patch_language_server.sh status
+
+# Check status for specific Antigravity IDE path:
+./patch_language_server.sh status -f "/path/to/Antigravity IDE/.../bin/language_server_linux_x64"
 
 # Patch automatically (using default port 8000):
 ./patch_language_server.sh patch
+
+# Patch a specific Antigravity IDE standalone binary:
+./patch_language_server.sh patch -f "/home/qumhab/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_x64"
 
 # Patch with custom port or URL:
 ./patch_language_server.sh patch --port 8080
 ./patch_language_server.sh patch --url "http://127.0.0.1:8000"
 
-# Restart language_server so Antigravity IDE respawns it with proxy wrapper:
+# Restart language_server so editor respawns it with proxy wrapper:
 ./patch_language_server.sh restart
 
 # Restore original unmodified binary (clean unpatch):

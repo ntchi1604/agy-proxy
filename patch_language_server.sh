@@ -24,14 +24,31 @@ CUSTOM_TARGET="${ANTIGRAVITY_LS_PATH:-${ANTIGRAVITY_FILE:-${ANTIGRAVITY_BIN_DIR:
 AUTO_CONFIRM=false
 COMMAND=""
 
-# Known candidate directories for Antigravity resources/bin
+# Known candidate directories for Antigravity 2.0 and Antigravity IDE (Standalone)
 CANDIDATE_DIRS=(
+    # Google Antigravity 2.0 (Hub / Desktop App)
     "/opt/Antigravity/resources/bin"
     "/opt/antigravity/resources/bin"
     "${HOME}/.local/share/Antigravity/resources/bin"
     "/usr/lib/antigravity/resources/bin"
     "/Applications/Antigravity.app/Contents/Resources/app/resources/bin"
     "/Applications/Antigravity.app/Contents/Resources/bin"
+
+    # Google Antigravity IDE (Standalone Dedicated Editor)
+    "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "/opt/antigravity-ide/resources/app/extensions/antigravity/bin"
+    "${HOME}/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "${HOME}/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
+)
+
+KNOWN_BIN_NAMES=(
+    "language_server"
+    "language_server_linux_x64"
+    "language_server_linux_arm64"
+    "language_server_darwin_arm64"
+    "language_server_darwin_x64"
+    "language_server_windows_x64.exe"
 )
 
 # Print Help
@@ -172,7 +189,16 @@ resolve_target() {
 
         if [[ -d "$target" ]]; then
             BIN_DIR="$(cd "$target" && pwd)"
-            LS_NAME="language_server"
+            LS_NAME=""
+            for bname in "${KNOWN_BIN_NAMES[@]}"; do
+                if [[ -f "${BIN_DIR}/${bname}" || -f "${BIN_DIR}/${bname}.real" ]]; then
+                    LS_NAME="$bname"
+                    break
+                fi
+            done
+            if [[ -z "$LS_NAME" ]]; then
+                LS_NAME="language_server"
+            fi
             LS_FILE="${BIN_DIR}/${LS_NAME}"
             REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
             return 0
@@ -208,12 +234,16 @@ resolve_target() {
 
     # Try candidate directories
     for dir in "${CANDIDATE_DIRS[@]}"; do
-        if [[ -d "$dir" && (-f "${dir}/language_server" || -f "${dir}/language_server.real") ]]; then
-            BIN_DIR="$dir"
-            LS_NAME="language_server"
-            LS_FILE="${BIN_DIR}/${LS_NAME}"
-            REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
-            return 0
+        if [[ -d "$dir" ]]; then
+            for bname in "${KNOWN_BIN_NAMES[@]}"; do
+                if [[ -f "${dir}/${bname}" || -f "${dir}/${bname}.real" ]]; then
+                    BIN_DIR="$dir"
+                    LS_NAME="$bname"
+                    LS_FILE="${BIN_DIR}/${LS_NAME}"
+                    REAL_FILE="${BIN_DIR}/${LS_NAME}.real"
+                    return 0
+                fi
+            done
         fi
     done
 
