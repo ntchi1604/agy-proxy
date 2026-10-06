@@ -193,6 +193,26 @@ def _process_passthrough_metadata(action_key: str, data: dict[str, Any]) -> dict
     return data
 
 
+def _extract_error_message(resp: Any) -> str:
+    """Extract a clean, concise single-line error message from HTTP response."""
+    if hasattr(resp, "json"):
+        try:
+            data = resp.json()
+            if isinstance(data, dict):
+                err = data.get("error")
+                if isinstance(err, dict):
+                    msg = err.get("message")
+                    if msg:
+                        return str(msg).strip().replace("\n", " ")
+                elif isinstance(err, str):
+                    return err.strip().replace("\n", " ")
+        except Exception:
+            pass
+    text = getattr(resp, "text", str(resp)) or ""
+    text = text.strip().replace("\n", " ")
+    return text[:200] if len(text) > 200 else (text or "Unknown Error")
+
+
 _init_passthrough_cache()
 
 
@@ -1508,10 +1528,10 @@ def create_app(
                     status_code=400,
                     content={"error": {"message": err_msg, "type": "invalid_request_error", "code": 400}},
                 )
-            logger.error("OpenAI Chat Completion Error: %s", e, exc_info=True)
+            logger.error("OpenAI Chat Completion Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             raise HTTPException(status_code=500, detail=err_msg)
         except Exception as e:
-            logger.error("OpenAI Chat Completion Error: %s", e, exc_info=True)
+            logger.error("OpenAI Chat Completion Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
             raise HTTPException(status_code=500, detail=err_msg)
 
@@ -1599,7 +1619,7 @@ def create_app(
                 )
             raise HTTPException(status_code=e.response.status_code, detail=str(e))
         except Exception as e:
-            logger.error("OpenAI Responses Error: %s", e, exc_info=True)
+            logger.error("OpenAI Responses Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
             raise HTTPException(status_code=500, detail=err_msg)
 
@@ -1732,10 +1752,10 @@ def create_app(
                         },
                     },
                 )
-            logger.error("Anthropic Messages Error: %s", e, exc_info=True)
+            logger.error("Anthropic Messages Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             raise HTTPException(status_code=500, detail=err_msg)
         except Exception as e:
-            logger.error("Anthropic Messages Error: %s", e, exc_info=True)
+            logger.error("Anthropic Messages Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
             return JSONResponse(
                 status_code=500,
@@ -1922,7 +1942,9 @@ def create_app(
             is_last = (acc_idx == len(candidates) - 1)
             acc_label = getattr(acc, "email", acc.account_id)
             if is_generation:
-                logger.info(f"[{acc_label}] Handling CloudCode generation: {route_desc}")
+                logger.info("[%s] %s (Antigravity CloudCode)", acc_label, req_model or "streamGenerateContent")
+            else:
+                logger.debug("[%s] CloudCode passthrough: %s", acc_label, route_desc)
 
             # Ensure candidate uses its own project ID to avoid 404 permissions error across accounts
             candidate_body = copy.deepcopy(body) if isinstance(body, dict) else body
@@ -1955,7 +1977,7 @@ def create_app(
 
                 # Retry / failover logic
                 if resp.status_code == 401 and not is_last:
-                    logger.warning("[%s] Got 401 Unauthorized on %s. Refreshing token...", acc_label, route_desc)
+                    logger.warning("[%s] Got 401 Unauthorized. Refreshing token...", acc_label)
                     try:
                         await acc.refresh_access_token(force=True)
                     except Exception:
@@ -1963,12 +1985,14 @@ def create_app(
                     continue
 
                 if resp.status_code == 429 and not is_last:
-                    logger.warning("[%s] Quota reached (429) on %s. Failing over to next account...", acc_label, route_desc)
+                    logger.warning("[%s] Quota reached (429) for %s. Failing over to next account...", acc_label, req_model if is_generation else "default")
                     acc.mark_rate_limited(req_model if is_generation else "default", duration=60.0)
                     continue
 
                 if resp.status_code in (404, 500, 502, 503, 504) and is_generation and not is_last:
-                    logger.warning("[%s] CloudCode error %d on %s (%s). Failing over to next account in pool...", acc_label, resp.status_code, route_desc, resp.text[:200])
+                    err_hint = _extract_error_message(resp)
+                    logger.warning("[%s] CloudCode error %d (%s). Failing over to next account in pool...", acc_label, resp.status_code, err_hint)
+                    logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
                     continue
 
                 # Last candidate got 404 for generation - try automatic fallback to DEFAULT_MODEL if different model was requested
@@ -1987,7 +2011,9 @@ def create_app(
                         pass
 
                 if resp.status_code >= 400:
-                    logger.error(f"CloudCode Error {resp.status_code}: {resp.text}")
+                    err_summary = _extract_error_message(resp)
+                    logger.error("[%s] CloudCode Error %d: %s", acc_label, resp.status_code, err_summary)
+                    logger.debug("[%s] CloudCode raw error response: %s", acc_label, resp.text)
 
                 # Success tracking
                 if resp.status_code == 200 and is_generation:
@@ -2013,12 +2039,15 @@ def create_app(
 
             except Exception as e:
                 last_error = str(e)
-                logger.warning("[%s] CloudCode internal passthrough error (%s): %s", acc_label, route_desc, e)
+                if not is_generation and is_metadata:
+                    logger.debug("[%s] CloudCode metadata passthrough error (%s): %s", acc_label, route_desc, e)
+                else:
+                    logger.warning("[%s] CloudCode passthrough error (%s): %s", acc_label, route_desc, e)
                 is_net_error = isinstance(e, (httpx.ConnectError, httpx.ConnectTimeout, socket.gaierror, OSError))
 
                 # If non-generation metadata call hit network failure, serve cached metadata immediately
                 if not is_generation and is_metadata and is_net_error:
-                    logger.info("[%s] Network unreachable for %s. Serving cached metadata immediately.", acc_label, route_desc)
+                    logger.debug("[%s] Network unreachable for %s. Serving cached metadata immediately.", acc_label, route_desc)
                     cached_data = _get_cached_or_default_passthrough(action_key)
                     cached_data = _process_passthrough_metadata(action_key, cached_data)
                     return JSONResponse(status_code=200, content=cached_data)
@@ -2038,7 +2067,7 @@ def create_app(
 
         # All candidates failed
         if not is_generation and is_metadata:
-            logger.info("All candidates failed for %s. Serving cached metadata.", route_desc)
+            logger.debug("All candidates failed for %s. Serving cached metadata.", route_desc)
             cached_data = _get_cached_or_default_passthrough(action_key)
             cached_data = _process_passthrough_metadata(action_key, cached_data)
             return JSONResponse(status_code=200, content=cached_data)

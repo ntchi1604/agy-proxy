@@ -822,9 +822,16 @@ class CloudCodeClient:
 
                             if response.status_code != 200:
                                 error_text = await response.aread()
-                                logger.error("[%s] Provider error [%d]: %s", acc.email, response.status_code, error_text.decode("utf-8", "ignore")[:1000])
+                                err_decoded = error_text.decode("utf-8", "ignore").strip()
+                                try:
+                                    err_json = json.loads(err_decoded)
+                                    clean_err = err_json.get("error", {}).get("message") or err_decoded.replace("\n", " ")[:200]
+                                except Exception:
+                                    clean_err = err_decoded.replace("\n", " ")[:200]
+                                logger.error("[%s] Provider error [%d]: %s", acc.email, response.status_code, clean_err)
+                                logger.debug("[%s] Raw provider error response: %s", acc.email, err_decoded)
                                 raise httpx.HTTPStatusError(
-                                    f"API returned {response.status_code}: {error_text.decode('utf-8', 'ignore')[:1000]}",
+                                    f"API returned {response.status_code}: {clean_err}",
                                     request=response.request,
                                     response=response,
                                 )

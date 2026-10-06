@@ -809,9 +809,11 @@ def main():
 
     # Configure logging
     effective_log_level = "debug" if args.debug else args.log_level
-    if args.debug:
+    if args.debug or effective_log_level.lower() == "debug":
+        os.environ["AGY_DEBUG"] = "1"
         log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     else:
+        os.environ.pop("AGY_DEBUG", None)
         log_format = "%(asctime)s [%(levelname)s] %(message)s"
 
     logging.basicConfig(
@@ -848,12 +850,31 @@ def main():
     logging.getLogger("httpx").addFilter(SanitizingFilter())
 
     class EndpointFilter(logging.Filter):
+        POLLING_PATHS = (
+            "/api/cache/stats",
+            "/api/context/settings",
+            "/api/accounts",
+            "/api/processes/status",
+            "/api/processes",
+            "/api/quota",
+            "/api/usage",
+            "/health",
+            "/v1internal:recordCodeAssistMetrics",
+            "/v1internal:listExperiments",
+            "/v1internal:loadCodeAssist",
+            "/v1internal:fetchUserInfo",
+            "/v1internal:fetchAvailableModels",
+            "/v1internal:retrieveUserQuotaSummary",
+            "/v1internal/cascadeNuxes",
+        )
+
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.getMessage()
-            return not any(p in msg for p in ["/api/cache/stats", "/api/context/settings", "/api/accounts", "/health", "/api/usage"])
+            return not any(p in msg for p in self.POLLING_PATHS)
 
-    logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
-    logging.getLogger("uvicorn").addFilter(EndpointFilter())
+    if not (args.debug or effective_log_level.lower() == "debug"):
+        logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+        logging.getLogger("uvicorn").addFilter(EndpointFilter())
 
     if args.debug or effective_log_level.lower() == "debug":
         logging.getLogger("httpx").setLevel(logging.INFO)
