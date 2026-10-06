@@ -223,8 +223,11 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
    - `/Applications/Antigravity.app/Contents/Resources/app/resources/bin`
    - `/Applications/Antigravity.app/Contents/Resources/bin`
 2. Safely backs up the original binary to `language_server.real`.
-3. Installs a non-destructive wrapper script named `language_server` that exports `HTTPS_PROXY`, `HTTP_PROXY`, and `ALL_PROXY` pointing to your proxy, with health-check waiting logic.
-4. When you execute `restart`, it terminates the active process so Antigravity IDE automatically respawns it using the wrapper.
+3. Installs a non-destructive wrapper script named `language_server` with **Auto-Fallback (Direct Bypass)**:
+   - When `agy-proxy` is running: intercepts and routes completions/chats through the proxy.
+   - When `agy-proxy` is stopped/offline: automatically runs the original binary in native direct mode (connecting directly to Google backend) without breaking or stalling the editor.
+4. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if Antigravity IDE is currently running in direct mode and gracefully signals the background language server to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
+5. When you execute `restart`, it terminates the active process so Antigravity IDE automatically respawns it using the wrapper.
 
 #### 🔹 Quick Usage
 ```bash
@@ -258,7 +261,7 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 | `--port <PORT>` | Port where `agy-proxy` is listening (default: `8000` or `$PORT`). |
 | `--host <HOST>` | Host where `agy-proxy` is listening (default: `127.0.0.1` or `$HOST`). |
 | `--url <URL>` | Full proxy base URL (e.g. `http://127.0.0.1:8080` or Cloudflare Worker URL). |
-| `--timeout <SECONDS>` | Max seconds to wait for proxy health-check at startup (default: `10`, `0` to disable). |
+| `--timeout <SECONDS>` | Max seconds to wait for proxy health-check at startup (default: `2`, `0` to disable). |
 | `--no-wait` | Disable startup wait check before executing the binary. |
 | `-y, --yes` | Automatically answer yes to all confirmation prompts. |
 
