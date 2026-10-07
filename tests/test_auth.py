@@ -499,6 +499,21 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(oa.is_rate_limited("gemini-2.5-pro"))
         self.assertFalse(oa.is_rate_limited("claude-sonnet-4-6"))
 
+    def test_claude_5_5_fallback_when_rate_limited(self):
+        pool = AccountPool(accounts_file=self.accounts_file)
+        oa = AntigravityOAuthSession(
+            account_id="oa_c55",
+            refresh_token="tok",
+            email="c55@example.com",
+            available_models={"claude-sonnet-5-5-high": {}},
+        )
+        pool.accounts["oa_c55"] = oa
+        # Mark Claude 5.5 as rate limited
+        oa.mark_rate_limited("claude-sonnet-5-5-high", duration=60.0)
+        # Requesting Claude 5.5 when rate limited should auto-route to Claude 4.6 candidate account
+        candidates = pool.get_candidate_accounts("claude-sonnet-5-5-high")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].account_id, "oa_c55")
 
     def test_split_files_storage_and_reload(self):
         # 1. Create pool and add both OAuth and API key accounts

@@ -2027,17 +2027,24 @@ def create_app(
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
                     continue
 
-                # Last candidate got 404: If Claude 5.5 is not enabled on account, auto-fallback to Claude 4.6 so generation never breaks
-                if resp.status_code == 404 and is_generation and is_last:
+                # Last candidate got 404 or 429: If Claude 5.5 reached quota or is not enabled, auto-fallback to Claude 4.6 so generation never breaks
+                if resp.status_code in (404, 429) and is_generation and is_last:
                     if is_claude_5_5_model(req_model):
                         fallback_model = get_claude_fallback_model(req_model)
+                        if resp.status_code == 429:
+                            acc.mark_rate_limited(req_model, duration=60.0)
+                            reason_msg = "reached quota limit (429)"
+                        else:
+                            reason_msg = "returned 404 (not enabled on this account)"
                         logger.warning(
-                            "[%s] ⚠️ Model %s returned 404 (not enabled on this account). 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
+                            "[%s] ⚠️ Model %s %s. 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
                             acc_label,
                             req_model,
+                            reason_msg,
                             fallback_model,
                         )
-                        for fb_acc in candidates:
+                        fallback_candidates = pool.get_candidate_accounts(fallback_model) if pool else candidates
+                        for fb_acc in fallback_candidates:
                             fb_label = getattr(fb_acc, "email", fb_acc.account_id)
                             logger.info("[%s] %s active (Antigravity CloudCode - Fallback from %s)", fb_label, fallback_model, req_model)
                             fb_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body

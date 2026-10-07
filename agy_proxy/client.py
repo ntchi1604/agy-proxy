@@ -930,12 +930,21 @@ class CloudCodeClient:
         # If all accounts failed
         if last_error:
             if is_claude_5_5_model(model_name):
-                is_404 = getattr(last_error, "response", None) and getattr(last_error.response, "status_code", None) == 404
-                if is_404 or "not found" in str(last_error).lower() or "404" in str(last_error):
+                status_code = getattr(getattr(last_error, "response", None), "status_code", None)
+                is_recoverable = (
+                    status_code in (404, 429)
+                    or "not found" in str(last_error).lower()
+                    or "404" in str(last_error)
+                    or "429" in str(last_error)
+                    or "quota" in str(last_error).lower()
+                )
+                if is_recoverable:
                     fallback_m = get_claude_fallback_model(model_name)
+                    reason_msg = "reached quota limits (HTTP 429)" if status_code == 429 or "429" in str(last_error) else "is not enabled (HTTP 404)"
                     logger.warning(
-                        "[Model Fallback] ⚠️ Claude 5.5 (%s) is not enabled on accounts in the pool (HTTP 404). 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
+                        "[Model Fallback] ⚠️ Claude 5.5 (%s) %s across accounts in the pool. 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
                         model_name,
+                        reason_msg,
                         fallback_m,
                     )
                     logger.info("[Model Fallback] %s active (Antigravity CloudCode - Fallback from %s)", fallback_m, model_name)

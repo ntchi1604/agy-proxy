@@ -1157,6 +1157,18 @@ class AccountPool:
             if not acc.is_rate_limited(norm_model) and not acc.is_quota_exhausted(norm_model)
         ]
         if not available:
+            if is_c55:
+                fallback_m = get_claude_fallback_model(norm_model)
+                logger.warning(
+                    "[Model Fallback] ⚠️ All accounts supporting Claude 5.5 (%s) have reached quota (429) or rate limits. 🔄 Auto-routing to Claude 4.6 (%s) to avoid interruption!",
+                    norm_model,
+                    fallback_m,
+                )
+                return self.get_candidate_accounts(
+                    model=fallback_m,
+                    specific_account_id=specific_account_id,
+                    preferred_account_id=preferred_account_id,
+                )
             # Fall back to accounts that are at least not rate limited, or all active accounts to allow retry
             not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(norm_model)]
             available = not_rate_limited if not_rate_limited else list(active_pool)

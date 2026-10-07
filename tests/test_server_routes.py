@@ -761,6 +761,58 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(posted_requests[1]["model"], "claude-sonnet-4-6")
         self.assertNotIn("thinkingLevel", posted_requests[1]["request"]["thinkingConfig"])
 
+    async def test_cloudcode_passthrough_claude_5_5_fallback_to_4_6_on_429(self):
+        """Tests that when Claude 5.5 hits 429 quota limit, it automatically falls back to Claude 4.6 without error."""
+        acc1 = AccountSession(
+            account_id="acc_c55_quota",
+            email="c55_quota@gmail.com",
+            refresh_token="rf_c55_q",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_c55_quota"] = acc1
+
+        posted_requests = []
+
+        class QuotaFallbackClient:
+            async def post(self, url, json=None, **kwargs):
+                posted_requests.append(dict(json or {}))
+                req_m = (json or {}).get("model", "")
+                if "5-5" in req_m or "5.5" in req_m:
+                    return unittest.mock.Mock(
+                        status_code=429,
+                        text='{"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}}',
+                        content=b'{"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}}',
+                        headers={"content-type": "application/json"},
+                        json=lambda: {"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}},
+                    )
+                # Fallback to claude-sonnet-4-6 succeeds
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Recovered from 429 via Claude 4.6"}}',
+                    content=b'{"response": {"text": "Recovered from 429 via Claude 4.6"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Recovered from 429 via Claude 4.6"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=QuotaFallbackClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_c55_q"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-5-5-high",
+                "request": {
+                    "model": "claude-sonnet-5-5-high",
+                    "contents": [{"role": "user", "parts": [{"text": "Generate code"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Recovered from 429 via Claude 4.6"}})
+        self.assertEqual(len(posted_requests), 2)
+        self.assertEqual(posted_requests[0]["model"], "claude-sonnet-5-5-high")
+        self.assertEqual(posted_requests[1]["model"], "claude-sonnet-4-6")
+
     async def test_cloudcode_passthrough_isolates_candidate_project_id(self):
         """Tests that each account sends its own project_id rather than a cross-account project_id."""
         acc1 = AccountSession(

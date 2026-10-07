@@ -1157,9 +1157,9 @@ export default {
 
             if (!gRes.ok) {
               const errBody = await gRes.text();
-              if (gRes.status === 404 && (backendModel.includes("5-5") || backendModel.includes("5.5"))) {
+              if ((gRes.status === 404 || (gRes.status === 429 && isLastCandidate)) && (backendModel.includes("5-5") || backendModel.includes("5.5"))) {
                 const fbModel = backendModel.includes("opus") ? "claude-opus-4-6-thinking" : "claude-sonnet-4-6";
-                console.warn(`[Cloudflare] ⚠️ Model ${backendModel} returned 404. Falling back to ${fbModel}`);
+                console.warn(`[Cloudflare] ⚠️ Model ${backendModel} returned ${gRes.status}. Falling back to ${fbModel}`);
                 const fbPayload = buildCloudCodePayload(reqJson, fbModel, auth);
                 const fbRes = await fetch(targetUrl, {
                   method: "POST",
