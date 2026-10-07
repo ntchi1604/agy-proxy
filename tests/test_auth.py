@@ -527,6 +527,90 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].account_id, "oa_c55")
 
+    def test_claude_mutual_recursion_loop_broken_when_both_exhausted(self):
+        """Tests that when both Claude 5.5 and Claude 4.6 accounts are rate-limited or quota-exhausted,
+        the pool terminates immediately without infinite mutual recursion or log spam."""
+        pool = AccountPool(accounts_file=self.accounts_file)
+        acc_55 = AntigravityOAuthSession(
+            account_id="acc_55",
+            refresh_token="tok_55",
+            email="c55@example.com",
+            available_models={"claude-sonnet-5-5-high": {}},
+        )
+        acc_46 = AntigravityOAuthSession(
+            account_id="acc_46",
+            refresh_token="tok_46",
+            email="c46@example.com",
+            available_models={"claude-sonnet-4-6": {}},
+        )
+        pool.accounts["acc_55"] = acc_55
+        pool.accounts["acc_46"] = acc_46
+
+        # Mark both as rate-limited
+        acc_55.mark_rate_limited("claude-sonnet-5-5-high", duration=60.0)
+        acc_46.mark_rate_limited("claude-sonnet-4-6", duration=60.0)
+
+        # 1. Requesting Claude 5.5 must NOT loop into 4.6 and back; returns acc_55 directly
+        cands_55 = pool.get_candidate_accounts("claude-sonnet-5-5-high")
+        self.assertEqual(len(cands_55), 1)
+        self.assertEqual(cands_55[0].account_id, "acc_55")
+
+        # 2. Requesting Claude 4.6 must NOT loop into 5.5 and back; returns acc_46 directly
+        cands_46 = pool.get_candidate_accounts("claude-sonnet-4-6")
+        self.assertEqual(len(cands_46), 1)
+        self.assertEqual(cands_46[0].account_id, "acc_46")
+
+        # 3. Test also when both are quota-exhausted (0% remaining fraction)
+        acc_55.rate_limited_models.clear()
+        acc_46.rate_limited_models.clear()
+        acc_55.quota_summary = {
+            "groups": [{"displayName": "Claude", "remainingFraction": 0.0, "buckets": []}]
+        }
+        acc_46.quota_summary = {
+            "groups": [{"displayName": "Claude", "remainingFraction": 0.0, "buckets": []}]
+        }
+        self.assertTrue(acc_55.is_quota_exhausted("claude-sonnet-5-5-high"))
+        self.assertTrue(acc_46.is_quota_exhausted("claude-sonnet-4-6"))
+
+        cands_55_q = pool.get_candidate_accounts("claude-sonnet-5-5-high")
+        self.assertEqual(len(cands_55_q), 1)
+        self.assertEqual(cands_55_q[0].account_id, "acc_55")
+
+        cands_46_q = pool.get_candidate_accounts("claude-sonnet-4-6")
+        self.assertEqual(len(cands_46_q), 1)
+        self.assertEqual(cands_46_q[0].account_id, "acc_46")
+
+    def test_claude_allow_auto_routing_flag(self):
+        """Tests that allow_auto_routing=False disables fallback/upgrade routing."""
+        pool = AccountPool(accounts_file=self.accounts_file)
+        acc_55 = AntigravityOAuthSession(
+            account_id="acc_55",
+            refresh_token="tok_55",
+            email="c55@example.com",
+            available_models={"claude-sonnet-5-5-high": {}},
+        )
+        acc_46 = AntigravityOAuthSession(
+            account_id="acc_46",
+            refresh_token="tok_46",
+            email="c46@example.com",
+            available_models={"claude-sonnet-4-6": {}},
+        )
+        pool.accounts["acc_55"] = acc_55
+        pool.accounts["acc_46"] = acc_46
+
+        # acc_55 rate limited, but acc_46 is healthy
+        acc_55.mark_rate_limited("claude-sonnet-5-5-high", duration=60.0)
+
+        # With allow_auto_routing=True (default), it routes to acc_46
+        cands_routed = pool.get_candidate_accounts("claude-sonnet-5-5-high", allow_auto_routing=True)
+        self.assertEqual(len(cands_routed), 1)
+        self.assertEqual(cands_routed[0].account_id, "acc_46")
+
+        # With allow_auto_routing=False, it does NOT route to acc_46; stays on acc_55
+        cands_no_route = pool.get_candidate_accounts("claude-sonnet-5-5-high", allow_auto_routing=False)
+        self.assertEqual(len(cands_no_route), 1)
+        self.assertEqual(cands_no_route[0].account_id, "acc_55")
+
     def test_supports_claude_5_5_flag_with_catalog(self):
         oa = AntigravityOAuthSession(
             account_id="oa_flag",

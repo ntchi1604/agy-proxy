@@ -2050,10 +2050,15 @@ def create_app(
                         continue
                     else:
                         # If this was the last candidate in the initial list, check if pool has other accounts for req_model
-                        alt_candidates = [
-                            a for a in (pool.get_candidate_accounts(req_model) if pool else [])
-                            if a.account_id != acc.account_id and a.is_model_supported(req_model)
-                        ]
+                        alt_candidates = []
+                        if pool:
+                            try:
+                                alt_candidates = [
+                                    a for a in pool.get_candidate_accounts(req_model, allow_auto_routing=False)
+                                    if a.account_id != acc.account_id and a.is_model_supported(req_model)
+                                ]
+                            except Exception:
+                                alt_candidates = []
                         if alt_candidates:
                             logger.info("[%s] 🔄 Failing over to alternate account in pool supporting %s...", acc_label, req_model)
                             for alt_acc in alt_candidates:
@@ -2141,14 +2146,17 @@ def create_app(
                             fallback_model,
                         )
                         if pool:
-                            fallback_candidates = [
-                                a for a in pool.get_candidate_accounts(fallback_model)
-                                if a.account_id != acc.account_id and a.is_model_supported(fallback_model)
-                            ]
-                            if not fallback_candidates:
-                                fallback_candidates = [a for a in pool.get_candidate_accounts(fallback_model)]
+                            try:
+                                fallback_candidates = [
+                                    a for a in pool.get_candidate_accounts(fallback_model, allow_auto_routing=False)
+                                    if a.account_id != acc.account_id and a.is_model_supported(fallback_model)
+                                ]
                                 if not fallback_candidates:
-                                    fallback_candidates = [acc]
+                                    fallback_candidates = [a for a in pool.get_candidate_accounts(fallback_model, allow_auto_routing=False)]
+                            except Exception:
+                                fallback_candidates = []
+                            if not fallback_candidates:
+                                fallback_candidates = [acc]
                         else:
                             fallback_candidates = [a for a in candidates if a.account_id != acc.account_id and a.is_model_supported(fallback_model)]
                             if not fallback_candidates:
