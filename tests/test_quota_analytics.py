@@ -446,6 +446,65 @@ class TestQuotaAndAnalytics(unittest.TestCase):
         self.assertIn("35.40%", text)
         self.assertIn("GEMINI MODELS", text)
 
+    def test_parse_reset_duration(self):
+        from agy_proxy.auth.token_utils import parse_reset_duration
+        msg = "CloudCode Error 429: Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 107h48m2s."
+        self.assertEqual(parse_reset_duration(msg), 107 * 3600 + 48 * 60 + 2)
+        self.assertEqual(parse_reset_duration("Resets in 5h30m"), 5 * 3600 + 30 * 60)
+        self.assertEqual(parse_reset_duration("Resets in 45s"), 45.0)
+        self.assertEqual(parse_reset_duration("Resets in 2d5h"), 2 * 86400 + 5 * 3600)
+        self.assertEqual(parse_reset_duration("Retry after 90 seconds"), 90.0)
+        self.assertEqual(parse_reset_duration("retry in 30s"), 30.0)
+        self.assertIsNone(parse_reset_duration("Resource has been exhausted (quota exceeded)."))
+        self.assertIsNone(parse_reset_duration(None))
+
+    def test_calculate_cooldown_duration_from_error_and_headers(self):
+        from agy_proxy.auth.token_utils import calculate_cooldown_duration
+        import unittest.mock
+
+        # 1. From error string
+        msg = "Individual quota reached. Resets in 107h48m2s."
+        self.assertEqual(calculate_cooldown_duration(err_message=msg), 107 * 3600 + 48 * 60 + 2)
+
+        # 2. From mock response headers (Retry-After)
+        mock_resp = unittest.mock.Mock()
+        mock_resp.headers = {"retry-after": "120"}
+        mock_resp.json.side_effect = Exception("No json")
+        mock_resp.text = "Quota reached"
+        self.assertEqual(calculate_cooldown_duration(resp=mock_resp), 120.0)
+
+        # 3. Fallback to default
+        mock_resp2 = unittest.mock.Mock()
+        mock_resp2.headers = {}
+        mock_resp2.json.side_effect = Exception("No json")
+        mock_resp2.text = "Generic 429"
+        self.assertEqual(calculate_cooldown_duration(resp=mock_resp2, default_cooldown=60.0), 60.0)
+
+    def test_calculate_cooldown_duration_from_account_quota_reset_time(self):
+        from agy_proxy.auth.token_utils import calculate_cooldown_duration
+        from datetime import datetime, timezone, timedelta
+
+        acc = AccountSession(account_id="acc_reset_test", refresh_token="dummy", auth_method="consumer")
+        future_dt = datetime.now(timezone.utc) + timedelta(hours=48)
+        iso_reset = future_dt.isoformat()
+
+        acc.quota_summary = {
+            "groups": [
+                {
+                    "displayName": "Claude & GPT",
+                    "buckets": [
+                        {"bucketId": "claude-weekly", "remainingFraction": 0.0, "resetTime": iso_reset},
+                    ],
+                }
+            ]
+        }
+        self.assertTrue(acc.is_quota_exhausted("claude-sonnet-4-6"))
+        dur = calculate_cooldown_duration(account=acc, model="claude-sonnet-4-6")
+        # Should be approximately 48 hours (~172,800 seconds)
+        self.assertGreater(dur, 47 * 3600)
+        self.assertLessEqual(dur, 48 * 3600 + 10)
+
 
 if __name__ == "__main__":
     unittest.main()
+

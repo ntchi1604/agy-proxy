@@ -325,3 +325,104 @@ def get_authorization_url(code_challenge: str, state: str, client_id: str = DEFA
         "state": state,
     }
     return f"https://accounts.google.com/o/oauth2/auth?{urllib.parse.urlencode(params)}"
+
+
+def parse_reset_duration(text: str | None) -> float | None:
+    """Parses reset duration in seconds from CloudCode error strings (e.g. 'Resets in 107h48m2s')."""
+    if not text or not isinstance(text, str):
+        return None
+    # Pattern 1: Resets in 107h48m2s / Resets in 5h30m / Resets in 45s / Resets in 2d5h
+    m = re.search(
+        r"resets?\s+(?:in|after)\s+(?:(?:(?P<days>\d+)\s*d(?:ays?)?)?\s*(?:(?P<hours>\d+)\s*h(?:ours?|rs?)?)?\s*(?:(?P<minutes>\d+)\s*m(?:in(?:utes?)?)?)?\s*(?:(?P<seconds>\d+)\s*s(?:ec(?:onds?)?)?)?|(?P<sec_only>\d+)\s*(?:seconds|sec|s)?)",
+        text,
+        re.IGNORECASE,
+    )
+    if m:
+        if m.group("sec_only"):
+            return float(m.group("sec_only"))
+        days = int(m.group("days") or 0)
+        hours = int(m.group("hours") or 0)
+        minutes = int(m.group("minutes") or 0)
+        seconds = int(m.group("seconds") or 0)
+        total = days * 86400 + hours * 3600 + minutes * 60 + seconds
+        if total > 0:
+            return float(total)
+
+    # Pattern 2: retry after X seconds / retry in X seconds
+    m2 = re.search(r"retry\s+(?:after|in)\s+(\d+)\s*(?:seconds|sec|s)?", text, re.IGNORECASE)
+    if m2:
+        return float(m2.group(1))
+
+    return None
+
+
+def calculate_cooldown_duration(
+    resp: Any = None,
+    err_message: str | None = None,
+    account: Any | None = None,
+    model: str | None = None,
+    default_cooldown: float = 60.0,
+) -> float:
+    """Calculates cooldown duration from 429 response error message, Retry-After header,
+    or account quota reset time."""
+    msg = err_message or ""
+    if not msg and resp is not None:
+        if hasattr(resp, "json"):
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    err = data.get("error")
+                    if isinstance(err, dict):
+                        msg = str(err.get("message") or "")
+                    elif isinstance(err, str):
+                        msg = err
+            except Exception:
+                pass
+        if not msg:
+            msg = getattr(resp, "text", str(resp)) or ""
+
+    # 1. Parse 'Resets in ...' from error message
+    dur = parse_reset_duration(msg)
+    if dur is not None and dur > 0:
+        return dur
+
+    # 2. Check Retry-After header
+    if hasattr(resp, "headers") and resp.headers:
+        ra = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
+        if ra:
+            try:
+                dur = float(ra)
+                if dur > 0:
+                    return dur
+            except ValueError:
+                pass
+
+    # 3. Check account quota details reset time if quota is exhausted
+    if account and hasattr(account, "get_quota_details"):
+        try:
+            qd = account.get_quota_details()
+            from agy_proxy.models import is_3p_model
+            key = "3p" if (model and is_3p_model(model)) else "gemini"
+            group_q = qd.get(key, {})
+            is_exhausted = (
+                group_q.get("percent", 100.0) <= 0.0
+                or group_q.get("fraction", 1.0) <= 0.001
+                or (group_q.get("weekly", {}).get("percent", 100.0) <= 0.0 if "weekly" in group_q else False)
+                or (group_q.get("5h", {}).get("percent", 100.0) <= 0.0 if "5h" in group_q else False)
+            )
+            if is_exhausted:
+                r_time = (
+                    group_q.get("reset_time")
+                    or group_q.get("weekly", {}).get("reset_time")
+                    or group_q.get("5h", {}).get("reset_time")
+                )
+                if r_time and isinstance(r_time, str):
+                    dt = datetime.fromisoformat(r_time.replace("Z", "+00:00"))
+                    rem = (dt - datetime.now(timezone.utc)).total_seconds()
+                    if rem > 0:
+                        return rem
+        except Exception:
+            pass
+
+    return default_cooldown
+

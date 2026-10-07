@@ -2322,6 +2322,13 @@ ightarrow$ v1.0.3</p>
           geminiCooldown,
           claudeCooldown
         );
+        const formatCooldown = (s) => {
+          if (!s || s <= 0) return '0s';
+          if (s <= 60) return s + 's';
+          if (s < 3600) return Math.round(s / 60) + 'm';
+          if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+          return (s / 86400).toFixed(1) + 'd';
+        };
         const isRateLimited = maxCooldown > 0 || Boolean(acc.rate_limited);
         const isExhausted = (geminiPct <= 0 && claudePct <= 0);
 
@@ -2329,7 +2336,7 @@ ightarrow$ v1.0.3</p>
         if (isExhausted) {
           statusBadge = '<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Exhausted</span>';
         } else if (isRateLimited) {
-          statusBadge = `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[9px]"></i>Cooldown (${maxCooldown}s)</span>`;
+          statusBadge = `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[9px]"></i>Cooldown (${formatCooldown(maxCooldown)})</span>`;
         } else if (geminiPct > 20 && claudePct > 20) {
           statusBadge = '<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Ready</span>';
         } else {
@@ -2853,6 +2860,13 @@ ightarrow$ v1.0.3</p>
         geminiCooldown,
         claudeCooldown
       );
+      const formatCooldown = (s) => {
+        if (!s || s <= 0) return '0s';
+        if (s <= 60) return s + 's';
+        if (s < 3600) return Math.round(s / 60) + 'm';
+        if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+        return (s / 86400).toFixed(1) + 'd';
+      };
 
       let quotaSectionHtml = '';
       if (isWeb) {
@@ -2962,7 +2976,7 @@ ightarrow$ v1.0.3</p>
                   geminiIsExhausted
                     ? '<span class="text-red-400 font-semibold">Exhausted</span>'
                     : (geminiCooldown > 0
-                        ? `<span class="text-amber-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[8px]"></i>Cooldown (${geminiCooldown}s)</span>`
+                        ? `<span class="text-amber-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[8px]"></i>Cooldown (${formatCooldown(geminiCooldown)})</span>`
                         : 'Quota available')
                 }</span>
                 <span class="${geminiIsExhausted ? 'text-red-400 font-semibold' : (geminiCooldown > 0 ? 'text-amber-400' : 'text-slate-400')}">${geminiResetBadge}</span>
@@ -3005,7 +3019,7 @@ ightarrow$ v1.0.3</p>
                   claudeIsExhausted
                     ? '<span class="text-red-400 font-semibold">Exhausted</span>'
                     : (claudeCooldown > 0
-                        ? `<span class="text-amber-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[8px]"></i>Cooldown (${claudeCooldown}s)</span>`
+                        ? `<span class="text-amber-400 font-semibold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[8px]"></i>Cooldown (${formatCooldown(claudeCooldown)})</span>`
                         : 'Quota available')
                 }</span>
                 <span class="${claudeIsExhausted ? 'text-red-400 font-semibold' : (claudeCooldown > 0 ? 'text-amber-400' : 'text-slate-400')}">${claudeResetBadge}</span>
@@ -3054,7 +3068,7 @@ ightarrow$ v1.0.3</p>
                     ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center space-x-1 shrink-0 shadow-sm"><i class="fa-solid fa-star text-amber-400 text-[9px]"></i><span>Primary</span></span>' 
                     : `<button onclick="setPrimaryAccount('${acc.account_id}')" class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-indigo-600 hover:text-white text-slate-400 border border-slate-700 transition flex items-center space-x-1 shrink-0" title="Set as primary active account"><i class="fa-regular fa-star text-[9px]"></i><span>Set Primary</span></button>`}
                   ${agyActiveCardBadge}
-                  ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${maxAccountCooldown}s)</span></span>` : '')}
+                  ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${formatCooldown(maxAccountCooldown)})</span></span>` : '')}
                   ${!isEnabled ? '<span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700 shrink-0">Paused</span>' : ''}
                 </div>
                 <div class="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex items-center space-x-1.5 mt-0.5" title="${acc.email}">
@@ -3142,6 +3156,13 @@ ightarrow$ v1.0.3</p>
         geminiCooldown,
         claudeCooldown
       );
+      const formatCooldown = (s) => {
+        if (!s || s <= 0) return '0s';
+        if (s <= 60) return s + 's';
+        if (s < 3600) return Math.round(s / 60) + 'm';
+        if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+        return (s / 86400).toFixed(1) + 'd';
+      };
 
       const isCliActive = !isWeb && !isApiKey && (acc.account_id === cliActiveAccountId);
       const isStandaloneActive = !isWeb && !isApiKey && (acc.account_id === (typeof standaloneActiveAccountId !== 'undefined' ? standaloneActiveAccountId : ((typeof ideActiveAccountId !== 'undefined') ? ideActiveAccountId : null)));
@@ -3188,7 +3209,7 @@ ightarrow$ v1.0.3</p>
                 : (isApiKey
                   ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-key mr-1"></i> API Key</span>'
                   : '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"><i class="fa-brands fa-google mr-1"></i> OAuth</span>')}
-              ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono"><i class="fa-solid fa-clock-rotate-left mr-1 text-[8px]"></i>Cooldown (${maxAccountCooldown}s)</span>` : '')}
+              ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono"><i class="fa-solid fa-clock-rotate-left mr-1 text-[8px]"></i>Cooldown (${formatCooldown(maxAccountCooldown)})</span>` : '')}
               ${!isEnabled ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Paused</span>' : ''}
             </div>
           </td>
@@ -3209,7 +3230,7 @@ ightarrow$ v1.0.3</p>
                 <div>
                   <div class="flex justify-between items-center text-[10px]">
                     <span class="text-slate-400">Wk: <span class="font-bold font-mono ${geminiWkPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${geminiWkPct}%</span></span>
-                    <span class="text-[9px] ${geminiIsExhausted ? 'text-red-400 font-semibold' : (geminiCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${geminiIsExhausted ? geminiResetBadge : (geminiCooldown > 0 ? 'Cooldown (' + geminiCooldown + 's)' : geminiResetBadge)}</span>
+                    <span class="text-[9px] ${geminiIsExhausted ? 'text-red-400 font-semibold' : (geminiCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${geminiIsExhausted ? geminiResetBadge : (geminiCooldown > 0 ? 'Cooldown (' + formatCooldown(geminiCooldown) + ')' : geminiResetBadge)}</span>
                   </div>
                   <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${geminiWkPct <= 0 ? 'bg-red-500' : (geminiWkPct > 30 ? 'bg-indigo-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, geminiWkPct))}%"></div>
@@ -3233,7 +3254,7 @@ ightarrow$ v1.0.3</p>
                 <div>
                   <div class="flex justify-between items-center text-[10px]">
                     <span class="text-slate-400">Wk: <span class="font-bold font-mono ${claudeWkPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${claudeWkPct}%</span></span>
-                    <span class="text-[9px] ${claudeIsExhausted ? 'text-red-400 font-semibold' : (claudeCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${claudeIsExhausted ? claudeResetBadge : (claudeCooldown > 0 ? 'Cooldown (' + claudeCooldown + 's)' : claudeResetBadge)}</span>
+                    <span class="text-[9px] ${claudeIsExhausted ? 'text-red-400 font-semibold' : (claudeCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${claudeIsExhausted ? claudeResetBadge : (claudeCooldown > 0 ? 'Cooldown (' + formatCooldown(claudeCooldown) + ')' : claudeResetBadge)}</span>
                   </div>
                   <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${claudeWkPct <= 0 ? 'bg-red-500' : (claudeWkPct > 30 ? 'bg-purple-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, claudeWkPct))}%"></div>

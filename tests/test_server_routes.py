@@ -1305,7 +1305,46 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.json()["candidates"][0]["content"]["parts"][0]["text"], "Hello Gemini Native!")
 
+    async def test_cloudcode_passthrough_429_parses_resets_in_duration(self):
+        """Tests that when upstream returns 429 with 'Resets in 107h48m2s', the account is marked rate-limited for ~107h."""
+        acc1 = AccountSession(
+            account_id="acc_429_dur",
+            email="reset429@gmail.com",
+            refresh_token="rf_429",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_429_dur"] = acc1
+
+        class Reset429Client:
+            async def post(self, url, json=None, **kwargs):
+                return unittest.mock.Mock(
+                    status_code=429,
+                    text='{"error": {"code": 429, "message": "Individual quota reached. Resets in 107h48m2s."}}',
+                    content=b'{"error": {"code": 429, "message": "Individual quota reached. Resets in 107h48m2s."}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"error": {"code": 429, "message": "Individual quota reached. Resets in 107h48m2s."}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=Reset429Client())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-4-6",
+                "request": {
+                    "model": "claude-sonnet-4-6",
+                    "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 429)
+        self.assertTrue(acc1.is_rate_limited("claude-sonnet-4-6"))
+        qd = acc1.get_quota_details()
+        self.assertGreater(qd["3p"]["cooldown_seconds"], 360000)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -2015,8 +2015,27 @@ def create_app(
                     continue
 
                 if resp.status_code == 429 and not is_last:
-                    logger.warning("[%s] Quota reached (429) for %s. Failing over to next account...", acc_label, req_model if is_generation else "default")
-                    acc.mark_rate_limited(req_model if is_generation else "default", duration=60.0)
+                    from agy_proxy.auth.token_utils import calculate_cooldown_duration
+                    err_hint = _extract_error_message(resp)
+                    cd_dur = calculate_cooldown_duration(
+                        resp,
+                        err_message=err_hint,
+                        account=acc,
+                        model=req_model if is_generation else "default",
+                        default_cooldown=60.0,
+                    )
+                    logger.warning(
+                        "[%s] Quota reached (429) for %s (%s). Failing over to next account...",
+                        acc_label,
+                        req_model if is_generation else "default",
+                        err_hint,
+                    )
+                    acc.mark_rate_limited(req_model if is_generation else "default", duration=cd_dur)
+                    if hasattr(acc, "fetch_quota"):
+                        try:
+                            asyncio.create_task(acc.fetch_quota())
+                        except Exception:
+                            pass
                     continue
 
                 err_hint = _extract_error_message(resp)
@@ -2131,13 +2150,26 @@ def create_app(
 
                 # Last candidate got 404 or 429: If Claude 5.5 reached quota or is not enabled, auto-fallback to Claude 4.6 on another account
                 if resp.status_code in (404, 429) and is_generation and is_last:
+                    from agy_proxy.auth.token_utils import calculate_cooldown_duration
+                    err_hint = _extract_error_message(resp)
+                    if resp.status_code == 429:
+                        cd_dur = calculate_cooldown_duration(
+                            resp,
+                            err_message=err_hint,
+                            account=acc,
+                            model=req_model,
+                            default_cooldown=60.0,
+                        )
+                        acc.mark_rate_limited(req_model, duration=cd_dur)
+                        if hasattr(acc, "fetch_quota"):
+                            try:
+                                asyncio.create_task(acc.fetch_quota())
+                            except Exception:
+                                pass
+
                     if is_claude_5_5_model(req_model):
                         fallback_model = get_claude_fallback_model(req_model)
-                        if resp.status_code == 429:
-                            acc.mark_rate_limited(req_model, duration=60.0)
-                            reason_msg = "reached quota limit (429)"
-                        else:
-                            reason_msg = "returned 404 (not enabled on this account)"
+                        reason_msg = "reached quota limit (429)" if resp.status_code == 429 else "returned 404 (not enabled on this account)"
                         logger.warning(
                             "[%s] ⚠️ Model %s %s. 🔄 Auto-falling back to Claude 4.6 (%s) on another account so generation continues without error!",
                             acc_label,
@@ -2197,7 +2229,8 @@ def create_app(
                                 continue
 
                     elif req_model != DEFAULT_MODEL:
-                        logger.warning("[%s] Model %s returned 404. Attempting automatic fallback to %s...", acc_label, req_model, DEFAULT_MODEL)
+                        reason_msg = "reached quota limit (429)" if resp.status_code == 429 else "returned 404"
+                        logger.warning("[%s] Model %s %s. Attempting automatic fallback to %s...", acc_label, req_model, reason_msg, DEFAULT_MODEL)
                         fallback_body = copy.deepcopy(candidate_body)
                         if isinstance(fallback_body, dict):
                             fallback_body["model"] = DEFAULT_MODEL
@@ -2206,6 +2239,19 @@ def create_app(
                         try:
                             fb_resp = await c.post(target_url, headers=headers, json=fallback_body, params=query_params, timeout=timeout_sec)
                             if fb_resp.status_code == 200:
+                                resp = fb_resp
+                                req_model = DEFAULT_MODEL
+                            else:
+                                if fb_resp.status_code == 429:
+                                    fb_hint = _extract_error_message(fb_resp)
+                                    fb_dur = calculate_cooldown_duration(
+                                        fb_resp,
+                                        err_message=fb_hint,
+                                        account=acc,
+                                        model=DEFAULT_MODEL,
+                                        default_cooldown=60.0,
+                                    )
+                                    acc.mark_rate_limited(DEFAULT_MODEL, duration=fb_dur)
                                 resp = fb_resp
                         except Exception:
                             pass
