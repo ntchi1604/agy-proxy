@@ -16,6 +16,8 @@ from agy_proxy.models import (
     OpenAIMessage,
     is_3p_model,
     normalize_model_name,
+    is_claude_5_5_model,
+    get_claude_fallback_model,
 )
 
 
@@ -100,6 +102,34 @@ class TestModelNormalization(unittest.TestCase):
         self.assertTrue(is_3p_model("anthropic"))
         self.assertTrue(is_3p_model("gpt-oss-120b"))
         self.assertTrue(is_3p_model("gpt-oss-120b-medium"))
+
+    def test_claude_5_5_detection_and_fallback(self):
+        # Detection
+        self.assertTrue(is_claude_5_5_model("claude-sonnet-5-5-high"))
+        self.assertTrue(is_claude_5_5_model("claude-sonnet-5-5-medium"))
+        self.assertTrue(is_claude_5_5_model("claude-sonnet-5-5-low"))
+        self.assertTrue(is_claude_5_5_model("claude-opus-5-5-high"))
+        self.assertTrue(is_claude_5_5_model("claude-opus-5-5-medium"))
+        self.assertTrue(is_claude_5_5_model("claude-opus-5-5-low"))
+        self.assertTrue(is_claude_5_5_model("claude-5-5"))
+        self.assertTrue(is_claude_5_5_model("claude-5.5"))
+        self.assertTrue(is_claude_5_5_model("claude-5-5-sonnet"))
+        self.assertTrue(is_claude_5_5_model("claude-5-5-opus"))
+        self.assertFalse(is_claude_5_5_model("claude-sonnet-4-6"))
+        self.assertFalse(is_claude_5_5_model("claude-opus-4-6-thinking"))
+        self.assertFalse(is_claude_5_5_model("gemini-3.8-flash-high"))
+        self.assertFalse(is_claude_5_5_model(None))
+
+        # Fallback mapping
+        self.assertEqual(get_claude_fallback_model("claude-sonnet-5-5-high"), "claude-sonnet-4-6")
+        self.assertEqual(get_claude_fallback_model("claude-sonnet-5-5-medium"), "claude-sonnet-4-6")
+        self.assertEqual(get_claude_fallback_model("claude-sonnet-5-5-low"), "claude-sonnet-4-6")
+        self.assertEqual(get_claude_fallback_model("claude-5-5"), "claude-sonnet-4-6")
+        self.assertEqual(get_claude_fallback_model("claude-opus-5-5-high"), "claude-opus-4-6-thinking")
+        self.assertEqual(get_claude_fallback_model("claude-opus-5-5-medium"), "claude-opus-4-6-thinking")
+        self.assertEqual(get_claude_fallback_model("claude-opus-5-5-low"), "claude-opus-4-6-thinking")
+        self.assertEqual(get_claude_fallback_model("claude-5-5-opus"), "claude-opus-4-6-thinking")
+
 
 
 

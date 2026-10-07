@@ -44,7 +44,7 @@ from agy_proxy.auth.token_utils import (
     parse_antigravity_token_file,
     parse_token_dict,
 )
-from agy_proxy.models import is_3p_model
+from agy_proxy.models import is_3p_model, is_claude_5_5_model, get_claude_fallback_model
 
 def _load_sensitive_data(acc_id: str, item: dict):
     if keyring is None:
@@ -1118,14 +1118,33 @@ class AccountPool:
 
         active_pool = [acc for acc in active_pool if acc.is_model_supported(norm_model)]
 
-        # For Claude 5.5 models: if any accounts have explicitly confirmed access, restrict strictly to them
-        is_c55 = norm_model.startswith("claude-") and ("5-5" in norm_model or "5.5" in norm_model)
+        # For Claude 5.5 models: prioritize confirmed accounts first, or auto-fallback to 4.6
+        is_c55 = is_claude_5_5_model(norm_model)
         if is_c55:
-            confirmed = [acc for acc in active_pool if getattr(acc, "available_models", None) and norm_model in acc.available_models]
+            confirmed = [
+                acc for acc in active_pool
+                if (getattr(acc, "available_models", None) and norm_model in acc.available_models)
+                or getattr(acc, "supports_claude_5_5", False)
+            ]
             if confirmed:
-                active_pool = confirmed
+                unconfirmed = [acc for acc in active_pool if acc not in confirmed]
+                active_pool = confirmed + unconfirmed
 
         if not active_pool:
+            if is_c55:
+                # If no accounts in pool support 5.5, auto-fallback to 4.6 so request doesn't fail
+                fallback_m = get_claude_fallback_model(norm_model)
+                logger.warning(
+                    "[Model Fallback] Claude 5.5 (%s) is not supported on available accounts. Auto-routing to Claude 4.6 (%s) to avoid interruption.",
+                    norm_model,
+                    fallback_m,
+                )
+                return self.get_candidate_accounts(
+                    model=fallback_m,
+                    specific_account_id=specific_account_id,
+                    preferred_account_id=preferred_account_id,
+                )
+
             is_3p = is_3p_model(norm_model)
             if is_3p:
                 raise RuntimeError("No active Google OAuth accounts available for Claude / 3P models.")

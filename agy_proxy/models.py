@@ -425,6 +425,56 @@ def is_3p_model(model: str) -> bool:
     return any(k in m for k in ("claude", "sonnet", "opus", "haiku", "gpt-oss", "fable", "3p"))
 
 
+CLAUDE_5_5_MODELS: set[str] = {
+    "claude-sonnet-5-5-high",
+    "claude-sonnet-5-5-medium",
+    "claude-sonnet-5-5-low",
+    "claude-opus-5-5-high",
+    "claude-opus-5-5-medium",
+    "claude-opus-5-5-low",
+    "claude-5-5",
+    "claude-sonnet-5-5",
+    "claude-opus-5-5",
+    "claude-5-5-sonnet",
+    "claude-5-5-opus",
+}
+
+CLAUDE_5_5_TO_4_6_FALLBACK: dict[str, str] = {
+    # Sonnet 5.5 variants -> claude-sonnet-4-6
+    "claude-sonnet-5-5-high": "claude-sonnet-4-6",
+    "claude-sonnet-5-5-medium": "claude-sonnet-4-6",
+    "claude-sonnet-5-5-low": "claude-sonnet-4-6",
+    "claude-sonnet-5-5": "claude-sonnet-4-6",
+    "claude-5-5": "claude-sonnet-4-6",
+    "claude-5-5-sonnet": "claude-sonnet-4-6",
+    # Opus 5.5 variants -> claude-opus-4-6-thinking
+    "claude-opus-5-5-high": "claude-opus-4-6-thinking",
+    "claude-opus-5-5-medium": "claude-opus-4-6-thinking",
+    "claude-opus-5-5-low": "claude-opus-4-6-thinking",
+    "claude-opus-5-5": "claude-opus-4-6-thinking",
+    "claude-5-5-opus": "claude-opus-4-6-thinking",
+}
+
+
+def is_claude_5_5_model(model_name: str | None) -> bool:
+    """Checks whether the requested model is a Claude 5.5 variant."""
+    if not model_name:
+        return False
+    norm = normalize_model_name(model_name)
+    return norm in CLAUDE_5_5_MODELS or (norm.startswith("claude-") and ("5-5" in norm or "5.5" in norm))
+
+
+def get_claude_fallback_model(model_name: str | None) -> str:
+    """
+    Returns the corresponding Claude 4.6 fallback model for a Claude 5.5 variant.
+    Preserves model tier (Opus -> Opus 4.6 Thinking, Sonnet -> Sonnet 4.6).
+    """
+    if not model_name:
+        return "claude-sonnet-4-6"
+    norm = normalize_model_name(model_name)
+    if "opus" in norm:
+        return "claude-opus-4-6-thinking"
+    return "claude-sonnet-4-6"
 
 
 # ---------------------------------------------------------

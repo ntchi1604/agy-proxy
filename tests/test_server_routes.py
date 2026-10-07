@@ -705,6 +705,62 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.json(), {"response": {"text": "Recovered turn"}})
         self.assertEqual(acc2.total_requests, 1)
 
+    async def test_cloudcode_passthrough_claude_5_5_fallback_to_4_6_on_404(self):
+        """Tests that Claude 5.5 requests automatically fall back to Claude 4.6 when upstream returns 404."""
+        acc1 = AccountSession(
+            account_id="acc_c55",
+            email="c55@gmail.com",
+            refresh_token="rf_c55",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_c55"] = acc1
+
+        posted_requests = []
+
+        class FallbackClient:
+            async def post(self, url, json=None, **kwargs):
+                posted_requests.append(dict(json or {}))
+                req_m = (json or {}).get("model", "")
+                if "5-5" in req_m or "5.5" in req_m:
+                    return unittest.mock.Mock(
+                        status_code=404,
+                        text='{"error": {"code": 404, "message": "Requested entity was not found."}}',
+                        content=b'{"error": {"code": 404, "message": "Requested entity was not found."}}',
+                        headers={"content-type": "application/json"},
+                        json=lambda: {"error": {"code": 404, "message": "Requested entity was not found."}},
+                    )
+                # Fallback to claude-sonnet-4-6 succeeds
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Generated with Claude 4.6 fallback"}}',
+                    content=b'{"response": {"text": "Generated with Claude 4.6 fallback"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Generated with Claude 4.6 fallback"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=FallbackClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_c55"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-5-5-high",
+                "request": {
+                    "model": "claude-sonnet-5-5-high",
+                    "thinkingConfig": {"thinkingLevel": "HIGH"},
+                    "contents": [{"role": "user", "parts": [{"text": "Hello Claude"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Generated with Claude 4.6 fallback"}})
+        self.assertEqual(len(posted_requests), 2)
+        # First request was claude-sonnet-5-5-high
+        self.assertEqual(posted_requests[0]["model"], "claude-sonnet-5-5-high")
+        # Second request was fallback to claude-sonnet-4-6 and thinkingLevel was stripped
+        self.assertEqual(posted_requests[1]["model"], "claude-sonnet-4-6")
+        self.assertNotIn("thinkingLevel", posted_requests[1]["request"]["thinkingConfig"])
+
     async def test_cloudcode_passthrough_isolates_candidate_project_id(self):
         """Tests that each account sends its own project_id rather than a cross-account project_id."""
         acc1 = AccountSession(

@@ -41,6 +41,8 @@ from agy_proxy.models import (
     PROXY_CATALOG_MODELS,
     OpenAIChatRequest,
     normalize_model_name,
+    is_claude_5_5_model,
+    get_claude_fallback_model,
 )
 from agy_proxy.converter import anthropic_to_cloudcode_payload
 from agy_proxy.responses import (
@@ -2021,24 +2023,64 @@ def create_app(
                         if getattr(acc, "available_models", None) and req_model in acc.available_models:
                             acc.available_models.pop(req_model, None)
                     err_hint = _extract_error_message(resp)
-                    logger.warning("[%s] CloudCode error %d (%s). Failing over to next account in pool...", acc_label, resp.status_code, err_hint)
+                    logger.warning("[%s] CloudCode error %d (%s) for %s. Failing over to next account in pool...", acc_label, resp.status_code, err_hint, req_model)
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
                     continue
 
-                # Last candidate got 404 for generation - try automatic fallback to DEFAULT_MODEL if different model was requested
-                if resp.status_code == 404 and is_generation and is_last and req_model != DEFAULT_MODEL:
-                    logger.warning("[%s] Model %s returned 404. Attempting automatic fallback to %s...", acc_label, req_model, DEFAULT_MODEL)
-                    fallback_body = copy.deepcopy(candidate_body)
-                    if isinstance(fallback_body, dict):
-                        fallback_body["model"] = DEFAULT_MODEL
-                        if "request" in fallback_body and isinstance(fallback_body["request"], dict):
-                            fallback_body["request"]["model"] = DEFAULT_MODEL
-                    try:
-                        fb_resp = await c.post(target_url, headers=headers, json=fallback_body, params=query_params, timeout=timeout_sec)
-                        if fb_resp.status_code == 200:
-                            resp = fb_resp
-                    except Exception:
-                        pass
+                # Last candidate got 404: If Claude 5.5 is not enabled on account, auto-fallback to Claude 4.6 so generation never breaks
+                if resp.status_code == 404 and is_generation and is_last:
+                    if is_claude_5_5_model(req_model):
+                        fallback_model = get_claude_fallback_model(req_model)
+                        logger.warning(
+                            "[%s] ⚠️ Model %s returned 404 (not enabled on this account). 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
+                            acc_label,
+                            req_model,
+                            fallback_model,
+                        )
+                        for fb_acc in candidates:
+                            fb_label = getattr(fb_acc, "email", fb_acc.account_id)
+                            logger.info("[%s] %s active (Antigravity CloudCode - Fallback from %s)", fb_label, fallback_model, req_model)
+                            fb_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
+                            if isinstance(fb_body, dict):
+                                fb_body["model"] = fallback_model
+                                if "request" in fb_body and isinstance(fb_body["request"], dict):
+                                    fb_body["request"]["model"] = fallback_model
+                                    if "thinkingConfig" in fb_body["request"] and isinstance(fb_body["request"]["thinkingConfig"], dict):
+                                        fb_body["request"]["thinkingConfig"].pop("thinkingLevel", None)
+                                fb_proj = getattr(fb_acc, "project_id", None) or "aicode-consumers"
+                                fb_body["project"] = fb_proj
+                                if "request" in fb_body and isinstance(fb_body["request"], dict):
+                                    fb_body["request"]["project"] = fb_proj
+                            try:
+                                fb_headers = await fb_acc.get_auth_headers()
+                                if "user-agent" in request.headers:
+                                    fb_headers["User-Agent"] = request.headers["user-agent"]
+                                fb_c = await fb_acc.get_http_client()
+                                fb_resp = await fb_c.post(target_url, headers=fb_headers, json=fb_body, params=query_params, timeout=timeout_sec)
+                                if fb_resp.status_code == 200:
+                                    logger.info("[%s] ✅ Fallback to %s succeeded! Generation continuing seamlessly.", fb_label, fallback_model)
+                                    resp = fb_resp
+                                    acc = fb_acc
+                                    acc_label = fb_label
+                                    req_model = fallback_model
+                                    break
+                            except Exception as fb_err:
+                                logger.debug("[%s] Fallback attempt to %s error: %s", fb_label, fallback_model, fb_err)
+                                continue
+
+                    elif req_model != DEFAULT_MODEL:
+                        logger.warning("[%s] Model %s returned 404. Attempting automatic fallback to %s...", acc_label, req_model, DEFAULT_MODEL)
+                        fallback_body = copy.deepcopy(candidate_body)
+                        if isinstance(fallback_body, dict):
+                            fallback_body["model"] = DEFAULT_MODEL
+                            if "request" in fallback_body and isinstance(fallback_body["request"], dict):
+                                fallback_body["request"]["model"] = DEFAULT_MODEL
+                        try:
+                            fb_resp = await c.post(target_url, headers=headers, json=fallback_body, params=query_params, timeout=timeout_sec)
+                            if fb_resp.status_code == 200:
+                                resp = fb_resp
+                        except Exception:
+                            pass
 
                 if resp.status_code >= 400:
                     err_summary = _extract_error_message(resp)

@@ -4,6 +4,7 @@ and multi-account failover/load-balancing across accounts.
 """
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -25,7 +26,14 @@ from agy_proxy.converter import (
     parse_gemini_sse_candidate,
     sanitize_gemini_contents_thought_signatures,
 )
-from agy_proxy.models import AnthropicRequest, OpenAIChatRequest, normalize_model_name, DEFAULT_MODEL
+from agy_proxy.models import (
+    AnthropicRequest,
+    OpenAIChatRequest,
+    normalize_model_name,
+    DEFAULT_MODEL,
+    is_claude_5_5_model,
+    get_claude_fallback_model,
+)
 from agy_proxy.compactor import (
     generate_compact_summary,
     should_auto_compact,
@@ -921,6 +929,41 @@ class CloudCodeClient:
 
         # If all accounts failed
         if last_error:
+            if is_claude_5_5_model(model_name):
+                is_404 = getattr(last_error, "response", None) and getattr(last_error.response, "status_code", None) == 404
+                if is_404 or "not found" in str(last_error).lower() or "404" in str(last_error):
+                    fallback_m = get_claude_fallback_model(model_name)
+                    logger.warning(
+                        "[Model Fallback] ⚠️ Claude 5.5 (%s) is not enabled on accounts in the pool (HTTP 404). 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
+                        model_name,
+                        fallback_m,
+                    )
+                    logger.info("[Model Fallback] %s active (Antigravity CloudCode - Fallback from %s)", fallback_m, model_name)
+
+                    def fb_payload_builder(proj: str):
+                        base = payload_builder_fn(proj)
+                        if isinstance(base, dict):
+                            p_copy = copy.deepcopy(base)
+                            p_copy["model"] = fallback_m
+                            if "request" in p_copy and isinstance(p_copy["request"], dict):
+                                p_copy["request"]["model"] = fallback_m
+                                if "thinkingConfig" in p_copy["request"] and isinstance(p_copy["request"]["thinkingConfig"], dict):
+                                    p_copy["request"]["thinkingConfig"].pop("thinkingLevel", None)
+                            return p_copy
+                        return base
+
+                    async for chunk in self._post_sse_stream_with_failover(
+                        endpoint,
+                        fb_payload_builder,
+                        model_name=fallback_m,
+                        timeout=timeout,
+                        session_key=session_key,
+                        specific_account_id=specific_account_id,
+                    ):
+                        yield chunk
+                    logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
+                    return
+
             raise last_error
         raise RuntimeError("All accounts in pool failed to fulfill the request.")
 
