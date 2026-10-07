@@ -592,6 +592,44 @@ curl -X POST http://127.0.0.1:8000/api/context/settings \
 
 ---
 
+## 🧪 Antigravity Experimental Features & Flags Manager
+
+Antigravity Proxy includes a dedicated **Experimental Features & Flags Manager** (`agy_proxy/experiments.py`) that safely enables next-generation capabilities in Google Antigravity & Antigravity IDE while protecting your environment from toxic or restrictive flags.
+
+### 🌟 Features Unlocked:
+- **Autonomous Multi-Agent & Swarms**: Enables `/deepagent`, autonomous agent teams (`enable-agent-team`), native agent swarms (`enable-swarm`, `enable-native-swarm`), Subagent Hub (`enable-subagent-hub`), direct subagent messaging (`enable-subagent-user-messaging`), and Mixture of Agents (`Chat__enable_chat_moa`).
+- **Model Context Protocol (MCP)**: Full support for agentic MCP chat (`Chat__enable_chat_agentic_mcp_chat`), MCP server integration (`Chat__enable_mcp_server`), stdio MCP proxies, and non-blocking turn loads.
+- **Enhanced IDE UX & Diff View**: Rich inline diff reviews (`DuetAiGeneration__codeGeneration_enable_diff_view`), side-by-side pane views (`DuetAiGeneration__codeGeneration_enable_pane_view`), and reasoning thought inspection & steering (`enable-thought-editing`, `enable-thought-steering-from-selection`).
+- **Deep Codebase Awareness & Local RAG**: Enables full-codebase folder selection (`Chat__enable_chat_folder_context_selection`), BM25 local snippet retrieval, open tab inclusion, and 3.5M token context windows.
+- **Next-Gen Model Experiment IDs**: Injects and merges 121 verified experiment IDs (including `106544526` for Claude 5.5 and Vertex AI preview) across all accounts in your pool.
+
+### 🛡️ Built-in Toxic Flag Blocklist (Protection against breakage):
+Blindly forcing all flags `True` broke features because Google upstream includes restrictive flags:
+- `GeminiFreeTier__enable_free_tier`: Forces Free Tier account limitations and disables pro models (strictly kept `false`).
+- `disable-search-tools`: Disables workspace search tools (strictly kept `false`).
+- `remove-conversation-history`: Deletes conversation history (strictly kept `false`).
+- `disable-command-assessor`, feedback blocks, and telemetry polling blocks are protected and sanitized.
+
+### ⚙️ CLI & REST API Management:
+```bash
+# List all experimental flags and current status:
+agy-proxy experiments list
+
+# Force enable a specific flag:
+agy-proxy experiments enable enable-deepagent
+
+# Disable a specific flag:
+agy-proxy experiments disable enable-deepagent
+
+# Change operating mode (curated [default], all_safe, passthrough):
+agy-proxy experiments mode curated
+
+# Reset all overrides back to curated defaults:
+agy-proxy experiments reset
+```
+
+---
+
 ## 🌐 Live Web Search & Google Grounding
 
 Antigravity Proxy natively equips coding agents and IDEs (Cursor, Windsurf, Roo Code, Cline, Claude Code, Aider) with live internet access without needing paid API keys from third-party search providers.

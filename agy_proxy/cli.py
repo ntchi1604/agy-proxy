@@ -480,6 +480,81 @@ def handle_run_codex(port: int = 8000, model: str = "gemini-3.8-flash-high", ext
         pass
 
 
+def handle_experiments_command(args):
+    """Command for inspecting and managing Antigravity experimental flags."""
+    from agy_proxy.experiments import (
+        get_experiments_status,
+        set_experiment_override,
+        reset_experiment_overrides,
+        set_experiment_mode,
+        BLOCKLIST_FLAGS,
+    )
+
+    action = getattr(args, "exp_action", "list") or "list"
+
+    if action == "list":
+        status = get_experiments_status()
+        mode = status["mode"]
+        active = status["active"]
+
+        header_text = (
+            f"[bold cyan]Antigravity Experimental Features & Flags Manager[/bold cyan]\n"
+            f"Status: [{'bold green' if active else 'bold red'}]{'Active' if active else 'Disabled'}[/] | "
+            f"Mode: [bold magenta]{mode}[/bold magenta] | "
+            f"Curated Flags: [bold white]{status['total_curated_flags']}[/bold white] | "
+            f"Experiment IDs: [bold white]{status['total_experiment_ids']}[/bold white] | "
+            f"Overrides: [bold yellow]{status['overrides_count']}[/bold yellow]"
+        )
+        console.print(Panel(header_text, border_style="blue"))
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Flag Name", style="white")
+        table.add_column("Category", style="cyan")
+        table.add_column("State", justify="center")
+        table.add_column("Description", style="dim")
+
+        for fl in status["flags"]:
+            is_on = fl["enabled"]
+            is_overridden = fl["is_overridden"]
+            state_str = "[bold green]ON[/bold green]" if is_on else "[dim]OFF[/dim]"
+            if is_overridden:
+                state_str += " [yellow]*[/yellow]"
+            table.add_row(
+                fl["name"],
+                fl["category_label"],
+                state_str,
+                fl["description"],
+            )
+
+        console.print(table)
+        console.print("[dim]* = Manually overridden in ~/.config/agy-proxy/experiments.json[/dim]\n")
+
+    elif action == "enable":
+        flag = args.flag
+        if flag in BLOCKLIST_FLAGS:
+            console.print(f"[bold red]Cannot enable '{flag}': This flag is in the critical blocklist (would break functionality).[/bold red]")
+            return
+        set_experiment_override(flag, True)
+        console.print(f"[bold green]✓ Successfully enabled experimental flag:[/bold green] [bold white]{flag}[/bold white]")
+
+    elif action == "disable":
+        flag = args.flag
+        set_experiment_override(flag, False)
+        console.print(f"[bold yellow]✓ Successfully disabled experimental flag:[/bold yellow] [bold white]{flag}[/bold white]")
+
+    elif action == "mode":
+        mode = args.mode
+        try:
+            set_experiment_mode(mode)
+            console.print(f"[bold green]✓ Set experiment operating mode to:[/bold green] [bold magenta]{mode}[/bold magenta]")
+        except Exception as e:
+            console.print(f"[bold red]Failed to set mode:[/bold red] {e}")
+
+    elif action == "reset":
+        reset_experiment_overrides()
+        console.print("[bold green]✓ Successfully reset all experimental flag overrides back to curated defaults.[/bold green]")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the argument parser for agy-proxy CLI."""
     parser = argparse.ArgumentParser(
@@ -594,6 +669,22 @@ def build_parser() -> argparse.ArgumentParser:
     codex_run_p.add_argument("--model", "-m", type=str, default="gemini-3.8-flash-high", help="Model to use (default: gemini-3.8-flash-high)")
     codex_run_p.add_argument("codex_args", nargs=argparse.REMAINDER, help="Additional arguments passed directly to codex")
 
+    # experiments subcommand (agy-proxy experiments)
+    exp_parser = subparsers.add_parser(
+        "experiments",
+        aliases=["exp"],
+        help="Inspect and manage Antigravity experimental features and flags",
+    )
+    exp_subparsers = exp_parser.add_subparsers(dest="exp_action")
+    exp_subparsers.add_parser("list", help="List all experimental flags and current status")
+    exp_enable_p = exp_subparsers.add_parser("enable", help="Force enable an experimental flag")
+    exp_enable_p.add_argument("flag", help="Flag name to enable (e.g. enable-deepagent)")
+    exp_disable_p = exp_subparsers.add_parser("disable", help="Disable an experimental flag")
+    exp_disable_p.add_argument("flag", help="Flag name to disable")
+    exp_mode_p = exp_subparsers.add_parser("mode", help="Set experiment operating mode")
+    exp_mode_p.add_argument("mode", choices=["curated", "all_safe", "passthrough"], help="Operating mode: curated (default), all_safe, passthrough")
+    exp_subparsers.add_parser("reset", help="Reset all overrides back to curated defaults")
+
     # Server arguments
     parser.add_argument(
         "--host",
@@ -675,6 +766,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Rate-limit cooldown in seconds upon receiving HTTP 429 from provider (default: 0 / disabled)",
+    )
+    parser.add_argument(
+        "--experiments-mode",
+        type=str,
+        default=None,
+        choices=["curated", "all_safe", "passthrough"],
+        help="Experimental features operating mode (default: curated)",
     )
     parser.add_argument(
         "--tray",
@@ -786,6 +884,9 @@ def main():
             extra_args=getattr(args, "codex_args", []),
         )
         return
+    elif args.subcommand in ("experiments", "exp"):
+        handle_experiments_command(args)
+        return
 
 
     # Apply CLI context auto-compaction and tool pruning overrides
@@ -806,6 +907,13 @@ def main():
 
     if getattr(args, "cooldown", None) is not None:
         os.environ["AGY_RATE_LIMIT_COOLDOWN"] = str(args.cooldown)
+
+    if getattr(args, "experiments_mode", None):
+        from agy_proxy.experiments import set_experiment_mode
+        try:
+            set_experiment_mode(args.experiments_mode)
+        except Exception:
+            pass
 
     # Configure logging
     effective_log_level = "debug" if args.debug else args.log_level
@@ -853,6 +961,7 @@ def main():
         POLLING_PATHS = (
             "/api/cache/stats",
             "/api/context/settings",
+            "/api/experiments",
             "/api/accounts",
             "/api/processes/status",
             "/api/processes",

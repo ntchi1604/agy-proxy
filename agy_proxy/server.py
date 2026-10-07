@@ -50,6 +50,15 @@ from agy_proxy.responses import (
     generate_responses_dict,
 )
 from agy_proxy.ui import get_dashboard_html
+from agy_proxy.experiments import (
+    enhance_list_experiments,
+    enhance_available_models,
+    get_default_experiments_payload,
+    get_experiments_status,
+    save_experiment_config,
+    load_experiment_config,
+    reset_experiment_overrides,
+)
 
 logger = logging.getLogger("agy_proxy.server")
 
@@ -121,14 +130,7 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
             "gcpManaged": False,
         }
     elif action_key == "listExperiments":
-        return {
-            "experimentIds": ["exp-antigravity-enabled"],
-            "flags": [
-                {"name": "enable_reasoning", "boolValue": True},
-                {"name": "enable_tools", "boolValue": True},
-                {"name": "enable_multi_turn", "boolValue": True},
-            ],
-        }
+        return get_default_experiments_payload()
     elif action_key == "fetchUserInfo":
         return {
             "user": {
@@ -174,22 +176,9 @@ def _process_passthrough_metadata(action_key: str, data: dict[str, Any]) -> dict
     if not isinstance(data, dict):
         return data
     if action_key == "listExperiments":
-        for flag in data.get("flags", []):
-            if isinstance(flag, dict) and "boolValue" in flag:
-                flag["boolValue"] = True
+        return enhance_list_experiments(data)
     elif action_key == "fetchAvailableModels":
-        for model_id, model_data in data.get("models", {}).items():
-            if isinstance(model_data, dict):
-                for section in model_data.get("capabilities", {}).values():
-                    if isinstance(section, dict):
-                        for k, v in section.items():
-                            if isinstance(v, dict) and "boolValue" in v:
-                                v["boolValue"] = True
-                experiments = model_data.get("modelExperiments", {}).get("experiments", {})
-                if isinstance(experiments, dict):
-                    for exp_name, exp_val in experiments.items():
-                        if isinstance(exp_val, dict) and "boolValue" in exp_val:
-                            exp_val["boolValue"] = True
+        return enhance_available_models(data)
     return data
 
 
@@ -1295,6 +1284,41 @@ def create_app(
             "tokens_after": after,
             "savings_percent": savings_pct,
         }
+
+    # -------------------------------------------------------------------------
+    # Experimental Features & Flags API
+    # -------------------------------------------------------------------------
+    @app.get("/api/experiments")
+    async def get_experiments_api():
+        return get_experiments_status()
+
+    @app.post("/api/experiments")
+    async def update_experiments_api(request: Request):
+        body = await request.json()
+        cfg = load_experiment_config()
+        if "enabled" in body:
+            cfg["enabled"] = bool(body["enabled"])
+        if "mode" in body:
+            new_mode = str(body["mode"])
+            if new_mode in ("curated", "all_safe", "passthrough"):
+                cfg["mode"] = new_mode
+            else:
+                raise HTTPException(status_code=400, detail="Invalid mode. Choose: curated, all_safe, passthrough")
+        if "overrides" in body and isinstance(body["overrides"], dict):
+            if "custom_overrides" not in cfg or not isinstance(cfg["custom_overrides"], dict):
+                cfg["custom_overrides"] = {}
+            for k, v in body["overrides"].items():
+                if v is None:
+                    cfg["custom_overrides"].pop(k, None)
+                else:
+                    cfg["custom_overrides"][k] = bool(v)
+        save_experiment_config(cfg)
+        return {"status": "ok", "experiments": get_experiments_status()}
+
+    @app.post("/api/experiments/reset")
+    async def reset_experiments_api():
+        reset_experiment_overrides()
+        return {"status": "ok", "experiments": get_experiments_status()}
 
     @app.get("/api/models")
     async def get_proxy_models():
