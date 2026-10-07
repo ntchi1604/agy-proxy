@@ -70,13 +70,17 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-opus-4-6": "claude-opus-4-6-thinking",
     "claude-opus-4.6": "claude-opus-4-6-thinking",
     "claude-3-7-sonnet": "claude-sonnet-4-6",
+    "claude-3.7-sonnet": "claude-sonnet-4-6",
     "claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
     "claude-3-5-sonnet": "claude-sonnet-4-6",
+    "claude-3.5-sonnet": "claude-sonnet-4-6",
     "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
     "claude-3-5-sonnet-latest": "claude-sonnet-4-6",
     "claude-3-opus": "claude-opus-4-6-thinking",
+    "claude-3.5-opus": "claude-opus-4-6-thinking",
     "claude-3-opus-20240229": "claude-opus-4-6-thinking",
     "claude-3-5-haiku": "gemini-3.1-flash-lite",
+    "claude-3.5-haiku": "gemini-3.1-flash-lite",
     "claude-3-haiku": "gemini-3.1-flash-lite",
 
     # Claude 5.5 Aliases
@@ -347,35 +351,39 @@ def normalize_model_name(model_name: str | None) -> str:
         return MODEL_ALIASES[cleaned]
 
     # Keyword checks
-    # Version specific checks
-    if "3.8" in cleaned or "3-8" in cleaned:
-        if "low" in cleaned:
-            return "gemini-3.8-flash-low"
-        if "med" in cleaned:
-            return "gemini-3.8-flash-medium"
-        return "gemini-3.8-flash-high"
-    if "3.7" in cleaned or "3-7" in cleaned:
-        if "low" in cleaned:
-            return "gemini-3.7-flash-low"
-        if "med" in cleaned:
-            return "gemini-3.7-flash-medium"
-        return "gemini-3.7-flash-high"
-    if "3.6" in cleaned or "3-6" in cleaned:
-        if "low" in cleaned:
-            return "gemini-3.6-flash-low"
-        if "med" in cleaned:
-            return "gemini-3.6-flash-medium"
-        return "gemini-3.6-flash-tiered"
-    if "3.5" in cleaned or "3-5" in cleaned:
-        if "lite" in cleaned:
-            return "gemini-3.5-flash-lite"
-        if "extra-low" in cleaned or "extra_low" in cleaned:
-            return "gemini-3.5-flash-extra-low"
-        return "gemini-3.5-flash-low"
-    if "3.1-pro" in cleaned or "3_1-pro" in cleaned or "3-1-pro" in cleaned:
-        return "gemini-3.1-pro-low"
-    if "2.5-pro" in cleaned or "2_5-pro" in cleaned:
-        return "gemini-2.5-pro"
+    # Claude query check
+    is_claude_query = any(k in cleaned for k in ("claude", "sonnet", "opus"))
+
+    # Version specific checks (Gemini only)
+    if not is_claude_query:
+        if "3.8" in cleaned or "3-8" in cleaned:
+            if "low" in cleaned:
+                return "gemini-3.8-flash-low"
+            if "med" in cleaned:
+                return "gemini-3.8-flash-medium"
+            return "gemini-3.8-flash-high"
+        if "3.7" in cleaned or "3-7" in cleaned:
+            if "low" in cleaned:
+                return "gemini-3.7-flash-low"
+            if "med" in cleaned:
+                return "gemini-3.7-flash-medium"
+            return "gemini-3.7-flash-high"
+        if "3.6" in cleaned or "3-6" in cleaned:
+            if "low" in cleaned:
+                return "gemini-3.6-flash-low"
+            if "med" in cleaned:
+                return "gemini-3.6-flash-medium"
+            return "gemini-3.6-flash-tiered"
+        if "3.5" in cleaned or "3-5" in cleaned:
+            if "lite" in cleaned:
+                return "gemini-3.5-flash-lite"
+            if "extra-low" in cleaned or "extra_low" in cleaned:
+                return "gemini-3.5-flash-extra-low"
+            return "gemini-3.5-flash-low"
+        if "3.1-pro" in cleaned or "3_1-pro" in cleaned or "3-1-pro" in cleaned:
+            return "gemini-3.1-pro-low"
+        if "2.5-pro" in cleaned or "2_5-pro" in cleaned:
+            return "gemini-2.5-pro"
 
     # Claude 5.5 models
     if ("5.5" in cleaned or "5-5" in cleaned) and "gpt" not in cleaned:
@@ -476,6 +484,27 @@ def get_claude_fallback_model(model_name: str | None) -> str:
     if "opus" in norm:
         return "claude-opus-4-6-thinking"
     return "claude-sonnet-4-6"
+
+
+def is_claude_4_6_model(model_name: str | None) -> bool:
+    """Checks whether the requested model is a Claude 4.6 variant (e.g. Sonnet 4.6, Opus 4.6)."""
+    if not model_name:
+        return False
+    norm = normalize_model_name(model_name)
+    return (norm.startswith("claude-") or "claude" in norm) and not is_claude_5_5_model(norm)
+
+
+def get_claude_5_5_upgrade_model(model_name: str | None) -> str:
+    """
+    Returns the corresponding Claude 5.5 upgrade model for a Claude 4.6 variant.
+    Preserves model tier (Opus -> Opus 5.5 High, Sonnet -> Sonnet 5.5 High).
+    """
+    if not model_name:
+        return "claude-sonnet-5-5-high"
+    norm = normalize_model_name(model_name)
+    if "opus" in norm:
+        return "claude-opus-5-5-high"
+    return "claude-sonnet-5-5-high"
 
 
 # ---------------------------------------------------------

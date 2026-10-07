@@ -373,6 +373,32 @@ function isAccountRateLimited(acc, model) {
   return true;
 }
 
+function isModelSupported(acc, model) {
+  const norm = normalizeModelName(model);
+  const isC55 = (norm.includes("5-5") || norm.includes("5.5")) && norm.includes("claude");
+  const isC46 = norm.includes("claude") && !isC55;
+  const avail = acc.available_models || [];
+  const availList = Array.isArray(avail) ? avail : Object.keys(avail);
+  const has55 = Boolean(acc.supports_claude_5_5) || availList.some(m => (m.includes("5-5") || m.includes("5.5")) && m.includes("claude"));
+
+  if (isC55) {
+    if (acc.supports_claude_5_5) return true;
+    if (has55) {
+      if (availList.length > 0) return availList.includes(norm) || availList.some(m => (m.includes("5-5") || m.includes("5.5")) && m.includes("claude"));
+      return true;
+    }
+    return false;
+  }
+  if (isC46) {
+    if (has55) return false;
+    if (availList.length > 0) {
+      return availList.includes(norm) || availList.some(m => m.includes("claude") && !m.includes("5-5") && !m.includes("5.5"));
+    }
+    return true;
+  }
+  return true;
+}
+
 function markAccountRateLimited(acc, model, durationMs = 60000) {
   const is3p = model.includes("claude") || model.includes("gpt-oss");
   const key = `${acc.account_id || acc.email || "acc"}:${is3p ? "3p" : "gemini"}`;
@@ -1041,10 +1067,23 @@ export default {
       const backendModel = normalizeModelName(rawModel);
       const isStream = Boolean(reqJson.stream);
 
-      // Prioritize non-rate-limited accounts
+      // Filter candidate accounts supporting the requested model
       let candidates = accounts.filter(
-        (a) => !isAccountRateLimited(a, backendModel)
+        (a) => isModelSupported(a, backendModel) && !isAccountRateLimited(a, backendModel)
       );
+      if (candidates.length === 0) {
+        // Fallback: If 5.5 requested but no 5.5 accounts available, try 4.6 accounts
+        if (backendModel.includes("5-5") || backendModel.includes("5.5")) {
+          const fbModel = backendModel.includes("opus") ? "claude-opus-4-6-thinking" : "claude-sonnet-4-6";
+          candidates = accounts.filter((a) => isModelSupported(a, fbModel) && !isAccountRateLimited(a, fbModel));
+        } else if (backendModel.includes("claude")) {
+          const upModel = backendModel.includes("opus") ? "claude-opus-5-5-high" : "claude-sonnet-5-5-high";
+          candidates = accounts.filter((a) => isModelSupported(a, upModel) && !isAccountRateLimited(a, upModel));
+        }
+      }
+      if (candidates.length === 0) {
+        candidates = accounts.filter((a) => isModelSupported(a, backendModel));
+      }
       if (candidates.length === 0) {
         candidates = [...accounts];
       }
@@ -1161,15 +1200,24 @@ export default {
 
             if (!gRes.ok) {
               const errBody = await gRes.text();
+              const isClaudeDep = errBody.includes("no longer available") || (errBody.includes("4.6") && errBody.includes("5.5"));
+              if (isClaudeDep) {
+                acc.supports_claude_5_5 = true;
+                console.warn(`[Cloudflare] ⚠️ Account does not support Claude 4.6 (marked as Claude 5.5-only).`);
+              }
+
               if ((gRes.status === 404 || gRes.status === 429) && isLastCandidate && (backendModel.includes("5-5") || backendModel.includes("5.5"))) {
                 const fbModel = backendModel.includes("opus") ? "claude-opus-4-6-thinking" : "claude-sonnet-4-6";
                 console.warn(`[Cloudflare] ⚠️ Model ${backendModel} returned ${gRes.status}. Falling back to ${fbModel}`);
-                const fbPayload = buildCloudCodePayload(reqJson, fbModel, auth);
+                const altAccounts = accounts.filter((a) => (a.account_id !== acc.account_id) && isModelSupported(a, fbModel) && !isAccountRateLimited(a, fbModel));
+                const targetAcc = altAccounts.length > 0 ? altAccounts[0] : acc;
+                const fbAuth = altAccounts.length > 0 ? await getAccessToken(targetAcc) : auth;
+                const fbPayload = buildCloudCodePayload(reqJson, fbModel, fbAuth);
                 const fbRes = await fetch(targetUrl, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${auth.token}`,
+                    Authorization: `Bearer ${fbAuth.token}`,
                     "User-Agent": DEFAULT_USER_AGENT,
                   },
                   body: JSON.stringify(fbPayload),

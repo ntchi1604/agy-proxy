@@ -1888,8 +1888,12 @@ def create_app(
                 _sanitize_roles(body["request"].get("contents", []))
             _sanitize_roles(body.get("contents", []))
 
-        # 2. Identify target account from Authorization header if present
+        # 2. Identify target account from Authorization header or explicit account header if present
         target_account = None
+        req_acc_id = request.headers.get("x-requested-account-id") or request.headers.get("x-account-id")
+        if req_acc_id and req_acc_id in pool.accounts:
+            target_account = pool.accounts[req_acc_id]
+
         auth_header = request.headers.get("authorization") or ""
         bearer_token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else None
         if bearer_token:
@@ -2015,8 +2019,99 @@ def create_app(
                     acc.mark_rate_limited(req_model if is_generation else "default", duration=60.0)
                     continue
 
-                if resp.status_code in (404, 500, 502, 503, 504) and is_generation and not is_last:
-                    if resp.status_code == 404:
+                err_hint = _extract_error_message(resp)
+                err_lower = err_hint.lower()
+
+                # Upstream error: Claude 4.6 is no longer available on this account (migrated to Claude 5.5)
+                is_claude_deprecated = (
+                    "no longer available" in err_lower
+                    or ("4.6" in err_lower and "5.5" in err_lower)
+                    or "switch to claude" in err_lower
+                )
+                if is_claude_deprecated and is_generation:
+                    if not hasattr(acc, "unsupported_models"):
+                        acc.unsupported_models = set()
+                    acc.unsupported_models.add("claude-sonnet-4-6")
+                    acc.unsupported_models.add("claude-opus-4-6-thinking")
+                    norm_m = normalize_model_name(req_model)
+                    acc.unsupported_models.add(norm_m)
+                    if getattr(acc, "available_models", None):
+                        acc.available_models.pop("claude-sonnet-4-6", None)
+                        acc.available_models.pop("claude-opus-4-6-thinking", None)
+                        acc.available_models.pop(norm_m, None)
+                    acc.supports_claude_5_5 = True
+                    logger.warning(
+                        "[%s] ⚠️ Account does not support Claude 4.6 (%s). Marked as Claude 5.5-only account.",
+                        acc_label,
+                        err_hint,
+                    )
+                    if not is_last:
+                        logger.info("[%s] Failing over to next candidate account for %s...", acc_label, req_model)
+                        continue
+                    else:
+                        # If this was the last candidate in the initial list, check if pool has other accounts for req_model
+                        alt_candidates = [
+                            a for a in (pool.get_candidate_accounts(req_model) if pool else [])
+                            if a.account_id != acc.account_id and a.is_model_supported(req_model)
+                        ]
+                        if alt_candidates:
+                            logger.info("[%s] 🔄 Failing over to alternate account in pool supporting %s...", acc_label, req_model)
+                            for alt_acc in alt_candidates:
+                                alt_label = getattr(alt_acc, "email", alt_acc.account_id)
+                                alt_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
+                                if isinstance(alt_body, dict):
+                                    alt_proj = getattr(alt_acc, "project_id", None) or "aicode-consumers"
+                                    alt_body["project"] = alt_proj
+                                    if "request" in alt_body and isinstance(alt_body["request"], dict):
+                                        alt_body["request"]["project"] = alt_proj
+                                try:
+                                    alt_headers = await alt_acc.get_auth_headers()
+                                    if "user-agent" in request.headers:
+                                        alt_headers["User-Agent"] = request.headers["user-agent"]
+                                    alt_c = await alt_acc.get_http_client()
+                                    alt_resp = await alt_c.post(target_url, headers=alt_headers, json=alt_body, params=query_params, timeout=timeout_sec)
+                                    if alt_resp.status_code == 200:
+                                        logger.info("[%s] ✅ Alternate account failover to %s succeeded!", alt_label, req_model)
+                                        resp = alt_resp
+                                        acc = alt_acc
+                                        acc_label = alt_label
+                                        break
+                                except Exception as alt_err:
+                                    logger.debug("[%s] Alternate failover error: %s", alt_label, alt_err)
+                                    continue
+                        # If no other account supports Claude 4.6, auto-switch to Claude 5.5 on this account as upstream asked
+                        if resp.status_code != 200:
+                            from agy_proxy.models import get_claude_5_5_upgrade_model
+                            upgrade_model = get_claude_5_5_upgrade_model(req_model)
+                            logger.warning(
+                                "[%s] 🔄 Auto-switching request from %s to Claude 5.5 (%s) on this account as recommended by upstream!",
+                                acc_label,
+                                req_model,
+                                upgrade_model,
+                            )
+                            up_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
+                            if isinstance(up_body, dict):
+                                up_body["model"] = upgrade_model
+                                if "request" in up_body and isinstance(up_body["request"], dict):
+                                    up_body["request"]["model"] = upgrade_model
+                            try:
+                                up_headers = await acc.get_auth_headers()
+                                if "user-agent" in request.headers:
+                                    up_headers["User-Agent"] = request.headers["user-agent"]
+                                up_c = await acc.get_http_client()
+                                up_resp = await up_c.post(target_url, headers=up_headers, json=up_body, params=query_params, timeout=timeout_sec)
+                                if up_resp.status_code == 200:
+                                    logger.info("[%s] ✅ Upgraded request to %s succeeded seamlessly!", acc_label, upgrade_model)
+                                    resp = up_resp
+                                    req_model = upgrade_model
+                            except Exception as up_err:
+                                logger.debug("[%s] Upgrade request error: %s", acc_label, up_err)
+
+                if resp.status_code in (400, 404, 500, 502, 503, 504) and is_generation and not is_last:
+                    is_model_err = (resp.status_code == 404) or (
+                        resp.status_code == 400 and any(kw in err_lower for kw in ("not supported", "unknown model", "invalid model", "not found", "model", "available"))
+                    )
+                    if is_model_err:
                         if not hasattr(acc, "unsupported_models"):
                             acc.unsupported_models = set()
                         acc.unsupported_models.add(req_model)
@@ -2025,12 +2120,11 @@ def create_app(
                         if getattr(acc, "available_models", None):
                             acc.available_models.pop(req_model, None)
                             acc.available_models.pop(norm_m, None)
-                    err_hint = _extract_error_message(resp)
                     logger.warning("[%s] CloudCode error %d (%s) for %s. Failing over to next account in pool...", acc_label, resp.status_code, err_hint, req_model)
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
                     continue
 
-                # Last candidate got 404 or 429: If Claude 5.5 reached quota or is not enabled, auto-fallback to Claude 4.6 so generation never breaks
+                # Last candidate got 404 or 429: If Claude 5.5 reached quota or is not enabled, auto-fallback to Claude 4.6 on another account
                 if resp.status_code in (404, 429) and is_generation and is_last:
                     if is_claude_5_5_model(req_model):
                         fallback_model = get_claude_fallback_model(req_model)
@@ -2040,13 +2134,25 @@ def create_app(
                         else:
                             reason_msg = "returned 404 (not enabled on this account)"
                         logger.warning(
-                            "[%s] ⚠️ Model %s %s. 🔄 Auto-falling back to Claude 4.6 (%s) so generation continues without error!",
+                            "[%s] ⚠️ Model %s %s. 🔄 Auto-falling back to Claude 4.6 (%s) on another account so generation continues without error!",
                             acc_label,
                             req_model,
                             reason_msg,
                             fallback_model,
                         )
-                        fallback_candidates = pool.get_candidate_accounts(fallback_model) if pool else candidates
+                        if pool:
+                            fallback_candidates = [
+                                a for a in pool.get_candidate_accounts(fallback_model)
+                                if a.account_id != acc.account_id and a.is_model_supported(fallback_model)
+                            ]
+                            if not fallback_candidates:
+                                fallback_candidates = [a for a in pool.get_candidate_accounts(fallback_model)]
+                                if not fallback_candidates:
+                                    fallback_candidates = [acc]
+                        else:
+                            fallback_candidates = [a for a in candidates if a.account_id != acc.account_id and a.is_model_supported(fallback_model)]
+                            if not fallback_candidates:
+                                fallback_candidates = list(candidates) or [acc]
                         for fb_acc in fallback_candidates:
                             fb_label = getattr(fb_acc, "email", fb_acc.account_id)
                             logger.info("[%s] %s active (Antigravity CloudCode - Fallback from %s)", fb_label, fallback_model, req_model)

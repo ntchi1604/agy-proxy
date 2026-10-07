@@ -410,6 +410,62 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
             fb_gc = fb_sent["request"]["generationConfig"]["thinkingConfig"]
             self.assertNotIn("thinkingLevel", fb_gc)
 
+    async def test_post_sse_stream_failover_claude_4_6_no_longer_available_auto_upgrades_to_5_5(self):
+        """Tests that client auto-upgrades to Claude 5.5 when Claude 4.6 is no longer available."""
+        mock_400_resp = MagicMock()
+        mock_400_resp.status_code = 400
+        mock_400_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_400_resp.aread = AsyncMock(return_value=b'{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}')
+        mock_400_resp.text = '{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}'
+
+        mock_400_ctx = MagicMock()
+        mock_400_ctx.__aenter__ = AsyncMock(return_value=mock_400_resp)
+        mock_400_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        async def fake_stream_lines():
+            yield 'data: {"response": {"candidates": [{"content": {"parts": [{"text": "Hello 5.5"}]}}]}}'
+
+        mock_200_resp = MagicMock()
+        mock_200_resp.status_code = 200
+        mock_200_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_200_resp.aiter_lines = fake_stream_lines
+
+        mock_200_ctx = MagicMock()
+        mock_200_ctx.__aenter__ = AsyncMock(return_value=mock_200_resp)
+        mock_200_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        sent_payloads = []
+
+        def stream_side_effect(method, url, json=None, **kwargs):
+            sent_payloads.append(dict(json or {}))
+            if json and "4-6" in json.get("model", ""):
+                return mock_400_ctx
+            return mock_200_ctx
+
+        mock_http_client = MagicMock()
+        mock_http_client.stream = MagicMock(side_effect=stream_side_effect)
+
+        with patch.object(self.acc, "initialize_project", AsyncMock(return_value="test-proj")), \
+             patch.object(self.acc, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer test"})), \
+             patch.object(self.acc, "get_http_client", AsyncMock(return_value=mock_http_client)):
+
+            results = []
+            gen = self.client._post_sse_stream_with_failover(
+                endpoint="v1internal:streamGenerateContent?alt=sse",
+                payload_builder_fn=lambda proj: {
+                    "model": "claude-sonnet-4-6",
+                    "request": {"model": "claude-sonnet-4-6"},
+                },
+                model_name="claude-sonnet-4-6",
+            )
+            async for chunk in gen:
+                results.append(chunk)
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(len(sent_payloads), 2)
+            self.assertEqual(sent_payloads[0]["model"], "claude-sonnet-4-6")
+            self.assertEqual(sent_payloads[1]["model"], "claude-sonnet-5-5-high")
+
 
 if __name__ == "__main__":
     unittest.main()

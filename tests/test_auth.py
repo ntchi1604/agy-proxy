@@ -457,13 +457,22 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(cands_sonnet_5_5), 1)
         self.assertEqual(cands_sonnet_5_5[0].account_id, "acc_mel")
 
-        # 2. Legacy Claude 4.6 remains accessible to both accounts
+        # 2. Claude 4.6 routes exclusively to acc_vit because acc_mel migrated to Claude 5.5 and no longer supports 4.6
         cands_4_6 = pool.get_candidate_accounts("claude-sonnet-4-6")
-        self.assertEqual(len(cands_4_6), 2)
+        self.assertEqual(len(cands_4_6), 1)
+        self.assertEqual(cands_4_6[0].account_id, "acc_vit")
 
         # 3. Model support check directly on sessions
         self.assertTrue(acc_with_5_5.is_model_supported("claude-sonnet-5-5-high"))
         self.assertFalse(acc_without_5_5.is_model_supported("claude-sonnet-5-5-high"))
+        self.assertFalse(acc_with_5_5.is_model_supported("claude-sonnet-4-6"))
+        self.assertTrue(acc_without_5_5.is_model_supported("claude-sonnet-4-6"))
+
+        # 4. When acc_mel is rate-limited on 5.5, pool auto-routes to acc_vit with Claude 4.6
+        acc_with_5_5.mark_rate_limited("claude-sonnet-5-5-high", duration=60.0)
+        cands_fb = pool.get_candidate_accounts("claude-sonnet-5-5-high")
+        self.assertEqual(len(cands_fb), 1)
+        self.assertEqual(cands_fb[0].account_id, "acc_vit")
 
     def test_quota_exhausted_gemini_with_anthropic_prefix(self):
         # Account has 0% 3P quota (e.g. no Claude access) but 100% Gemini quota

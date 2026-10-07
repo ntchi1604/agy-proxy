@@ -451,6 +451,12 @@ class AccountPool:
                     acc.available_models = {m: {} for m in models}
                 elif isinstance(models, dict):
                     acc.available_models = models
+            supports_55 = prev.get("supports_claude_5_5") if "supports_claude_5_5" in prev else item.get("supports_claude_5_5")
+            if supports_55 is not None:
+                acc.supports_claude_5_5 = bool(supports_55)
+            elif getattr(acc, "available_models", None):
+                from agy_proxy.models import is_claude_5_5_model
+                acc.supports_claude_5_5 = any(is_claude_5_5_model(m) for m in acc.available_models.keys())
 
         # ── Step 4: load OAuth accounts (accounts.json) ───────────────────
         if self.accounts_file.exists():
@@ -796,6 +802,7 @@ class AccountPool:
                         "is_primary": acc.is_primary,
                         "proxy_url": getattr(acc, "proxy_url", None),
                         "available_models": list((getattr(acc, "available_models", None) or {}).keys()),
+                        "supports_claude_5_5": getattr(acc, "supports_claude_5_5", False),
                     }
                     sensitive = {
                         "refresh_token": acc.refresh_token,
@@ -1134,16 +1141,33 @@ class AccountPool:
             if is_c55:
                 # If no accounts in pool support 5.5, auto-fallback to 4.6 so request doesn't fail
                 fallback_m = get_claude_fallback_model(norm_model)
-                logger.warning(
-                    "[Model Fallback] Claude 5.5 (%s) is not supported on available accounts. Auto-routing to Claude 4.6 (%s) to avoid interruption.",
-                    norm_model,
-                    fallback_m,
-                )
-                return self.get_candidate_accounts(
-                    model=fallback_m,
-                    specific_account_id=specific_account_id,
-                    preferred_account_id=preferred_account_id,
-                )
+                c46_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m)]
+                if c46_pool:
+                    logger.warning(
+                        "[Model Fallback] Claude 5.5 (%s) is not supported on available accounts. Auto-routing to another account with Claude 4.6 (%s) to avoid interruption.",
+                        norm_model,
+                        fallback_m,
+                    )
+                    return self.get_candidate_accounts(
+                        model=fallback_m,
+                        specific_account_id=specific_account_id,
+                        preferred_account_id=preferred_account_id,
+                    )
+            from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
+            if is_claude_4_6_model(norm_model):
+                upgrade_m = get_claude_5_5_upgrade_model(norm_model)
+                c55_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(upgrade_m)]
+                if c55_pool:
+                    logger.warning(
+                        "[Model Upgrade] Claude 4.6 (%s) is not supported on available accounts. Auto-routing to account with Claude 5.5 (%s) to avoid interruption.",
+                        norm_model,
+                        upgrade_m,
+                    )
+                    return self.get_candidate_accounts(
+                        model=upgrade_m,
+                        specific_account_id=specific_account_id,
+                        preferred_account_id=preferred_account_id,
+                    )
 
             is_3p = is_3p_model(norm_model)
             if is_3p:
@@ -1159,16 +1183,41 @@ class AccountPool:
         if not available:
             if is_c55:
                 fallback_m = get_claude_fallback_model(norm_model)
-                logger.warning(
-                    "[Model Fallback] ⚠️ All accounts supporting Claude 5.5 (%s) have reached quota (429) or rate limits. 🔄 Auto-routing to Claude 4.6 (%s) to avoid interruption!",
-                    norm_model,
-                    fallback_m,
-                )
-                return self.get_candidate_accounts(
-                    model=fallback_m,
-                    specific_account_id=specific_account_id,
-                    preferred_account_id=preferred_account_id,
-                )
+                c46_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m) and not a.is_rate_limited(fallback_m) and not a.is_quota_exhausted(fallback_m)]
+                if not c46_pool:
+                    c46_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m) and not a.is_rate_limited(fallback_m)]
+                if not c46_pool:
+                    c46_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m)]
+                if c46_pool:
+                    logger.warning(
+                        "[Model Fallback] ⚠️ All accounts supporting Claude 5.5 (%s) have reached quota (429) or rate limits. 🔄 Auto-routing to another account with Claude 4.6 (%s) to avoid interruption!",
+                        norm_model,
+                        fallback_m,
+                    )
+                    return self.get_candidate_accounts(
+                        model=fallback_m,
+                        specific_account_id=specific_account_id,
+                        preferred_account_id=preferred_account_id,
+                    )
+            from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
+            if is_claude_4_6_model(norm_model):
+                upgrade_m = get_claude_5_5_upgrade_model(norm_model)
+                c55_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(upgrade_m) and not a.is_rate_limited(upgrade_m) and not a.is_quota_exhausted(upgrade_m)]
+                if not c55_pool:
+                    c55_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(upgrade_m) and not a.is_rate_limited(upgrade_m)]
+                if not c55_pool:
+                    c55_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(upgrade_m)]
+                if c55_pool:
+                    logger.warning(
+                        "[Model Upgrade] ⚠️ All accounts supporting Claude 4.6 (%s) have reached quota or rate limits. 🔄 Auto-routing to account with Claude 5.5 (%s) to avoid interruption!",
+                        norm_model,
+                        upgrade_m,
+                    )
+                    return self.get_candidate_accounts(
+                        model=upgrade_m,
+                        specific_account_id=specific_account_id,
+                        preferred_account_id=preferred_account_id,
+                    )
             # Fall back to accounts that are at least not rate limited, or all active accounts to allow retry
             not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(norm_model)]
             available = not_rate_limited if not_rate_limited else list(active_pool)

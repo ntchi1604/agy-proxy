@@ -867,6 +867,181 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         fb_gc = posted_requests[1]["request"]["generationConfig"]["thinkingConfig"]
         self.assertNotIn("thinkingLevel", fb_gc)
 
+    async def test_cloudcode_passthrough_claude_4_6_no_longer_available_failover_to_another_account(self):
+        """Tests that when an account returns 'Claude Sonnet 4.6 is no longer available', proxy fails over to another 4.6 account."""
+        acc1 = AccountSession(
+            account_id="acc_mel",
+            email="melnykoksa1405@gmail.com",
+            refresh_token="rf_mel",
+            is_primary=True,
+        )
+        acc2 = AccountSession(
+            account_id="acc_amy",
+            email="amystery894@gmail.com",
+            refresh_token="rf_amy",
+            is_primary=False,
+        )
+        acc1.available_models = {"claude-sonnet-5-5-high": {}}
+        acc2.available_models = {"claude-sonnet-4-6": {}}
+        self.pool.accounts["acc_mel"] = acc1
+        self.pool.accounts["acc_amy"] = acc2
+
+        # Simulate acc1 mistakenly called or returning 400 'no longer available'
+        class MelClient:
+            async def post(self, url, json=None, **kwargs):
+                return unittest.mock.Mock(
+                    status_code=400,
+                    text='{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}',
+                    content=b'{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}},
+                )
+
+        class AmyClient:
+            async def post(self, url, json=None, **kwargs):
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Success from Amy with Claude 4.6"}}',
+                    content=b'{"response": {"text": "Success from Amy with Claude 4.6"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Success from Amy with Claude 4.6"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=MelClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_mel"})
+        acc2.get_http_client = unittest.mock.AsyncMock(return_value=AmyClient())
+        acc2.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_amy"})
+
+        # Request Claude 4.6 targeting acc1 specifically to trigger the error handling
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            headers={"x-requested-account-id": "acc_mel"},
+            json={
+                "model": "claude-sonnet-4-6",
+                "request": {
+                    "model": "claude-sonnet-4-6",
+                    "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Success from Amy with Claude 4.6"}})
+        self.assertTrue(acc1.supports_claude_5_5)
+        self.assertIn("claude-sonnet-4-6", acc1.unsupported_models)
+
+    async def test_cloudcode_passthrough_claude_4_6_no_longer_available_auto_upgrades_to_5_5(self):
+        """Tests that when single account returns 'no longer available. Please switch to Claude Sonnet 5.5', proxy auto-upgrades to 5.5."""
+        acc1 = AccountSession(
+            account_id="acc_single_mel",
+            email="single_mel@gmail.com",
+            refresh_token="rf_smel",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_single_mel"] = acc1
+
+        posted_models = []
+
+        class SingleMelClient:
+            async def post(self, url, json=None, **kwargs):
+                req_m = (json or {}).get("model", "")
+                posted_models.append(req_m)
+                if "4-6" in req_m:
+                    return unittest.mock.Mock(
+                        status_code=400,
+                        text='{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}',
+                        content=b'{"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}}',
+                        headers={"content-type": "application/json"},
+                        json=lambda: {"error": {"code": 400, "message": "Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5."}},
+                    )
+                # Claude 5.5 succeeds
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Success with Claude 5.5"}}',
+                    content=b'{"response": {"text": "Success with Claude 5.5"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Success with Claude 5.5"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=SingleMelClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_smel"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-4-6",
+                "request": {
+                    "model": "claude-sonnet-4-6",
+                    "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Success with Claude 5.5"}})
+        self.assertEqual(posted_models[0], "claude-sonnet-4-6")
+        self.assertEqual(posted_models[1], "claude-sonnet-5-5-high")
+
+    async def test_cloudcode_passthrough_claude_5_5_fallback_routes_to_separate_4_6_account(self):
+        """Tests that when Claude 5.5 hits quota limit (429) on acc1, fallback routes to acc2 with Claude 4.6 (not acc1)."""
+        acc1 = AccountSession(
+            account_id="acc_c55_main",
+            email="c55_main@gmail.com",
+            refresh_token="rf_c55_m",
+            is_primary=True,
+        )
+        acc2 = AccountSession(
+            account_id="acc_c46_backup",
+            email="c46_backup@gmail.com",
+            refresh_token="rf_c46_b",
+            is_primary=False,
+        )
+        acc1.available_models = {"claude-sonnet-5-5-high": {}}
+        acc2.available_models = {"claude-sonnet-4-6": {}}
+        self.pool.accounts["acc_c55_main"] = acc1
+        self.pool.accounts["acc_c46_backup"] = acc2
+
+        called_accounts = []
+
+        class MainClient:
+            async def post(self, url, json=None, **kwargs):
+                called_accounts.append("acc1")
+                return unittest.mock.Mock(
+                    status_code=429,
+                    text='{"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}}',
+                    content=b'{"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"error": {"code": 429, "message": "Resource has been exhausted (quota exceeded)."}},
+                )
+
+        class BackupClient:
+            async def post(self, url, json=None, **kwargs):
+                called_accounts.append("acc2")
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "Recovered via Backup Account Claude 4.6"}}',
+                    content=b'{"response": {"text": "Recovered via Backup Account Claude 4.6"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "Recovered via Backup Account Claude 4.6"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=MainClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_c55"})
+        acc2.get_http_client = unittest.mock.AsyncMock(return_value=BackupClient())
+        acc2.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_c46"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-5-5-high",
+                "request": {
+                    "model": "claude-sonnet-5-5-high",
+                    "contents": [{"role": "user", "parts": [{"text": "Generate code"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"response": {"text": "Recovered via Backup Account Claude 4.6"}})
+        self.assertEqual(called_accounts, ["acc1", "acc2"])
+
 
     async def test_cloudcode_passthrough_isolates_candidate_project_id(self):
         """Tests that each account sends its own project_id rather than a cross-account project_id."""

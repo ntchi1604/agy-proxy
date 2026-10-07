@@ -17,7 +17,9 @@ from agy_proxy.models import (
     is_3p_model,
     normalize_model_name,
     is_claude_5_5_model,
+    is_claude_4_6_model,
     get_claude_fallback_model,
+    get_claude_5_5_upgrade_model,
 )
 
 
@@ -134,6 +136,24 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(normalize_model_name("gpt-5-5"), "gemini-3.8-flash-high")
         self.assertEqual(normalize_model_name("gpt-5.5"), "gemini-3.8-flash-high")
         self.assertEqual(normalize_model_name("gpt-5.5-preview"), "gemini-3.8-flash-high")
+
+        # Claude 4.6 detection and aliases
+        self.assertTrue(is_claude_4_6_model("claude-sonnet-4-6"))
+        self.assertTrue(is_claude_4_6_model("claude-opus-4-6-thinking"))
+        self.assertTrue(is_claude_4_6_model("claude-3-5-sonnet"))
+        self.assertTrue(is_claude_4_6_model("claude-3.5-sonnet"))
+        self.assertTrue(is_claude_4_6_model("claude-3-7-sonnet"))
+        self.assertTrue(is_claude_4_6_model("claude-3.7-sonnet"))
+        self.assertFalse(is_claude_4_6_model("claude-sonnet-5-5-high"))
+        self.assertFalse(is_claude_4_6_model("claude-opus-5-5-high"))
+        self.assertFalse(is_claude_4_6_model("gemini-3.8-flash-high"))
+        self.assertFalse(is_claude_4_6_model(None))
+
+        # Claude 5.5 upgrade mapping
+        self.assertEqual(get_claude_5_5_upgrade_model("claude-sonnet-4-6"), "claude-sonnet-5-5-high")
+        self.assertEqual(get_claude_5_5_upgrade_model("claude-3.5-sonnet"), "claude-sonnet-5-5-high")
+        self.assertEqual(get_claude_5_5_upgrade_model("claude-opus-4-6-thinking"), "claude-opus-5-5-high")
+        self.assertEqual(get_claude_5_5_upgrade_model("claude-3-opus"), "claude-opus-5-5-high")
 
 
 

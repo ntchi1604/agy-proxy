@@ -45,7 +45,8 @@ class BaseAccountSession:
         self.last_used_model: str | None = kwargs.get("last_used_model", None)
         self.last_client_type: str | None = kwargs.get("last_client_type", None)
         self.rate_limited_models: dict[str, float] = {}  # model_group -> reset_timestamp
-        self.quota_summary: dict[str, Any] = kwargs.get("quota_summary") or {}
+        self.supports_claude_5_5: bool = kwargs.get("supports_claude_5_5", False)
+        self.unsupported_models: set[str] = set(kwargs.get("unsupported_models") or [])
         self._lock = asyncio.Lock()
         self._http_client: httpx.AsyncClient | None = None
 
@@ -179,6 +180,11 @@ class BaseAccountSession:
 
     def is_model_supported(self, model_name: str) -> bool:
         """Determines if this account type is capable of serving the given model."""
+        if hasattr(self, "unsupported_models") and getattr(self, "unsupported_models"):
+            from agy_proxy.models import normalize_model_name
+            norm = normalize_model_name(model_name)
+            if model_name in self.unsupported_models or norm in self.unsupported_models:
+                return False
         return True
 
     async def test_connection(self) -> dict[str, Any]:

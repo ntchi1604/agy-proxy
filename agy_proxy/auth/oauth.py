@@ -297,17 +297,49 @@ class AntigravityOAuthSession(AccountSession):
         return self.available_models
 
     def is_model_supported(self, model_name: str) -> bool:
-        """Antigravity OAuth accounts support Gemini, Claude 4.6, and Claude 5.5 (if enabled)."""
-        from agy_proxy.models import normalize_model_name, is_claude_5_5_model
+        """
+        Determines if this account supports the given model.
+        Antigravity OAuth accounts support Gemini, Claude 4.6, or Claude 5.5.
+        NOTE: Accounts that support Claude 5.5 have been migrated by Google and NO LONGER
+        support Claude 4.6 ("Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5.").
+        Conversely, accounts that have not been migrated support Claude 4.6 and do not support Claude 5.5.
+        """
+        from agy_proxy.models import normalize_model_name, is_claude_5_5_model, is_claude_4_6_model
         norm = normalize_model_name(model_name)
+
+        # 1. Any model explicitly marked unsupported on this account
+        unsupported = getattr(self, "unsupported_models", None)
+        if unsupported and (model_name in unsupported or norm in unsupported):
+            return False
+
+        # 2. Determine if this account supports Claude 5.5
+        flag_5_5 = getattr(self, "supports_claude_5_5", False)
+        avail = getattr(self, "available_models", None) or {}
+        has_5_5 = flag_5_5 or (bool(avail) and any(is_claude_5_5_model(m) for m in avail.keys()))
+
+        # 3. If model is a Claude 5.5 variant
         if is_claude_5_5_model(norm):
-            if hasattr(self, "unsupported_models") and (norm in self.unsupported_models or model_name in self.unsupported_models):
-                return False
-            if getattr(self, "supports_claude_5_5", False):
+            if flag_5_5:
                 return True
-            if getattr(self, "available_models", None):
-                return norm in self.available_models
+            if has_5_5:
+                if avail:
+                    return norm in avail or any(is_claude_5_5_model(m) for m in avail.keys())
+                return True
+            return False
+
+        # 4. If model is a Claude 4.6 variant
+        if is_claude_4_6_model(norm):
+            # Accounts with Claude 5.5 NO LONGER support Claude 4.6!
+            if has_5_5:
+                return False
+            if avail:
+                return norm in avail or any(is_claude_4_6_model(m) for m in avail.keys())
             return True
+
+        # 5. Native Gemini or other models: check catalog if populated
+        if avail and norm in avail:
+            return True
+
         return True
 
     def get_quota_details(self) -> dict[str, Any]:
