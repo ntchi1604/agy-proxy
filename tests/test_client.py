@@ -349,6 +349,67 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
                 "Hello from 4.6",
             )
 
+    async def test_post_sse_stream_failover_claude_5_5_strips_generation_config_thinking_level(self):
+        """Tests that client sse stream failover strips thinkingLevel from generationConfig."""
+        mock_404_resp = MagicMock()
+        mock_404_resp.status_code = 404
+        mock_404_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_404_resp.aread = AsyncMock(return_value=b'{"error": "Not found"}')
+
+        mock_404_ctx = MagicMock()
+        mock_404_ctx.__aenter__ = AsyncMock(return_value=mock_404_resp)
+        mock_404_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        async def fake_stream_lines():
+            yield 'data: {"response": {"candidates": [{"content": {"parts": [{"text": "Hello 4.6"}]}}]}}'
+
+        mock_200_resp = MagicMock()
+        mock_200_resp.status_code = 200
+        mock_200_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_200_resp.aiter_lines = fake_stream_lines
+
+        mock_200_ctx = MagicMock()
+        mock_200_ctx.__aenter__ = AsyncMock(return_value=mock_200_resp)
+        mock_200_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        sent_payloads = []
+
+        def stream_side_effect(method, url, json=None, **kwargs):
+            sent_payloads.append(dict(json or {}))
+            if json and "5-5" in json.get("model", ""):
+                return mock_404_ctx
+            return mock_200_ctx
+
+        mock_http_client = MagicMock()
+        mock_http_client.stream = MagicMock(side_effect=stream_side_effect)
+
+        with patch.object(self.acc, "initialize_project", AsyncMock(return_value="test-proj")), \
+             patch.object(self.acc, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer test"})), \
+             patch.object(self.acc, "get_http_client", AsyncMock(return_value=mock_http_client)):
+
+            results = []
+            gen = self.client._post_sse_stream_with_failover(
+                endpoint="v1internal:streamGenerateContent?alt=sse",
+                payload_builder_fn=lambda proj: {
+                    "model": "claude-sonnet-5-5-high",
+                    "request": {
+                        "model": "claude-sonnet-5-5-high",
+                        "generationConfig": {"thinkingConfig": {"thinkingLevel": "HIGH", "includeThoughts": True}},
+                    },
+                },
+                model_name="claude-sonnet-5-5-high",
+            )
+            async for chunk in gen:
+                results.append(chunk)
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(len(sent_payloads), 2)
+            # The second request is fallback to Claude 4.6
+            fb_sent = sent_payloads[1]
+            self.assertEqual(fb_sent["model"], "claude-sonnet-4-6")
+            fb_gc = fb_sent["request"]["generationConfig"]["thinkingConfig"]
+            self.assertNotIn("thinkingLevel", fb_gc)
+
 
 if __name__ == "__main__":
     unittest.main()

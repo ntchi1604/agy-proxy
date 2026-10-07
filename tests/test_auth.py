@@ -510,10 +510,27 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         pool.accounts["oa_c55"] = oa
         # Mark Claude 5.5 as rate limited
         oa.mark_rate_limited("claude-sonnet-5-5-high", duration=60.0)
+        self.assertTrue(oa.is_rate_limited("claude-sonnet-5-5-high"))
+        self.assertFalse(oa.is_rate_limited("claude-sonnet-4-6"))
+
         # Requesting Claude 5.5 when rate limited should auto-route to Claude 4.6 candidate account
         candidates = pool.get_candidate_accounts("claude-sonnet-5-5-high")
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0].account_id, "oa_c55")
+
+    def test_supports_claude_5_5_flag_with_catalog(self):
+        oa = AntigravityOAuthSession(
+            account_id="oa_flag",
+            refresh_token="tok",
+            email="flag@example.com",
+            available_models={"claude-sonnet-4-6": {}, "gemini-3.8-flash-high": {}},
+        )
+        # Without flag, unlisted 5.5 is not supported if catalog is present
+        self.assertFalse(oa.is_model_supported("claude-sonnet-5-5-high"))
+
+        # With flag, 5.5 is supported
+        oa.supports_claude_5_5 = True
+        self.assertTrue(oa.is_model_supported("claude-sonnet-5-5-high"))
 
     def test_split_files_storage_and_reload(self):
         # 1. Create pool and add both OAuth and API key accounts

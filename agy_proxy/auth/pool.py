@@ -795,7 +795,7 @@ class AccountPool:
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
                         "proxy_url": getattr(acc, "proxy_url", None),
-                        "available_models": list(getattr(acc, "available_models", {}).keys()),
+                        "available_models": list((getattr(acc, "available_models", None) or {}).keys()),
                     }
                     sensitive = {
                         "refresh_token": acc.refresh_token,

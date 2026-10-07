@@ -813,6 +813,61 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(posted_requests[0]["model"], "claude-sonnet-5-5-high")
         self.assertEqual(posted_requests[1]["model"], "claude-sonnet-4-6")
 
+    async def test_cloudcode_passthrough_claude_5_5_fallback_strips_generation_config_thinking_level(self):
+        """Tests that thinkingLevel is stripped from generationConfig.thinkingConfig during fallback."""
+        acc1 = AccountSession(
+            account_id="acc_gc_c55",
+            email="gc_c55@gmail.com",
+            refresh_token="rf_gc",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_gc_c55"] = acc1
+
+        posted_requests = []
+
+        class GcClient:
+            async def post(self, url, json=None, **kwargs):
+                posted_requests.append(dict(json or {}))
+                req_m = (json or {}).get("model", "")
+                if "5-5" in req_m:
+                    return unittest.mock.Mock(
+                        status_code=404,
+                        text='{"error": {"code": 404, "message": "Not found"}}',
+                        content=b'{"error": {"code": 404, "message": "Not found"}}',
+                        headers={"content-type": "application/json"},
+                        json=lambda: {"error": {"code": 404, "message": "Not found"}},
+                    )
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "ok"}}',
+                    content=b'{"response": {"text": "ok"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "ok"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=GcClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok"})
+
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent",
+            json={
+                "model": "claude-sonnet-5-5-high",
+                "request": {
+                    "model": "claude-sonnet-5-5-high",
+                    "generationConfig": {
+                        "thinkingConfig": {"thinkingLevel": "HIGH", "includeThoughts": True}
+                    },
+                    "contents": [{"role": "user", "parts": [{"text": "Hello"}]}],
+                },
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(posted_requests), 2)
+        # Fallback payload must not have thinkingLevel in generationConfig.thinkingConfig
+        fb_gc = posted_requests[1]["request"]["generationConfig"]["thinkingConfig"]
+        self.assertNotIn("thinkingLevel", fb_gc)
+
+
     async def test_cloudcode_passthrough_isolates_candidate_project_id(self):
         """Tests that each account sends its own project_id rather than a cross-account project_id."""
         acc1 = AccountSession(

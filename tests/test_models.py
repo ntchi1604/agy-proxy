@@ -130,6 +130,11 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(get_claude_fallback_model("claude-opus-5-5-low"), "claude-opus-4-6-thinking")
         self.assertEqual(get_claude_fallback_model("claude-5-5-opus"), "claude-opus-4-6-thinking")
 
+        # GPT 5.5 / 5-5 normalization must not resolve to Claude
+        self.assertEqual(normalize_model_name("gpt-5-5"), "gemini-3.8-flash-high")
+        self.assertEqual(normalize_model_name("gpt-5.5"), "gemini-3.8-flash-high")
+        self.assertEqual(normalize_model_name("gpt-5.5-preview"), "gemini-3.8-flash-high")
+
 
 
 

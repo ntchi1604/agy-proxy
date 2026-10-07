@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 
 from agy_proxy.auth.constants import logger
-from agy_proxy.models import is_3p_model
+from agy_proxy.models import is_3p_model, is_claude_5_5_model
 
 
 class BaseAccountSession:
@@ -115,7 +115,16 @@ class BaseAccountSession:
             else:
                 del self.rate_limited_models[model]
 
-        # 2. Group-level keys and aliases
+        # 2. Specific Claude 5.5 model limits
+        is_c55 = is_claude_5_5_model(model)
+        if is_c55:
+            if "claude-5-5" in self.rate_limited_models:
+                if now < self.rate_limited_models["claude-5-5"]:
+                    return True
+                else:
+                    del self.rate_limited_models["claude-5-5"]
+
+        # 3. Group-level keys and aliases
         is_3p = is_3p_model(model)
         key = "3p" if is_3p else "gemini"
         aliases = ["3p", "claude"] if is_3p else ["gemini"]
@@ -126,8 +135,13 @@ class BaseAccountSession:
                 else:
                     del self.rate_limited_models[alias]
 
-        # 3. Any active model limit matching the same family
+        # 4. Any active model limit matching the same family
         for k, v in list(self.rate_limited_models.items()):
+            # Claude 5.5 rate limit does NOT rate-limit other 3P models like Claude 4.6
+            if k == "claude-5-5" or is_claude_5_5_model(k):
+                if is_c55 and now < v:
+                    return True
+                continue
             k_is_3p = is_3p_model(k)
             if (is_3p and k_is_3p) or (not is_3p and not k_is_3p):
                 if now < v:
@@ -138,8 +152,11 @@ class BaseAccountSession:
 
     def mark_rate_limited(self, model: str, duration: float = 3600.0):
         """Marks account rate-limited for a duration."""
-        is_3p = is_3p_model(model)
-        key = "3p" if is_3p else "gemini"
+        if is_claude_5_5_model(model):
+            key = "claude-5-5"
+        else:
+            is_3p = is_3p_model(model)
+            key = "3p" if is_3p else "gemini"
         self.rate_limited_models[key] = time.time() + duration
         logger.warning("[%s] Marked as rate-limited for group %s for %.0fs", self.email, key, duration)
         try:
@@ -246,7 +263,7 @@ class BaseAccountSession:
             "rate_limited_models": active_limits,
             "quota_summary": getattr(self, "quota_summary", {}),
             "quota_details": self.get_quota_details(),
-            "available_models": [m for m in getattr(self, "available_models", {}).keys() if not m.startswith(("tab_", "chat_"))],
+            "available_models": [m for m in (getattr(self, "available_models", None) or {}).keys() if not m.startswith(("tab_", "chat_"))],
             "error_message": self.error_message,
             "proxy_url": getattr(self, "proxy_url", None),
         }

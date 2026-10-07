@@ -64,9 +64,15 @@ class AntigravityOAuthSession(AccountSession):
         self.client_id = client_id
         self.client_secret = client_secret
         self.id_token = kwargs.get("id_token")
+        self.tier_info: dict[str, Any] = kwargs.get("tier_info") or {}
 
-        self.tier_info: dict[str, Any] = {}
-        self.available_models: dict[str, Any] = {}
+        models_init = kwargs.get("available_models")
+        if isinstance(models_init, list):
+            self.available_models: dict[str, Any] = {m: {} for m in models_init}
+        elif isinstance(models_init, dict):
+            self.available_models: dict[str, Any] = dict(models_init)
+        else:
+            self.available_models: dict[str, Any] = {}
         self.quota_summary: dict[str, Any] = kwargs.get("quota_summary") or {}
         self.quota_details: dict[str, Any] | None = kwargs.get("quota_details")
 
@@ -292,11 +298,13 @@ class AntigravityOAuthSession(AccountSession):
 
     def is_model_supported(self, model_name: str) -> bool:
         """Antigravity OAuth accounts support Gemini, Claude 4.6, and Claude 5.5 (if enabled)."""
-        from agy_proxy.models import normalize_model_name
+        from agy_proxy.models import normalize_model_name, is_claude_5_5_model
         norm = normalize_model_name(model_name)
-        if norm.startswith("claude-") and ("5-5" in norm or "5.5" in norm):
-            if hasattr(self, "unsupported_models") and norm in self.unsupported_models:
+        if is_claude_5_5_model(norm):
+            if hasattr(self, "unsupported_models") and (norm in self.unsupported_models or model_name in self.unsupported_models):
                 return False
+            if getattr(self, "supports_claude_5_5", False):
+                return True
             if getattr(self, "available_models", None):
                 return norm in self.available_models
             return True

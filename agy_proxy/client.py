@@ -878,9 +878,12 @@ class CloudCodeClient:
                         if e.response.status_code == 404:
                             if not hasattr(acc, "unsupported_models"):
                                 acc.unsupported_models = set()
+                            norm_m = normalize_model_name(model_name)
                             acc.unsupported_models.add(model_name)
-                            if getattr(acc, "available_models", None) and model_name in acc.available_models:
+                            acc.unsupported_models.add(norm_m)
+                            if getattr(acc, "available_models", None):
                                 acc.available_models.pop(model_name, None)
+                                acc.available_models.pop(norm_m, None)
                         if e.response.status_code in (401, 403, 429, 500, 502, 503, 504, 404):
                             logger.warning("[%s] Account error [%d]. Failing over to next candidate account...", acc.email, e.response.status_code)
                             break
@@ -958,6 +961,10 @@ class CloudCodeClient:
                                 p_copy["request"]["model"] = fallback_m
                                 if "thinkingConfig" in p_copy["request"] and isinstance(p_copy["request"]["thinkingConfig"], dict):
                                     p_copy["request"]["thinkingConfig"].pop("thinkingLevel", None)
+                                if "generationConfig" in p_copy["request"] and isinstance(p_copy["request"]["generationConfig"], dict):
+                                    gc = p_copy["request"]["generationConfig"]
+                                    if "thinkingConfig" in gc and isinstance(gc["thinkingConfig"], dict):
+                                        gc["thinkingConfig"].pop("thinkingLevel", None)
                             return p_copy
                         return base
 

@@ -13,7 +13,7 @@ import uuid
 
 import httpx
 
-from agy_proxy.models import DEFAULT_MODEL, normalize_model_name
+from agy_proxy.models import DEFAULT_MODEL, normalize_model_name, is_claude_5_5_model
 
 logger = logging.getLogger("agy_proxy.converters.common")
 
@@ -492,7 +492,7 @@ def _apply_thinking_config(
             thinking_config["thinkingLevel"] = effort_map[effort_val]
 
     # For Claude 5.5 adaptive reasoning models (supportsAdaptiveThinking=True with Vertex)
-    is_c55 = backend_model.startswith("claude-") and ("5-5" in backend_model or "5.5" in backend_model)
+    is_c55 = is_claude_5_5_model(backend_model)
     if is_c55:
         if thinking_config.get("includeThoughts") is not False:
             if thinking_config.get("thinkingBudget") == -1:

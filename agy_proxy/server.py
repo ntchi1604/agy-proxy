@@ -2020,8 +2020,11 @@ def create_app(
                         if not hasattr(acc, "unsupported_models"):
                             acc.unsupported_models = set()
                         acc.unsupported_models.add(req_model)
-                        if getattr(acc, "available_models", None) and req_model in acc.available_models:
+                        norm_m = normalize_model_name(req_model)
+                        acc.unsupported_models.add(norm_m)
+                        if getattr(acc, "available_models", None):
                             acc.available_models.pop(req_model, None)
+                            acc.available_models.pop(norm_m, None)
                     err_hint = _extract_error_message(resp)
                     logger.warning("[%s] CloudCode error %d (%s) for %s. Failing over to next account in pool...", acc_label, resp.status_code, err_hint, req_model)
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
@@ -2054,6 +2057,10 @@ def create_app(
                                     fb_body["request"]["model"] = fallback_model
                                     if "thinkingConfig" in fb_body["request"] and isinstance(fb_body["request"]["thinkingConfig"], dict):
                                         fb_body["request"]["thinkingConfig"].pop("thinkingLevel", None)
+                                    if "generationConfig" in fb_body["request"] and isinstance(fb_body["request"]["generationConfig"], dict):
+                                        gc = fb_body["request"]["generationConfig"]
+                                        if "thinkingConfig" in gc and isinstance(gc["thinkingConfig"], dict):
+                                            gc["thinkingConfig"].pop("thinkingLevel", None)
                                 fb_proj = getattr(fb_acc, "project_id", None) or "aicode-consumers"
                                 fb_body["project"] = fb_proj
                                 if "request" in fb_body and isinstance(fb_body["request"], dict):

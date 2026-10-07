@@ -114,6 +114,7 @@ MODEL_ALIASES: dict[str, str] = {
     "gpt-5.6-terra": "gemini-3.8-flash-medium",
     "gpt-5.6-luna": "gemini-3.1-flash-lite",
     "gpt-5.5": "gemini-3.8-flash-high",
+    "gpt-5-5": "gemini-3.8-flash-high",
     "gpt-5.4": "gemini-3.8-flash-high",
     "gpt-5.4-mini": "gemini-3.1-flash-lite",
     "gpt-5.2": "gemini-3.7-flash-high",
@@ -377,7 +378,7 @@ def normalize_model_name(model_name: str | None) -> str:
         return "gemini-2.5-pro"
 
     # Claude 5.5 models
-    if "5.5" in cleaned or "5-5" in cleaned:
+    if ("5.5" in cleaned or "5-5" in cleaned) and "gpt" not in cleaned:
         is_opus = "opus" in cleaned
         if "low" in cleaned:
             return "claude-opus-5-5-low" if is_opus else "claude-sonnet-5-5-low"
