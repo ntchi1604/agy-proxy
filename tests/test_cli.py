@@ -80,6 +80,17 @@ class TestCliStartup(unittest.TestCase):
             cli.main()
             self.assertEqual(os.environ.get("AGY_RATE_LIMIT_COOLDOWN"), "15.0")
 
+    @patch("uvicorn.Server.run")
+    @patch("agy_proxy.cli.print_banner")
+    def test_cli_routing_strategy_flags(self, mock_banner, mock_server_run):
+        test_args = ["agy-proxy", "--round-robin"]
+        with patch.object(sys, "argv", test_args):
+            with patch("agy_proxy.cli.AccountPool") as mock_pool_cls:
+                cli.main()
+                mock_pool_cls.assert_called()
+                kwargs = mock_pool_cls.call_args[1]
+                self.assertEqual(kwargs.get("routing_strategy"), "round_robin")
+
 
 if __name__ == "__main__":
     unittest.main()

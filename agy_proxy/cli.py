@@ -61,6 +61,15 @@ def print_banner(host: str, port: int, pool: AccountPool, api_key: str = None, u
         pool_status = f"[bold white]{len(active_accs)} active account(s)[/bold white]"
     table.add_row("[bold cyan]Accounts in Pool:[/bold cyan]", pool_status)
 
+    strat = pool.routing_strategy
+    if strat in ("round_robin", "rotate"):
+        strat_display = "[bold magenta]Round-Robin (Automatic rotation)[/bold magenta]"
+    elif strat in ("balanced", "lru"):
+        strat_display = "[bold magenta]Balanced (Least Recently Used)[/bold magenta]"
+    else:
+        strat_display = "[bold green]Primary (Sticky Priority 1 + Failover)[/bold green]"
+    table.add_row("[bold cyan]Pool Routing Strategy:[/bold cyan]", strat_display)
+
     for acc in pool.accounts.values():
         if acc.enabled:
             tag = "[bold green](Primary)[/bold green]" if acc.is_primary else "[blue](Secondary)[/blue]"
@@ -775,6 +784,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Experimental features operating mode (default: curated)",
     )
     parser.add_argument(
+        "--routing-strategy",
+        type=str,
+        default=None,
+        choices=["primary", "round_robin", "balanced", "lru"],
+        help="Account pool routing strategy: primary (default, priority to primary account) or round_robin (rotates all active accounts evenly)",
+    )
+    parser.add_argument(
+        "--round-robin",
+        "--load-balance",
+        dest="round_robin",
+        action="store_true",
+        default=False,
+        help="Rotate requests across all active pool accounts in round-robin fashion",
+    )
+    parser.add_argument(
         "--tray",
         action="store_true",
         help="Run Antigravity Proxy with a system tray icon",
@@ -1003,7 +1027,8 @@ def main():
         logging.getLogger("uvicorn").setLevel(logging.WARNING)
 
     # Initialize AccountPool and preload accounts from disk for banner
-    pool = AccountPool(token_path=args.token_file)
+    effective_routing_strategy = "round_robin" if getattr(args, "round_robin", False) else getattr(args, "routing_strategy", None)
+    pool = AccountPool(token_path=args.token_file, routing_strategy=effective_routing_strategy)
     pool.load_accounts()
 
     # Create FastAPI app

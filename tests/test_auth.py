@@ -1418,6 +1418,75 @@ class TestGeminiWebSession(unittest.TestCase):
         asyncio.run(acc.close())
         self.assertIsNone(acc._http_client)
 
+    def test_routing_strategy_modes(self):
+        """Verify routing_strategy behaviors: primary priority vs round_robin vs balanced."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pool = AccountPool(accounts_file=Path(tmp_dir) / "accounts.json")
+            pool.save_accounts = lambda *args, **kwargs: None
+
+            acc1 = AntigravityOAuthSession(account_id="acc1", email="acc1@test.com", refresh_token="rt1")
+            acc1.is_primary = True
+            acc1.total_requests = 10
+            acc1.last_used_timestamp = 100.0
+
+            acc2 = AntigravityOAuthSession(account_id="acc2", email="acc2@test.com", refresh_token="rt2")
+            acc2.is_primary = False
+            acc2.total_requests = 2
+            acc2.last_used_timestamp = 20.0
+
+            acc3 = AntigravityOAuthSession(account_id="acc3", email="acc3@test.com", refresh_token="rt3")
+            acc3.is_primary = False
+            acc3.total_requests = 5
+            acc3.last_used_timestamp = 50.0
+
+            pool.accounts["acc1"] = acc1
+            pool.accounts["acc2"] = acc2
+            pool.accounts["acc3"] = acc3
+
+            # 1. Primary mode (default): acc1 is always first because is_primary=True
+            pool.routing_strategy = "primary"
+            cands = pool.get_candidate_accounts("gemini-2.5-flash")
+            self.assertEqual(cands[0].account_id, "acc1")
+
+            # 2. Round-Robin mode: rotates candidates evenly across calls
+            pool.routing_strategy = "round_robin"
+            first_cands = pool.get_candidate_accounts("gemini-2.5-flash")
+            second_cands = pool.get_candidate_accounts("gemini-2.5-flash")
+            third_cands = pool.get_candidate_accounts("gemini-2.5-flash")
+            fourth_cands = pool.get_candidate_accounts("gemini-2.5-flash")
+
+            # Each call rotates the first candidate
+            self.assertEqual(first_cands[0].account_id, "acc1")
+            self.assertEqual(second_cands[0].account_id, "acc2")
+            self.assertEqual(third_cands[0].account_id, "acc3")
+            self.assertEqual(fourth_cands[0].account_id, "acc1")
+
+            # 3. Balanced / LRU mode: sorts by least recently used and lowest total requests
+            pool.routing_strategy = "balanced"
+            balanced_cands = pool.get_candidate_accounts("gemini-2.5-flash")
+            # acc2 was used at t=20, acc3 at t=50, acc1 at t=100
+            self.assertEqual(balanced_cands[0].account_id, "acc2")
+            self.assertEqual(balanced_cands[1].account_id, "acc3")
+            self.assertEqual(balanced_cands[2].account_id, "acc1")
+
+    def test_routing_strategy_persistence(self):
+        """Verify routing strategy persistence in accounts.json."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            acc_file = Path(tmp_dir) / "accounts.json"
+            pool = AccountPool(accounts_file=acc_file)
+            pool.routing_strategy = "round_robin"
+            pool.save_accounts()
+
+            # Verify saved to disk
+            with open(acc_file, "r") as f:
+                data = json.load(f)
+            self.assertEqual(data.get("routing_strategy"), "round_robin")
+
+            # Reload pool from disk
+            pool2 = AccountPool(accounts_file=acc_file)
+            pool2.load_accounts()
+            self.assertEqual(pool2.routing_strategy, "round_robin")
+
 
 if __name__ == "__main__":
     unittest.main()

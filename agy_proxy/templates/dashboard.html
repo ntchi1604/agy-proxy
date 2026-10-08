@@ -2048,6 +2048,26 @@ ightarrow$ v1.0.3</p>
       document.getElementById('activeModelBadge').innerText = e.target.value;
     });
 
+    let currentRoutingStrategy = 'primary';
+
+    async function setRoutingStrategy(strat) {
+      try {
+        const res = await fetch('/api/routing/strategy', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({strategy: strat})
+        });
+        if (res.ok) {
+          const data = await res.json();
+          currentRoutingStrategy = data.strategy;
+          showToast(`Routing strategy set to: ${data.strategy === 'round_robin' ? 'Round-Robin (Rotation)' : 'Primary Priority'}`);
+          await loadAccounts(true);
+        }
+      } catch (err) {
+        showToast('Failed to update routing strategy: ' + err.message, 'error');
+      }
+    }
+
     async function loadAccounts(isSilent = false) {
       const dot = document.getElementById('autoRefreshDot');
       if (isSilent && dot && autoRefreshIntervalId) {
@@ -2059,6 +2079,7 @@ ightarrow$ v1.0.3</p>
           fetch('/api/accounts/cli-active').catch(() => null),
         ]);
         const data = await res.json();
+        currentRoutingStrategy = data.routing_strategy || 'primary';
         rawAccountsData = data.accounts || [];
         if (cliRes && cliRes.ok) {
           const cliData = await cliRes.json();
@@ -2192,6 +2213,16 @@ ightarrow$ v1.0.3</p>
               </p>
             </div>
             <div class="flex items-center space-x-2 shrink-0">
+              <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+                <button onclick="setRoutingStrategy('primary')" class="px-2.5 py-1 rounded-md font-medium text-xs transition flex items-center space-x-1 ${currentRoutingStrategy === 'primary' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}" title="Primary Account Priority (Failover to pool on 429)">
+                  <i class="fa-solid fa-star text-[10px] text-amber-400"></i>
+                  <span>Primary</span>
+                </button>
+                <button onclick="setRoutingStrategy('round_robin')" class="px-2.5 py-1 rounded-md font-medium text-xs transition flex items-center space-x-1 ${currentRoutingStrategy === 'round_robin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}" title="Rotate requests across all active pool accounts in round-robin fashion">
+                  <i class="fa-solid fa-rotate text-[10px]"></i>
+                  <span>Round-Robin</span>
+                </button>
+              </div>
               <span class="text-xs font-mono px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
                 <b class="text-indigo-400 font-bold">${totalReqs}</b> total requests
               </span>
@@ -2203,7 +2234,7 @@ ightarrow$ v1.0.3</p>
             <div class="p-3.5 rounded-xl bg-slate-900/90 border border-indigo-500/20 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
               <div class="flex items-center space-x-2.5 min-w-0">
                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                <span class="text-slate-300 font-medium">Pool Standby: <b class="text-white">${totalActive} active accounts</b> ready for automatic round-robin routing</span>
+                <span class="text-slate-300 font-medium">Pool Standby: <b class="text-white">${totalActive} active accounts</b> ready for ${currentRoutingStrategy === 'round_robin' ? 'automatic round-robin rotation' : 'primary priority routing'}</span>
               </div>
               <button onclick="switchTab('playground')" class="self-start sm:self-auto text-[11px] px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition flex items-center space-x-1.5 shadow-sm">
                 <i class="fa-solid fa-terminal text-[10px]"></i>
@@ -2231,12 +2262,16 @@ ightarrow$ v1.0.3</p>
         let roleBadge = '';
         if (!isEnabled) {
           roleBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-mono">Paused</span>';
+        } else if (currentRoutingStrategy === 'round_robin') {
+          roleBadge = acc.is_primary 
+            ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center space-x-1 font-mono"><i class="fa-solid fa-rotate text-emerald-400 text-[9px]"></i><span>Round-Robin (Primary)</span></span>'
+            : '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20 flex items-center space-x-1 font-mono"><i class="fa-solid fa-rotate text-emerald-400 text-[9px]"></i><span>Round-Robin Active</span></span>';
         } else if (acc.is_primary) {
           roleBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center space-x-1 font-mono"><i class="fa-solid fa-star text-amber-400 text-[9px]"></i><span>Primary (Priority 1)</span></span>';
         } else if (isApiKey) {
           roleBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-medium border border-amber-500/20 font-mono">PayG Fallback</span>';
         } else {
-          roleBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20 font-mono">Round-Robin Ready</span>';
+          roleBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 font-medium border border-slate-600 font-mono">Failover Backup</span>';
         }
 
         html += `

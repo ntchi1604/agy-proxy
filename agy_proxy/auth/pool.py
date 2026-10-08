@@ -164,11 +164,18 @@ class AccountPool:
         accounts_file: Path | str | None = None,
         api_keys_file: Path | str | None = None,
         web_sessions_file: Path | str | None = None,
+        routing_strategy: str | None = None,
     ):
         self.token_path = Path(token_path) if token_path else None
         self._accounts_file = Path(accounts_file) if accounts_file else None
         self._api_keys_file = Path(api_keys_file) if api_keys_file else None
         self._web_sessions_file = Path(web_sessions_file) if web_sessions_file else None
+        self._routing_strategy = (
+            routing_strategy
+            or os.environ.get("AGY_ROUTING_STRATEGY")
+            or ("round_robin" if os.environ.get("AGY_LOAD_BALANCE", "").lower() in ("1", "true", "yes") else None)
+            or "primary"
+        ).lower()
 
         self.accounts: dict[str, AccountSession] = {}
         self.round_robin_index = 0
@@ -178,6 +185,19 @@ class AccountPool:
         self._save_lock = threading.RLock()
         self._is_loaded: bool = False
         self._file_mtimes: dict[Path, float] = {}
+
+    @property
+    def routing_strategy(self) -> str:
+        env = os.environ.get("AGY_ROUTING_STRATEGY")
+        if env:
+            return env.lower()
+        if os.environ.get("AGY_LOAD_BALANCE", "").lower() in ("1", "true", "yes"):
+            return "round_robin"
+        return getattr(self, "_routing_strategy", "primary") or "primary"
+
+    @routing_strategy.setter
+    def routing_strategy(self, val: str | None):
+        self._routing_strategy = val.lower() if val else "primary"
 
     def _update_file_mtimes(self):
         """Records current mtimes of account storage files to detect external multi-process updates."""
@@ -463,6 +483,10 @@ class AccountPool:
             try:
                 with open(self.accounts_file, encoding="utf-8") as f:
                     data = json.load(f)
+                if isinstance(data, dict) and "routing_strategy" in data:
+                    env_strat = os.environ.get("AGY_ROUTING_STRATEGY")
+                    if not env_strat and os.environ.get("AGY_LOAD_BALANCE", "").lower() not in ("1", "true", "yes"):
+                        self._routing_strategy = str(data["routing_strategy"]).lower()
                 for item in data.get("accounts", []):
                     if item.get("auth_method", "consumer") != "consumer":
                         continue
@@ -876,8 +900,11 @@ class AccountPool:
                         except Exception:
                             pass
                     tmp_path = path.with_suffix(f".tmp.{os.getpid()}.{time.time_ns()}")
+                    payload_data = {disk_key: entries}
+                    if disk_key == "accounts":
+                        payload_data["routing_strategy"] = self.routing_strategy
                     with open(tmp_path, "w", encoding="utf-8") as f:
-                        json.dump({disk_key: entries}, f, indent=2)
+                        json.dump(payload_data, f, indent=2)
                     try:
                         os.chmod(tmp_path, 0o600)
                     except Exception:
@@ -1236,15 +1263,46 @@ class AccountPool:
         if preferred_account_id and any(a.account_id == preferred_account_id for a in available):
             preferred = [a for a in available if a.account_id == preferred_account_id]
             rest = [a for a in available if a.account_id != preferred_account_id]
-            rest.sort(key=lambda a: (
-                0 if getattr(a, "is_primary", False) else 1,
+            if self.routing_strategy == "primary":
+                rest.sort(key=lambda a: (
+                    0 if getattr(a, "is_primary", False) else 1,
+                    auth_priority.get(getattr(a, "auth_method", ""), 99),
+                    a.last_used_timestamp,
+                    a.total_requests,
+                ))
+            else:
+                rest.sort(key=lambda a: (
+                    auth_priority.get(getattr(a, "auth_method", ""), 99),
+                    a.last_used_timestamp,
+                    a.total_requests,
+                ))
+            return preferred + rest
+
+        strat = self.routing_strategy
+        if strat in ("round_robin", "rotate"):
+            # Sort by auth priority first (consumer OAuth -> API key -> Web)
+            available.sort(key=lambda a: auth_priority.get(getattr(a, "auth_method", ""), 99))
+            if len(available) > 1:
+                top_priority = auth_priority.get(getattr(available[0], "auth_method", ""), 99)
+                top_group = [a for a in available if auth_priority.get(getattr(a, "auth_method", ""), 99) == top_priority]
+                rest_group = [a for a in available if auth_priority.get(getattr(a, "auth_method", ""), 99) != top_priority]
+
+                idx = self.round_robin_index % len(top_group)
+                self.round_robin_index = (self.round_robin_index + 1) % 1_000_000
+                rotated_top = top_group[idx:] + top_group[:idx]
+                return rotated_top + rest_group
+            return available
+
+        if strat in ("balanced", "lru"):
+            # Sort by auth priority, then least recently used, then lowest total requests
+            available.sort(key=lambda a: (
                 auth_priority.get(getattr(a, "auth_method", ""), 99),
                 a.last_used_timestamp,
                 a.total_requests,
             ))
-            return preferred + rest
+            return available
 
-        # Sort by primary account first, then auth priority (OAuth -> API key -> Web), least recently used, and lowest total requests
+        # Default "primary" mode: Sort by primary account first, then auth priority (OAuth -> API key -> Web), least recently used, and lowest total requests
         available.sort(key=lambda a: (
             0 if getattr(a, "is_primary", False) else 1,
             auth_priority.get(getattr(a, "auth_method", ""), 99),

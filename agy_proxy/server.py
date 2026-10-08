@@ -560,7 +560,30 @@ def create_app(
             "auth_method": acc.auth_method if acc else "consumer",
             "expiry_timestamp": acc.expiry_timestamp if acc else 0.0,
             "total_accounts": len(pool.accounts),
+            "routing_strategy": pool.routing_strategy,
         }
+
+    @app.get("/api/routing/strategy")
+    async def get_routing_strategy():
+        return {
+            "strategy": pool.routing_strategy,
+            "available_strategies": ["primary", "round_robin", "balanced"],
+        }
+
+    @app.post("/api/routing/strategy")
+    async def set_routing_strategy(request: Request):
+        body = await request.json()
+        strat = str(body.get("strategy", "")).lower().strip()
+        if strat not in ("primary", "round_robin", "balanced", "lru", "rotate"):
+            raise HTTPException(status_code=400, detail="Invalid strategy. Supported: 'primary', 'round_robin', 'balanced'.")
+        pool.routing_strategy = "round_robin" if strat in ("round_robin", "rotate") else ("balanced" if strat in ("balanced", "lru") else "primary")
+        pool.save_accounts()
+        try:
+            from agy_proxy.cache import session_affinity
+            session_affinity.unpin_all()
+        except Exception:
+            pass
+        return {"status": "ok", "strategy": pool.routing_strategy}
 
     # -------------------------------------------------------------------------
     # Multi-Account Pool API Endpoints
@@ -573,7 +596,7 @@ def create_app(
         if time.time() - getattr(pool, "last_quota_refresh_time", 0.0) > 60.0:
             asyncio.create_task(pool.refresh_all_quotas(min_interval=45.0))
         accounts_list = [acc.to_dict() for acc in pool.accounts.values()]
-        return {"accounts": accounts_list}
+        return {"routing_strategy": pool.routing_strategy, "accounts": accounts_list}
 
     @app.get("/api/accounts/export")
     async def export_accounts():

@@ -1343,6 +1343,30 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         qd = acc1.get_quota_details()
         self.assertGreater(qd["3p"]["cooldown_seconds"], 360000)
 
+    async def test_routing_strategy_api_endpoints(self):
+        """Test GET and POST /api/routing/strategy."""
+        # 1. Default strategy is primary
+        resp = await self.client.get("/api/routing/strategy")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["strategy"], "primary")
+        self.assertIn("round_robin", data["available_strategies"])
+
+        # 2. Update to round_robin
+        resp = await self.client.post("/api/routing/strategy", json={"strategy": "round_robin"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["strategy"], "round_robin")
+        self.assertEqual(self.pool.routing_strategy, "round_robin")
+
+        # 3. Verify /api/accounts includes routing_strategy
+        resp = await self.client.get("/api/accounts")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["routing_strategy"], "round_robin")
+
+        # 4. Invalid strategy returns 400
+        resp = await self.client.post("/api/routing/strategy", json={"strategy": "unknown_invalid"})
+        self.assertEqual(resp.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()
