@@ -85,7 +85,7 @@ You can now directly use:
 
 ## 💡 Key Features in v2.2.0
 
-- **Upstream User-Agent Alignment**: Uses `antigravity/hub/2.19.1` matching official client telemetry.
+- **Upstream User-Agent Alignment**: Uses `antigravity/hub/2.22.0` matching official client telemetry.
 - **Multi-Account Failover Loop**: Automatically iterates through pooled accounts on `429 Too Many Requests`, `401 Unauthorized` (with automatic token refresh), or `5xx Server Error` (500, 502, 503, 504), preventing interrupted requests.
 - **Role Sanitization for Claude Models**: Message roles are strictly sanitized to lowercase `user` (for `user`, `context`) or `model` (for `model`, `assistant`), and system instructions are extracted to `systemInstruction`, preventing CloudCode Error 500 when using Claude Sonnet 4.6 or Claude Opus 4.6.
 - **Roo Code & Cline Optimization**:

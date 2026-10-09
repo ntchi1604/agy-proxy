@@ -611,6 +611,381 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "sdlc_models",
         "desc": "Prevents false-positive agent loop interrupts on long workflows",
     },
+    "DuetAiLocalRag__enable_local_rag_completion": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAiLocalRag__enable_local_rag_completion",
+    },
+    "Chat__enable_chat_gemini_cli": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_chat_gemini_cli",
+    },
+    "DatacloudKnowledgeCatalog__enable_relationship_graph_details_panel": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudKnowledgeCatalog__enable_relationship_graph_details_panel",
+    },
+    "GeminiFreeTier__call_onboard_user_from_legacy_flow": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiFreeTier__call_onboard_user_from_legacy_flow",
+    },
+    "UserTelemetry__enable_user_telemetry_call": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: UserTelemetry__enable_user_telemetry_call",
+    },
+    "DuetAiCloudCodeAPI__enable_cloudcode_api": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAiCloudCodeAPI__enable_cloudcode_api",
+    },
+    "IntentAware__enable_intent_aware_m1": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: IntentAware__enable_intent_aware_m1",
+    },
+    "MetricService__enable_metric_service": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: MetricService__enable_metric_service",
+    },
+    "DatacloudSpark__enable_jupyter_token_broker": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudSpark__enable_jupyter_token_broker",
+    },
+    "GcaTelemetry__enable_ai_characters_percentage": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GcaTelemetry__enable_ai_characters_percentage",
+    },
+    "DatacloudKnowledgeCatalog__enable_data_products": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudKnowledgeCatalog__enable_data_products",
+    },
+    "DatacloudKnowledgeCatalog__enable_post_next_improvements": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudKnowledgeCatalog__enable_post_next_improvements",
+    },
+    "DatacloudDataplex__enable_bigtable_adapter": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudDataplex__enable_bigtable_adapter",
+    },
+    "DuetAiLocalRag__enable_local_rag_chat": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAiLocalRag__enable_local_rag_chat",
+    },
+    "DuetAiProcessors__enable_prompt_recitations_check": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAiProcessors__enable_prompt_recitations_check",
+    },
+    "GcaUx__enable_gm3_design_system": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GcaUx__enable_gm3_design_system",
+    },
+    "ApigeeGeminiChatTool__enable_apigee_gemini_chat_tool": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: ApigeeGeminiChatTool__enable_apigee_gemini_chat_tool",
+    },
+    "DuetAiLocalRag__enable_local_rag": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAiLocalRag__enable_local_rag",
+    },
+    "DatacloudSpark__enable_load_in_spark_dataframe_from_gcs": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudSpark__enable_load_in_spark_dataframe_from_gcs",
+    },
+    "GcaTransformOutlines__enable_outlines": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GcaTransformOutlines__enable_outlines",
+    },
+    "Chat__enable_sessions": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_sessions",
+    },
+    "Chat__enable_chat_rag_remote_repositories_context_selection": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_chat_rag_remote_repositories_context_selection",
+    },
+    "DatacloudDatabases__enable_query_settings_improvements": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudDatabases__enable_query_settings_improvements",
+    },
+    "Chat__code_customization_enable_learn_more_message": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__code_customization_enable_learn_more_message",
+    },
+    "SparkMonitorIntegration__enable_spark_monitor_integration": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: SparkMonitorIntegration__enable_spark_monitor_integration",
+    },
+    "DatacloudDatabases__enable_cloud_sql_built_in_user": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudDatabases__enable_cloud_sql_built_in_user",
+    },
+    "DatacloudDatabases__enable_data_preview": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudDatabases__enable_data_preview",
+    },
+    "DuetAICodeTransform__enable_inline_diff": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DuetAICodeTransform__enable_inline_diff",
+    },
+    "Chat__enable_text_snippets": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_text_snippets",
+    },
+    "DatacloudBigqueryGraph__enable_bigquery_graph": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudBigqueryGraph__enable_bigquery_graph",
+    },
+    "Chat__enable_workspace_change_in_chat_history": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_workspace_change_in_chat_history",
+    },
+    "DatacloudFeedback__enable_listnr_survey": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudFeedback__enable_listnr_survey",
+    },
+    "DatacloudSpark__enable_spark_in_sql_editor": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: DatacloudSpark__enable_spark_in_sql_editor",
+    },
+    "Chat__enable_gemini3_announcement": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: Chat__enable_gemini3_announcement",
+    },
+    "enable-customization-kind-workflow": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-workflow",
+    },
+    "enable-customization-kind-hooks": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-hooks",
+    },
+    "enable-git-vcs-ui": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-git-vcs-ui",
+    },
+    "enable-customization-kind-agent": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-agent",
+    },
+    "enable-customization-kind-plugin": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-plugin",
+    },
+    "enable-sqlite-trajectory": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-sqlite-trajectory",
+    },
+    "jetski-generative-ui": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: jetski-generative-ui",
+    },
+    "enable-fig-vcs-ui": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-fig-vcs-ui",
+    },
+    "enable-hook-status": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-hook-status",
+    },
+    "enable-customization-kind-rule": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-rule",
+    },
+    "enable-daemon-commands": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-daemon-commands",
+    },
+    "enable-state-accumulator": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-state-accumulator",
+    },
+    "use-slash-plan": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: use-slash-plan",
+    },
+    "enable-command-assessor": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-command-assessor",
+    },
+    "enable-conversation-only-revert": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-conversation-only-revert",
+    },
+    "enable-gob-cog-vcs-ui": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-gob-cog-vcs-ui",
+    },
+    "jetski-sidecar-declared-permissions": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: jetski-sidecar-declared-permissions",
+    },
+    "sidecar-gateway": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: sidecar-gateway",
+    },
+    "enable-jetbox-terminal-v2": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-jetbox-terminal-v2",
+    },
+    "cascade-enable-messaging": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: cascade-enable-messaging",
+    },
+    "enable-fork-in-new-citc-workspace": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-fork-in-new-citc-workspace",
+    },
+    "enable-pseudo-project": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-pseudo-project",
+    },
+    "enable-feature-manager-keybindings": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-feature-manager-keybindings",
+    },
+    "enable-owl-slash-command": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-owl-slash-command",
+    },
+    "enable-gob-repo-vcs-ui": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-gob-repo-vcs-ui",
+    },
+    "enable-conversation-project-migration": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-conversation-project-migration",
+    },
+    "json-hooks-enabled": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: json-hooks-enabled",
+    },
+    "enable-remote-agent-fastpush-pin": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-remote-agent-fastpush-pin",
+    },
+    "enable-skill-accumulator": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-skill-accumulator",
+    },
+    "permission-v2": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: permission-v2",
+    },
+    "enable-audio-transcription": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-audio-transcription",
+    },
+    "use-core-direct": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: use-core-direct",
+    },
+    "enable-customization-kind-skill": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-skill",
+    },
+    "enable-customization-kind-mcp": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-customization-kind-mcp",
+    },
+    "enable-retroactive-projects-migration": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-retroactive-projects-migration",
+    },
+    "sidecar-iframe-prewarm": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: sidecar-iframe-prewarm",
+    },
+    "enable-background-task-accumulator": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-background-task-accumulator",
+    },
+    "enable-learn-slash-command": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-learn-slash-command",
+    },
+    "remote-control-setting-enabled": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: remote-control-setting-enabled",
+    },
+    "enable-reconcile-summaries": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-reconcile-summaries",
+    },
+    "enable-settings-error-card": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-settings-error-card",
+    },
 }
 
 # Optimized non-bool flag overrides
@@ -622,6 +997,334 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
     "DuetAiGeneration__codeGeneration_context_window_size": {
         "intValue": "64000",
         "desc": "Expanded 64k token code generation window",
+    },
+    "GcliAgentHistoryTruncation__enable_agent_history_truncation": {
+        "intValue": "45773188",
+        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__enable_agent_history_truncation",
+    },
+    "GeminiCLIIsLaunched__gemini_3_pro_launched": {
+        "intValue": "45743869",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_pro_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched": {
+        "intValue": "45761848",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched": {
+        "intValue": "45760185",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched": {
+        "intValue": "45784352",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched": {
+        "intValue": "45771641",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_flash_ga_launched": {
+        "intValue": "45780819",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_flash_ga_launched",
+    },
+    "GeminiCLIPreviewAvailable__enable_preview": {
+        "intValue": "45740196",
+        "desc": "v2.22.0 Int Value: GeminiCLIPreviewAvailable__enable_preview",
+    },
+    "GeminiCLIIsLaunched__gemini_3_8_flash_launched": {
+        "intValue": "45842815",
+        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_8_flash_launched",
+    },
+    "GcliCompressionPrompt__compression_prompt": {
+        "intValue": "45773187",
+        "desc": "v2.22.0 Int Value: GcliCompressionPrompt__compression_prompt",
+    },
+    "GcliConfigPayload__config_payload": {
+        "intValue": "45773036",
+        "desc": "v2.22.0 Int Value: GcliConfigPayload__config_payload",
+    },
+    "GeminiCLIBannerText__no_capacity_issues": {
+        "intValue": "45740199",
+        "desc": "v2.22.0 Int Value: GeminiCLIBannerText__no_capacity_issues",
+    },
+    "GeminiCLIBannerText__capacity_issues": {
+        "intValue": "45740200",
+        "desc": "v2.22.0 Int Value: GeminiCLIBannerText__capacity_issues",
+    },
+    "DuetAiMendelOverrides__inlineSuggestions_debounceMs": {
+        "intValue": "300",
+        "desc": "v2.22.0 Int Value: DuetAiMendelOverrides__inlineSuggestions_debounceMs",
+    },
+    "GCAUpgradeToPaid__current_tier_polling_interval_ms": {
+        "intValue": "43200000",
+        "desc": "v2.22.0 Int Value: GCAUpgradeToPaid__current_tier_polling_interval_ms",
+    },
+    "GcaEventsPipeline__events_pipeline_polling_interval_ms": {
+        "intValue": "60000",
+        "desc": "v2.22.0 Int Value: GcaEventsPipeline__events_pipeline_polling_interval_ms",
+    },
+    "DuetAiLocalRag__otherfiles_generation_limit": {
+        "intValue": "40",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__otherfiles_generation_limit",
+    },
+    "DuetAiLocalRag__sliding_window_fragmenter_window_size": {
+        "intValue": "20",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__sliding_window_fragmenter_window_size",
+    },
+    "DuetAiLocalRag__top_k_test_files_to_include": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__top_k_test_files_to_include",
+    },
+    "DuetAiRemoteRag__max_snippets_rag_for_chat": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_snippets_rag_for_chat",
+    },
+    "Chat__local_bm25_index_max_files": {
+        "intValue": "25000",
+        "desc": "v2.22.0 Int Value: Chat__local_bm25_index_max_files",
+    },
+    "DuetAiLocalRag__sliding_window_fragmenter_stride": {
+        "intValue": "10",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__sliding_window_fragmenter_stride",
+    },
+    "DuetAiLocalRag__top_k_doc_files_to_include": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__top_k_doc_files_to_include",
+    },
+    "DuetAiLocalRag__otherfiles_completion_limit": {
+        "intValue": "15",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__otherfiles_completion_limit",
+    },
+    "DuetAiRemoteRag__max_snippets_tailed_prompt": {
+        "intValue": "4",
+        "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_snippets_tailed_prompt",
+    },
+    "CliComplexityBasedRouting__prompt_complexity": {
+        "intValue": "45750527",
+        "desc": "v2.22.0 Int Value: CliComplexityBasedRouting__prompt_complexity",
+    },
+    "DuetAiCompletion__codeCompletion_client_side_context_size_limit": {
+        "intValue": "35000",
+        "desc": "v2.22.0 Int Value: DuetAiCompletion__codeCompletion_client_side_context_size_limit",
+    },
+    "DuetAiLocalRag__otherfiles_chat_limit": {
+        "intValue": "100",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__otherfiles_chat_limit",
+    },
+    "DuetAiRemoteRag__max_named_entity_for_chat": {
+        "intValue": "3",
+        "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_named_entity_for_chat",
+    },
+    "GcliConfig__cli_max_attempts": {
+        "intValue": "45774515",
+        "desc": "v2.22.0 Int Value: GcliConfig__cli_max_attempts",
+    },
+    "Chat__local_bm25_chat_max_results": {
+        "intValue": "10",
+        "desc": "v2.22.0 Int Value: Chat__local_bm25_chat_max_results",
+    },
+    "DuetAiLocalRag__bm25_in_completion_max_results": {
+        "intValue": "15",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__bm25_in_completion_max_results",
+    },
+    "DuetAiLocalRag__max_file_search_depth": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__max_file_search_depth",
+    },
+    "GeminiFreeTier__license_message_frequency_days": {
+        "intValue": "60",
+        "desc": "v2.22.0 Int Value: GeminiFreeTier__license_message_frequency_days",
+    },
+    "Chat__lca_chat_context_window_size_ij": {
+        "intValue": "3500000",
+        "desc": "v2.22.0 Int Value: Chat__lca_chat_context_window_size_ij",
+    },
+    "GcliAgentHistoryTruncation__agent_history_retained_messages": {
+        "intValue": "45773190",
+        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__agent_history_retained_messages",
+    },
+    "Timeouts__cli_total_request_timeout_seconds": {
+        "intValue": "45773135",
+        "desc": "v2.22.0 Int Value: Timeouts__cli_total_request_timeout_seconds",
+    },
+    "DuetAiCompletion__adaptingCache_maxInflightRequests": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiCompletion__adaptingCache_maxInflightRequests",
+    },
+    "DuetAiRemoteRag__max_snippets_rag_for_selected_code": {
+        "intValue": "2",
+        "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_snippets_rag_for_selected_code",
+    },
+    "GcliAgentHistoryTruncation__agent_history_truncation_threshold": {
+        "intValue": "45773189",
+        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__agent_history_truncation_threshold",
+    },
+    "Timeouts__cli_request_timeout_seconds": {
+        "intValue": "45773134",
+        "desc": "v2.22.0 Int Value: Timeouts__cli_request_timeout_seconds",
+    },
+    "GeminiCLIContextCompression__threshold_fraction": {
+        "intValue": "45740197",
+        "desc": "v2.22.0 Int Value: GeminiCLIContextCompression__threshold_fraction",
+    },
+    "DuetAiLocalRag__cache_co_located": {
+        "intValue": "20",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_co_located",
+    },
+    "DuetAiLocalRag__cache_file_limit": {
+        "intValue": "4194300",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_file_limit",
+    },
+    "DuetAiLocalRag__cache_total_files": {
+        "intValue": "250",
+        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_total_files",
+    },
+    "DuetAiRemoteRag__multi_query_tail_ns_for_completion": {
+        "stringValue": '{}',
+        "desc": "v2.22.0 Config: DuetAiRemoteRag__multi_query_tail_ns_for_completion",
+    },
+    "DuetAiRemoteRag__multi_query_tail_ns_for_generation": {
+        "stringValue": '{}',
+        "desc": "v2.22.0 Config: DuetAiRemoteRag__multi_query_tail_ns_for_generation",
+    },
+    "DuetAiLocalRag__substrings_to_identify_doc_prompts": {
+        "stringValue": '{"values": ["document", "comment"]}',
+        "desc": "v2.22.0 Config: DuetAiLocalRag__substrings_to_identify_doc_prompts",
+    },
+    "DuetAiLocalRag__substrings_to_identify_test_prompts": {
+        "stringValue": '{"values": ["test"]}',
+        "desc": "v2.22.0 Config: DuetAiLocalRag__substrings_to_identify_test_prompts",
+    },
+    "enable-url-artifacts": {
+        "intValue": "45825098",
+        "desc": "v2.22.0 Int Value: enable-url-artifacts",
+    },
+    "enable-base-ui-tooltips": {
+        "intValue": "45834473",
+        "desc": "v2.22.0 Int Value: enable-base-ui-tooltips",
+    },
+    "enable-context-menu-system": {
+        "intValue": "45838944",
+        "desc": "v2.22.0 Int Value: enable-context-menu-system",
+    },
+    "enable-jetbox-gcert-v2": {
+        "intValue": "45807049",
+        "desc": "v2.22.0 Int Value: enable-jetbox-gcert-v2",
+    },
+    "enable-styles-css-cleanup": {
+        "intValue": "45817109",
+        "desc": "v2.22.0 Int Value: enable-styles-css-cleanup",
+    },
+    "enable-upload-html-artifact-to-drive": {
+        "intValue": "45856317",
+        "desc": "v2.22.0 Int Value: enable-upload-html-artifact-to-drive",
+    },
+    "google-workspace-mentions": {
+        "intValue": "45825097",
+        "desc": "v2.22.0 Int Value: google-workspace-mentions",
+    },
+    "cascade-knowledge-config": {
+        "stringValue": '{"enabled": false, "min_turns_between_knowledge_generation": 10000}',
+        "desc": "v2.22.0 Config: cascade-knowledge-config",
+    },
+    "context-engine-config": {
+        "stringValue": '{}',
+        "desc": "v2.22.0 Config: context-engine-config",
+    },
+    "CASCADE_USE_REPLACE_CONTENT_EDIT_TOOL": {
+        "stringValue": '{"max_fuzzy_edit_distance_fraction": 0.001, "allow_partial_replacement_success": true, "use_line_range": true, "fast_apply_fallback_config": {"enabled": false, "prompt_unchanged_threshold": 5, "content_view_radius_lines": 200, "content_edit_radius_lines": 5}}',
+        "desc": "v2.22.0 Config: CASCADE_USE_REPLACE_CONTENT_EDIT_TOOL",
+    },
+    "invoke-subagent-config": {
+        "stringValue": '{"enabled": true, "always_inherit_model": false}',
+        "desc": "v2.22.0 Config: invoke-subagent-config",
+    },
+    "log-artifacts-config": {
+        "stringValue": '{"enabled": true, "hideNominalToolSteps": false, "hidePlannerResponseText": false, "maxBytesPerStep": 4096, "maxBytesPerToolArg": 2048, "hideSystemSteps": false, "hideUserImplicitSteps": false}',
+        "desc": "v2.22.0 Config: log-artifacts-config",
+    },
+    "auto-command-config": {
+        "stringValue": '{"system_allowlist": ["cd"], "sandbox_system_allowlist": ["head", "tail", "mkdir", "cd", "cp", "mv", "cat", "find", "grep", "rm", "touch", "less", "clear", "ls"]}',
+        "desc": "v2.22.0 Config: auto-command-config",
+    },
+    "cascade-conversation-history-config": {
+        "stringValue": '{"enabled": true, "max_conversations": 20}',
+        "desc": "v2.22.0 Config: cascade-conversation-history-config",
+    },
+    "max-media-attachments": {
+        "intValue": "5",
+        "desc": "v2.22.0 Int Value: max-media-attachments",
+    },
+    "continuous-pprof-mem-cooldown-minutes": {
+        "intValue": "30",
+        "desc": "v2.22.0 Int Value: continuous-pprof-mem-cooldown-minutes",
+    },
+    "customization-token-budget": {
+        "intValue": "20000",
+        "desc": "v2.22.0 Int Value: customization-token-budget",
+    },
+    "remote-control-silence-timeout-seconds": {
+        "intValue": "60",
+        "desc": "v2.22.0 Int Value: remote-control-silence-timeout-seconds",
+    },
+    "rules-token-budget": {
+        "intValue": "20000",
+        "desc": "v2.22.0 Int Value: rules-token-budget",
+    },
+    "best-of-nudge-length-threshold": {
+        "intValue": "150",
+        "desc": "v2.22.0 Int Value: best-of-nudge-length-threshold",
+    },
+    "continuous-pprof-cpu-interval-minutes": {
+        "intValue": "30",
+        "desc": "v2.22.0 Int Value: continuous-pprof-cpu-interval-minutes",
+    },
+    "max-best-of-n": {
+        "intValue": "10",
+        "desc": "v2.22.0 Int Value: max-best-of-n",
+    },
+    "max-tokens-per-step": {
+        "intValue": "16384",
+        "desc": "v2.22.0 Int Value: max-tokens-per-step",
+    },
+    "tool-output-max-bytes": {
+        "intValue": "10240",
+        "desc": "v2.22.0 Int Value: tool-output-max-bytes",
+    },
+    "continuous-pprof-mem-threshold-gib": {
+        "intValue": "16",
+        "desc": "v2.22.0 Int Value: continuous-pprof-mem-threshold-gib",
+    },
+    "max-conversation-save-count": {
+        "intValue": "500",
+        "desc": "v2.22.0 Int Value: max-conversation-save-count",
+    },
+    "battle-winner-survey-percent": {
+        "intValue": "50",
+        "desc": "v2.22.0 Int Value: battle-winner-survey-percent",
+    },
+    "continuous-pprof-cpu-duration-seconds": {
+        "intValue": "10",
+        "desc": "v2.22.0 Int Value: continuous-pprof-cpu-duration-seconds",
+    },
+    "continuous-pprof-heap-interval-minutes": {
+        "intValue": "30",
+        "desc": "v2.22.0 Int Value: continuous-pprof-heap-interval-minutes",
+    },
+    "default_subagent_interaction_timeout_seconds": {
+        "intValue": "60",
+        "desc": "v2.22.0 Int Value: default_subagent_interaction_timeout_seconds",
+    },
+    "agy-plugin-marketplaces": {
+        "stringValue": '{"values": ["antigravity-plugins-official=https://www.gstatic.com/antigravity/plugins/marketplace.json"]}',
+        "desc": "v2.22.0 Config: agy-plugin-marketplaces",
+    },
+    "jetbox-usage-tips": {
+        "stringValue": '{}',
+        "desc": "v2.22.0 Config: jetbox-usage-tips",
+    },
+    "rpc-telemetry-allowlist": {
+        "stringValue": '{}',
+        "desc": "v2.22.0 Config: rpc-telemetry-allowlist",
     },
 }
 

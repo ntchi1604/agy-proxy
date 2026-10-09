@@ -13,7 +13,7 @@
  */
 
 const DEFAULT_USER_AGENT =
-  "antigravity/hub/2.19.1 (aidev_client; os_type=linux; arch=amd64; cl=991101027)";
+  "antigravity/hub/2.22.0 (aidev_client; os_type=linux; arch=amd64; cl=995734886)";
 
 const DEFAULT_MODEL = "gemini-3.8-flash-high";
 
