@@ -103,14 +103,53 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
                     }
                 },
             }
+        sorted_model_ids = [
+            "gemini-3.8-flash-high",
+            "gemini-3.8-flash-medium",
+            "gemini-3.8-flash-low",
+            "gemini-3.7-flash-high",
+            "gemini-3.7-flash-medium",
+            "gemini-3.7-flash-low",
+            "gemini-3.6-flash-high",
+            "gemini-3.6-flash-medium",
+            "gemini-3.6-flash-low",
+            "gemini-pro-agent",
+            "gemini-3.1-pro-low",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6-thinking",
+            "gpt-oss-120b-medium",
+        ]
         return {
             "models": models_dict,
             "defaultAgentModelId": "gemini-3.8-flash-high",
-            "agentModelSorts": list(models_dict.keys()),
-            "commandModelIds": [m for m in models_dict.keys() if "flash" in m],
-            "tabModelIds": [m for m in models_dict.keys() if "flash" in m],
+            "agentModelSorts": [
+                {
+                    "displayName": "Recommended",
+                    "groups": [
+                        {"modelIds": [m for m in sorted_model_ids if m in models_dict]}
+                    ],
+                }
+            ],
+            "commandModelIds": ["gemini-3-flash"],
+            "tabModelIds": ["chat_20706", "chat_23310"],
+            "imageGenerationModelIds": ["gemini-3.1-flash-image"],
+            "mqueryModelIds": ["gemini-3.5-flash-lite"],
+            "webSearchModelIds": ["gemini-3.1-flash-lite"],
+            "commitMessageModelIds": ["gemini-3.5-flash-lite"],
+            "audioTranscriptionModelIds": ["models/proactive-observer-v10"],
+            "deprecatedModelIds": {
+                "gemini-3.1-pro-high": {
+                    "newModelId": "gemini-pro-agent",
+                    "oldModelEnum": "MODEL_PLACEHOLDER_M37",
+                    "newModelEnum": "MODEL_PLACEHOLDER_M16",
+                }
+            },
             "experimentIds": ["exp-antigravity-models"],
-            "tieredModelIds": [m for m in models_dict.keys() if "tiered" in m],
+            "tieredModelIds": {
+                "flashLite": ["gemini-3.5-flash-lite"],
+                "flash": ["gemini-3.8-flash-tiered"],
+                "pro": ["gemini-3.1-pro-low"],
+            },
         }
     elif action_key == "loadCodeAssist":
         return {
@@ -126,20 +165,110 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
                     "name": "Antigravity",
                     "description": "Gemini-powered code suggestions and chat in multiple IDEs",
                     "isDefault": True,
-                }
+                },
+                {
+                    "id": "standard-tier",
+                    "name": "Antigravity",
+                    "description": "Unlimited coding assistant with the most powerful Gemini models",
+                    "userDefinedCloudaicompanionProject": True,
+                    "privacyNotice": {},
+                    "usesGcpTos": True,
+                },
             ],
             "cloudaicompanionProject": "aicode-consumers",
             "gcpManaged": False,
+            "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade",
+            "paidTier": {
+                "id": "g1-pro-tier",
+                "name": "Google AI Pro",
+                "description": "Google AI Pro",
+                "upgradeSubscriptionUri": "https://antigravity.google/g1-upgrade",
+                "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits.",
+                "availableCredits": [
+                    {
+                        "creditType": "GOOGLE_ONE_AI",
+                        "minimumCreditAmountForUsage": "50",
+                    }
+                ],
+            },
         }
     elif action_key == "listExperiments":
         return get_default_experiments_payload()
     elif action_key == "fetchUserInfo":
         return {
+            "userSettings": {},
+            "regionCode": "US",
             "user": {
                 "email": "user@antigravity",
                 "name": "Antigravity User",
-            }
+            },
         }
+    elif action_key == "retrieveUserQuotaSummary":
+        return {
+            "groups": [
+                {
+                    "buckets": [
+                        {
+                            "bucketId": "gemini-weekly",
+                            "displayName": "Weekly Limit Remaining",
+                            "window": "weekly",
+                            "description": "You have full weekly limit remaining.",
+                            "remainingFraction": 1.0,
+                        },
+                        {
+                            "bucketId": "gemini-5h",
+                            "displayName": "Five Hour Limit Remaining",
+                            "window": "5h",
+                            "description": "You have full 5-hour limit remaining.",
+                            "remainingFraction": 1.0,
+                        },
+                    ],
+                    "displayName": "Gemini Models",
+                    "description": "Models within this group: Gemini Flash, Gemini Pro",
+                },
+                {
+                    "buckets": [
+                        {
+                            "bucketId": "3p-weekly",
+                            "displayName": "Weekly Limit Remaining",
+                            "window": "weekly",
+                            "description": "You have full weekly limit remaining.",
+                            "remainingFraction": 1.0,
+                        },
+                        {
+                            "bucketId": "3p-5h",
+                            "displayName": "Five Hour Limit Remaining",
+                            "window": "5h",
+                            "description": "You have full 5-hour limit remaining.",
+                            "remainingFraction": 1.0,
+                        },
+                    ],
+                    "displayName": "Claude and GPT models",
+                    "description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+                },
+            ],
+            "description": "Within each group, models share a weekly limit and a 5-hour limit.",
+        }
+    elif action_key == "cascadeNuxes":
+        default_nuxes_file = Path(__file__).parent / "default_nuxes.json"
+        if default_nuxes_file.exists():
+            try:
+                with open(default_nuxes_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"cascadeNuxes": []}
+    elif action_key == "agentPlugins":
+        default_plugins_file = Path(__file__).parent / "default_plugins.json"
+        if default_plugins_file.exists():
+            try:
+                with open(default_plugins_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {"agentPlugins": []}
+    elif action_key in ("fetchAdminControls", "writeTrajectoryAcls"):
+        return {}
     return {}
 
 
@@ -154,7 +283,14 @@ def _init_passthrough_cache():
                     _PASSTHROUGH_METADATA_CACHE.update(data)
         except Exception as e:
             logger.debug("Could not load passthrough cache: %s", e)
-    for k in ("fetchAvailableModels", "loadCodeAssist", "listExperiments"):
+    for k in (
+        "fetchAvailableModels",
+        "loadCodeAssist",
+        "listExperiments",
+        "retrieveUserQuotaSummary",
+        "cascadeNuxes",
+        "agentPlugins",
+    ):
         if k not in _PASSTHROUGH_METADATA_CACHE:
             _PASSTHROUGH_METADATA_CACHE[k] = _get_default_passthrough_response(k)
 
@@ -1361,6 +1497,7 @@ def create_app(
                     "pool_remaining_fraction": 0.0,
                 }
                 for m_id in sorted(VALID_CLOUDCODE_MODELS)
+                if not m_id.startswith(("tab_", "chat_"))
             }
         return {"models": models_dict}
 
@@ -1971,6 +2108,9 @@ def create_app(
             "listExperiments",
             "fetchUserInfo",
             "retrieveUserQuotaSummary",
+            "cascadeNuxes",
+            "agentPlugins",
+            "fetchAdminControls",
         )
 
         if not candidates:
@@ -2283,6 +2423,11 @@ def create_app(
                     err_summary = _extract_error_message(resp)
                     logger.error("[%s] CloudCode Error %d: %s", acc_label, resp.status_code, err_summary)
                     logger.debug("[%s] CloudCode raw error response: %s", acc_label, resp.text)
+                    if not is_generation and is_metadata:
+                        logger.debug("[%s] Upstream error %d for metadata %s. Serving cached/default fallback.", acc_label, resp.status_code, route_desc)
+                        cached_data = _get_cached_or_default_passthrough(action_key)
+                        cached_data = _process_passthrough_metadata(action_key, cached_data)
+                        return JSONResponse(status_code=200, content=cached_data)
 
                 # Success tracking
                 if resp.status_code == 200 and is_generation:
@@ -2294,11 +2439,11 @@ def create_app(
                     data = resp.json()
                     # Cache successful metadata responses
                     if resp.status_code == 200 and is_metadata and isinstance(data, dict) and data:
-                        _PASSTHROUGH_METADATA_CACHE[action_key] = data
+                        _PASSTHROUGH_METADATA_CACHE[action_key] = copy.deepcopy(data)
                         _save_passthrough_cache()
 
-                    data = _process_passthrough_metadata(action_key, data)
-                    return JSONResponse(status_code=resp.status_code, content=data)
+                    processed_data = _process_passthrough_metadata(action_key, copy.deepcopy(data))
+                    return JSONResponse(status_code=resp.status_code, content=processed_data)
                 except Exception:
                     return Response(
                         content=resp.content,

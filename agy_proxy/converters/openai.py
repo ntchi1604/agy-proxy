@@ -310,10 +310,10 @@ def openai_to_cloudcode_payload(
                 break
 
     if is_title_gen:
-        backend_model = "gemini-3.1-flash-lite"
-        generation_config["thinkingConfig"] = {"includeThoughts": False, "thinkingBudget": 0}
+        backend_model = "gemini-3.5-flash-lite"
+        generation_config["thinkingConfig"] = {"includeThoughts": True, "thinkingBudget": -1, "thinkingLevel": "LOW"}
         generation_config["maxOutputTokens"] = min(max_tokens, 1024)
-        req_type = "title"
+        req_type = "checkpoint"
         if "tools" in inner_request:
             inner_request.pop("tools", None)
     elif is_checkpoint_or_compact:

@@ -222,10 +222,32 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp_get.status_code, 200)
         self.assertIsInstance(resp_get.json(), dict)
 
-        # 3. GET action with slash path (e.g. cascadeNuxes)
+        # 3. GET action with slash path (cascadeNuxes)
         resp_nux = await self.client.get("/v1internal/cascadeNuxes")
         self.assertEqual(resp_nux.status_code, 200)
-        self.assertIsInstance(resp_nux.json(), dict)
+        self.assertIn("cascadeNuxes", resp_nux.json())
+
+        # 4. GET action with slash path (agentPlugins)
+        resp_pl = await self.client.get("/v1internal/agentPlugins")
+        self.assertEqual(resp_pl.status_code, 200)
+        self.assertIn("agentPlugins", resp_pl.json())
+        self.assertGreater(len(resp_pl.json()["agentPlugins"]), 0)
+
+        # 5. POST action retrieveUserQuotaSummary
+        resp_quota = await self.client.post("/v1internal:retrieveUserQuotaSummary")
+        self.assertEqual(resp_quota.status_code, 200)
+        self.assertIn("groups", resp_quota.json())
+        self.assertEqual(len(resp_quota.json()["groups"]), 2)
+
+        # 6. POST action fetchAvailableModels schema fidelity
+        resp_m = await self.client.post("/v1internal:fetchAvailableModels")
+        self.assertEqual(resp_m.status_code, 200)
+        m_data = resp_m.json()
+        self.assertIsInstance(m_data["agentModelSorts"], list)
+        self.assertIsInstance(m_data["agentModelSorts"][0], dict)
+        self.assertIn("displayName", m_data["agentModelSorts"][0])
+        self.assertIsInstance(m_data["tieredModelIds"], dict)
+        self.assertIn("flashLite", m_data["tieredModelIds"])
 
     async def test_gemini_web_api_routes(self):
         # 1. Add web account with raw cookies

@@ -42,6 +42,9 @@ scratch/
 *.bak
 *.bak.*
 *.mitm
+dumped_flows.*
+flags_extracted.txt
+interesting_flows.txt
 
 # Cloudflare
 .wrangler/

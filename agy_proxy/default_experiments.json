@@ -120,7 +120,9 @@
     106713380,
     106713382,
     106724030,
-    106754391
+    106754391,
+    106596395,
+    106544525
   ],
   "flags": [
     {
@@ -1947,6 +1949,90 @@
     {
       "name": "user-interaction-timeout-seconds",
       "intValue": "0"
+    },
+    {
+      "name": "DatacloudDataplex__enable_lakehouse_public_data",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-workflow",
+      "boolValue": true
+    },
+    {
+      "name": "enable-text-transitions",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-hooks",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-agent",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-plugin",
+      "boolValue": true
+    },
+    {
+      "name": "native-swarm-spanner-board",
+      "boolValue": false
+    },
+    {
+      "name": "enable-mcp-plugin-auth",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-rule",
+      "boolValue": true
+    },
+    {
+      "name": "disable-stained-loas2-creds",
+      "boolValue": true
+    },
+    {
+      "name": "enable-plugin-context-providers",
+      "boolValue": false
+    },
+    {
+      "name": "enable-plugin-sidebar-section",
+      "boolValue": false
+    },
+    {
+      "name": "context-window-selector",
+      "boolValue": false
+    },
+    {
+      "name": "enable-pierre-viewer",
+      "boolValue": false
+    },
+    {
+      "name": "jetski-shared-beyond-session-id",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-flow",
+      "boolValue": false
+    },
+    {
+      "name": "use-model-reported-token-count",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-skill",
+      "boolValue": true
+    },
+    {
+      "name": "enable-conversation-navigator",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-mcp",
+      "boolValue": true
+    },
+    {
+      "name": "verifiers_experiment_config",
+      "stringValue": ""
     }
   ]
 }

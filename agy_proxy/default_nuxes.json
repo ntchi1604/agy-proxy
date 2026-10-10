@@ -1,0 +1,50 @@
+{
+  "cascadeNuxes": [
+    {
+      "uid": 24,
+      "location": "CASCADE_NUX_LOCATION_ALWAYS_MOUNTED",
+      "trigger": "CASCADE_NUX_TRIGGER_MANAGER_CREATE_FIRST_PROJECT_DIALOG",
+      "analyticsEvent": "AGENT_NUX_EVENT_MANAGER_CREATE_FIRST_PROJECT_DIALOG",
+      "priority": 100,
+      "title": "Creating a Project",
+      "body": "Projects serve as your workspace where your agents work. Each project has its own file scope and permissions. Get started by creating your first project.",
+      "imageUrl": "https://www.gstatic.com/antigravity/nuxes/new-project.png",
+      "videoUrl": "",
+      "filter": {
+        "clients": [
+          "NUX_CLIENT_ANTIGRAVITY"
+        ],
+        "subclients": [
+          "hub"
+        ]
+      },
+      "session": "NUX_SESSION_FIRST_RUN"
+    },
+    {
+      "uid": 48,
+      "location": "CASCADE_NUX_LOCATION_MANAGER_BOTTOM_LEFT",
+      "priority": 100,
+      "title": "Changes to third-party model access",
+      "body": "Opus 5.5 and Sonnet 5.5 are available on paid Pro and Ultra plans. Third-party model access will no longer be available on your current plan starting on November 2, 2026.",
+      "imageUrl": "",
+      "videoUrl": "",
+      "filter": {
+        "clients": [
+          "NUX_CLIENT_ANTIGRAVITY"
+        ],
+        "userTiers": [
+          "free-tier",
+          "g1-plus-tier",
+          "g1-pro-tier",
+          "g1-ultra-tier",
+          "g1-ultra-lite-tier"
+        ],
+        "requiredExperimentFlags": [
+          "Nux__show_claude_opus_4_6_deprecation_nux"
+        ],
+        "expirationDate": "2026-11-02"
+      },
+      "session": "NUX_SESSION_RETURNING"
+    }
+  ]
+}

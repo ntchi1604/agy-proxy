@@ -43,6 +43,7 @@ BLOCKLIST_FLAGS: set[str] = {
 
     # Destructive or broken flags
     "remove-conversation-history",
+    "GcliAgentHistoryTruncation__enable_agent_history_truncation",
     "collect-x20-quotas-on-checkin",
     "show-trajectory-labeling-ad",
     "GCAFeedbackBlock__enable_feedback_block",
@@ -986,6 +987,171 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "tools_plugins",
         "desc": "v2.22.0 Flag: enable-settings-error-card",
     },
+    "GeminiCLIIsLaunched__gemini_3_pro_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_pro_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched",
+    },
+    "GeminiCLIIsLaunched__gemini_3_flash_ga_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_flash_ga_launched",
+    },
+    "GeminiCLIPreviewAvailable__enable_preview": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIPreviewAvailable__enable_preview",
+    },
+    "GeminiCLIIsLaunched__gemini_3_8_flash_launched": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: GeminiCLIIsLaunched__gemini_3_8_flash_launched",
+    },
+    "enable-url-artifacts": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-url-artifacts",
+    },
+    "enable-base-ui-tooltips": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-base-ui-tooltips",
+    },
+    "enable-context-menu-system": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-context-menu-system",
+    },
+    "enable-jetbox-gcert-v2": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-jetbox-gcert-v2",
+    },
+    "enable-styles-css-cleanup": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-styles-css-cleanup",
+    },
+    "enable-upload-html-artifact-to-drive": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: enable-upload-html-artifact-to-drive",
+    },
+    "google-workspace-mentions": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.22.0 Flag: google-workspace-mentions",
+    },
+    "enable-plugin-sidebar-section": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Shows plugins section in Antigravity sidebar",
+    },
+    "enable-plugin-context-providers": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables rich context providers from installed plugins",
+    },
+    "enable-mcp-plugin-auth": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables OAuth authentication support for MCP plugins",
+    },
+    "enable-conversation-navigator": {
+        "value": True,
+        "category": "ui_chat",
+        "desc": "Enables conversation navigator panel in sidebar",
+    },
+    "context-window-selector": {
+        "value": True,
+        "category": "sdlc_models",
+        "desc": "Enables dynamic context window size selection",
+    },
+    "enable-skill-search-tool": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables agent tool to search available skills",
+    },
+    "enable-skill-icons": {
+        "value": True,
+        "category": "ui_chat",
+        "desc": "Enables rendering skill icons in UI",
+    },
+    "enable-resume-conversations-from-restart": {
+        "value": True,
+        "category": "ui_chat",
+        "desc": "Preserves and resumes conversations across IDE restarts",
+    },
+    "enable-fork-artifact-streaming": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Enables streaming artifacts when branching conversations",
+    },
+    "enable-fork-at-historical-step": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Enables branching conversation from any historical step",
+    },
+    "enable-fork-with-subagents": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Preserves active subagents when branching conversations",
+    },
+    "enable-fork-in-new-worktree": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Branches into a separate git worktree",
+    },
+    "scheduled-tasks-v2": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "v2 scheduled tasks execution engine",
+    },
+    "send-subagent-initial-prompt-as-message": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Sends initial prompt to subagents as high-priority message",
+    },
+    "show-model-selection-change": {
+        "value": True,
+        "category": "ui_chat",
+        "desc": "Displays banner when active model changes",
+    },
+    "turn-on-projects-internally": {
+        "value": True,
+        "category": "agentic_workflow",
+        "desc": "Enables internal project management",
+    },
+    "use-model-reported-token-count": {
+        "value": True,
+        "category": "sdlc_models",
+        "desc": "Uses precise token counts reported by model",
+    },
+    "mcp-lazy-load-tools": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables lazy-loading tool schemas for MCP servers",
+    },
 }
 
 # Optimized non-bool flag overrides
@@ -997,58 +1163,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
     "DuetAiGeneration__codeGeneration_context_window_size": {
         "intValue": "64000",
         "desc": "Expanded 64k token code generation window",
-    },
-    "GcliAgentHistoryTruncation__enable_agent_history_truncation": {
-        "intValue": "45773188",
-        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__enable_agent_history_truncation",
-    },
-    "GeminiCLIIsLaunched__gemini_3_pro_launched": {
-        "intValue": "45743869",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_pro_launched",
-    },
-    "GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched": {
-        "intValue": "45761848",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched",
-    },
-    "GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched": {
-        "intValue": "45760185",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched",
-    },
-    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched": {
-        "intValue": "45784352",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched",
-    },
-    "GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched": {
-        "intValue": "45771641",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched",
-    },
-    "GeminiCLIIsLaunched__gemini_3_flash_ga_launched": {
-        "intValue": "45780819",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_flash_ga_launched",
-    },
-    "GeminiCLIPreviewAvailable__enable_preview": {
-        "intValue": "45740196",
-        "desc": "v2.22.0 Int Value: GeminiCLIPreviewAvailable__enable_preview",
-    },
-    "GeminiCLIIsLaunched__gemini_3_8_flash_launched": {
-        "intValue": "45842815",
-        "desc": "v2.22.0 Int Value: GeminiCLIIsLaunched__gemini_3_8_flash_launched",
-    },
-    "GcliCompressionPrompt__compression_prompt": {
-        "intValue": "45773187",
-        "desc": "v2.22.0 Int Value: GcliCompressionPrompt__compression_prompt",
-    },
-    "GcliConfigPayload__config_payload": {
-        "intValue": "45773036",
-        "desc": "v2.22.0 Int Value: GcliConfigPayload__config_payload",
-    },
-    "GeminiCLIBannerText__no_capacity_issues": {
-        "intValue": "45740199",
-        "desc": "v2.22.0 Int Value: GeminiCLIBannerText__no_capacity_issues",
-    },
-    "GeminiCLIBannerText__capacity_issues": {
-        "intValue": "45740200",
-        "desc": "v2.22.0 Int Value: GeminiCLIBannerText__capacity_issues",
     },
     "DuetAiMendelOverrides__inlineSuggestions_debounceMs": {
         "intValue": "300",
@@ -1098,10 +1212,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "intValue": "4",
         "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_snippets_tailed_prompt",
     },
-    "CliComplexityBasedRouting__prompt_complexity": {
-        "intValue": "45750527",
-        "desc": "v2.22.0 Int Value: CliComplexityBasedRouting__prompt_complexity",
-    },
     "DuetAiCompletion__codeCompletion_client_side_context_size_limit": {
         "intValue": "35000",
         "desc": "v2.22.0 Int Value: DuetAiCompletion__codeCompletion_client_side_context_size_limit",
@@ -1113,10 +1223,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
     "DuetAiRemoteRag__max_named_entity_for_chat": {
         "intValue": "3",
         "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_named_entity_for_chat",
-    },
-    "GcliConfig__cli_max_attempts": {
-        "intValue": "45774515",
-        "desc": "v2.22.0 Int Value: GcliConfig__cli_max_attempts",
     },
     "Chat__local_bm25_chat_max_results": {
         "intValue": "10",
@@ -1138,14 +1244,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "intValue": "3500000",
         "desc": "v2.22.0 Int Value: Chat__lca_chat_context_window_size_ij",
     },
-    "GcliAgentHistoryTruncation__agent_history_retained_messages": {
-        "intValue": "45773190",
-        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__agent_history_retained_messages",
-    },
-    "Timeouts__cli_total_request_timeout_seconds": {
-        "intValue": "45773135",
-        "desc": "v2.22.0 Int Value: Timeouts__cli_total_request_timeout_seconds",
-    },
     "DuetAiCompletion__adaptingCache_maxInflightRequests": {
         "intValue": "2",
         "desc": "v2.22.0 Int Value: DuetAiCompletion__adaptingCache_maxInflightRequests",
@@ -1154,80 +1252,40 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "intValue": "2",
         "desc": "v2.22.0 Int Value: DuetAiRemoteRag__max_snippets_rag_for_selected_code",
     },
-    "GcliAgentHistoryTruncation__agent_history_truncation_threshold": {
-        "intValue": "45773189",
-        "desc": "v2.22.0 Int Value: GcliAgentHistoryTruncation__agent_history_truncation_threshold",
-    },
-    "Timeouts__cli_request_timeout_seconds": {
-        "intValue": "45773134",
-        "desc": "v2.22.0 Int Value: Timeouts__cli_request_timeout_seconds",
-    },
-    "GeminiCLIContextCompression__threshold_fraction": {
-        "intValue": "45740197",
-        "desc": "v2.22.0 Int Value: GeminiCLIContextCompression__threshold_fraction",
-    },
     "DuetAiLocalRag__cache_co_located": {
-        "intValue": "20",
-        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_co_located",
+        "floatValue": 20.0,
+        "desc": "v2.22.0 Float Value: DuetAiLocalRag__cache_co_located",
     },
     "DuetAiLocalRag__cache_file_limit": {
-        "intValue": "4194300",
-        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_file_limit",
+        "floatValue": 4194300.0,
+        "desc": "v2.22.0 Float Value: DuetAiLocalRag__cache_file_limit",
     },
     "DuetAiLocalRag__cache_total_files": {
-        "intValue": "250",
-        "desc": "v2.22.0 Int Value: DuetAiLocalRag__cache_total_files",
+        "floatValue": 250.0,
+        "desc": "v2.22.0 Float Value: DuetAiLocalRag__cache_total_files",
     },
     "DuetAiRemoteRag__multi_query_tail_ns_for_completion": {
-        "stringValue": '{}',
+        "int32ListValue": {},
         "desc": "v2.22.0 Config: DuetAiRemoteRag__multi_query_tail_ns_for_completion",
     },
     "DuetAiRemoteRag__multi_query_tail_ns_for_generation": {
-        "stringValue": '{}',
+        "int32ListValue": {},
         "desc": "v2.22.0 Config: DuetAiRemoteRag__multi_query_tail_ns_for_generation",
     },
     "DuetAiLocalRag__substrings_to_identify_doc_prompts": {
-        "stringValue": '{"values": ["document", "comment"]}',
+        "stringListValue": {"values": ["document", "comment"]},
         "desc": "v2.22.0 Config: DuetAiLocalRag__substrings_to_identify_doc_prompts",
     },
     "DuetAiLocalRag__substrings_to_identify_test_prompts": {
-        "stringValue": '{"values": ["test"]}',
+        "stringListValue": {"values": ["test"]},
         "desc": "v2.22.0 Config: DuetAiLocalRag__substrings_to_identify_test_prompts",
-    },
-    "enable-url-artifacts": {
-        "intValue": "45825098",
-        "desc": "v2.22.0 Int Value: enable-url-artifacts",
-    },
-    "enable-base-ui-tooltips": {
-        "intValue": "45834473",
-        "desc": "v2.22.0 Int Value: enable-base-ui-tooltips",
-    },
-    "enable-context-menu-system": {
-        "intValue": "45838944",
-        "desc": "v2.22.0 Int Value: enable-context-menu-system",
-    },
-    "enable-jetbox-gcert-v2": {
-        "intValue": "45807049",
-        "desc": "v2.22.0 Int Value: enable-jetbox-gcert-v2",
-    },
-    "enable-styles-css-cleanup": {
-        "intValue": "45817109",
-        "desc": "v2.22.0 Int Value: enable-styles-css-cleanup",
-    },
-    "enable-upload-html-artifact-to-drive": {
-        "intValue": "45856317",
-        "desc": "v2.22.0 Int Value: enable-upload-html-artifact-to-drive",
-    },
-    "google-workspace-mentions": {
-        "intValue": "45825097",
-        "desc": "v2.22.0 Int Value: google-workspace-mentions",
     },
     "cascade-knowledge-config": {
         "stringValue": '{"enabled": false, "min_turns_between_knowledge_generation": 10000}',
         "desc": "v2.22.0 Config: cascade-knowledge-config",
     },
     "context-engine-config": {
-        "stringValue": '{}',
+        "stringValue": "{}",
         "desc": "v2.22.0 Config: context-engine-config",
     },
     "CASCADE_USE_REPLACE_CONTENT_EDIT_TOOL": {
@@ -1315,16 +1373,28 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "desc": "v2.22.0 Int Value: default_subagent_interaction_timeout_seconds",
     },
     "agy-plugin-marketplaces": {
-        "stringValue": '{"values": ["antigravity-plugins-official=https://www.gstatic.com/antigravity/plugins/marketplace.json"]}',
+        "stringListValue": {"values": ["antigravity-plugins-official=https://www.gstatic.com/antigravity/plugins/marketplace.json"]},
         "desc": "v2.22.0 Config: agy-plugin-marketplaces",
     },
     "jetbox-usage-tips": {
-        "stringValue": '{}',
+        "stringListValue": {},
         "desc": "v2.22.0 Config: jetbox-usage-tips",
     },
     "rpc-telemetry-allowlist": {
-        "stringValue": '{}',
+        "stringListValue": {},
         "desc": "v2.22.0 Config: rpc-telemetry-allowlist",
+    },
+    "remote-control-companion-url": {
+        "stringValue": "https://antigravity.google.com",
+        "desc": "Antigravity remote companion URL",
+    },
+    "remote-control-proxy-server-url": {
+        "stringValue": "jetski-webchannel.googleapis.com:443",
+        "desc": "Antigravity remote proxy server endpoint",
+    },
+    "remote-control-version": {
+        "stringValue": "v2",
+        "desc": "Remote control protocol version",
     },
 }
 
@@ -1346,11 +1416,11 @@ CURATED_EXPERIMENT_IDS: list[int] = [
     106264150, 106264162, 106264532, 106281951, 106283614, 106283618, 106392106,
     106392108, 106392113, 106392115, 106392120, 106392122, 106413417, 106413419,
     106428370, 106428372, 106458967, 106458969, 106474625, 106474627, 106511968,
-    106544526, 106555564, 106555566, 106568390, 106568772, 106588527, 106597020,
-    106617388, 106617390, 106621675, 106640124, 106640126, 106643242, 106659335,
-    106659337, 106659338, 106659344, 106659346, 106659347, 106670811, 106676368,
-    106701431, 106701435, 106711598, 106713377, 106713379, 106713380, 106713382,
-    106724030, 106754391
+    106544525, 106544526, 106555564, 106555566, 106568390, 106568772, 106588527,
+    106596395, 106597020, 106617388, 106617390, 106621675, 106640124, 106640126,
+    106643242, 106659335, 106659337, 106659338, 106659344, 106659346, 106659347,
+    106670811, 106676368, 106701431, 106701435, 106711598, 106713377, 106713379,
+    106713380, 106713382, 106724030, 106754391
 ]
 
 
@@ -1435,6 +1505,8 @@ def enhance_list_experiments(
     if not isinstance(data, dict):
         return data
 
+    data = copy.deepcopy(data)
+
     cfg = config_override or load_experiment_config()
     if not cfg.get("enabled", True) or cfg.get("mode") == "passthrough":
         return data
@@ -1473,10 +1545,17 @@ def enhance_list_experiments(
             if isinstance(fl, dict) and "name" in fl:
                 flag_map[fl["name"]] = fl
 
+    oneof_keys = {"boolValue", "intValue", "floatValue", "stringValue", "stringListValue", "int32ListValue"}
+
+    def _set_bool(fl: dict[str, Any], value: bool):
+        for k in oneof_keys:
+            fl.pop(k, None)
+        fl["boolValue"] = value
+
     # Helper to update or append flag
     def _apply_flag(name: str, value: bool):
         if name in flag_map:
-            flag_map[name]["boolValue"] = value
+            _set_bool(flag_map[name], value)
         else:
             new_fl = {"name": name, "boolValue": value}
             flag_map[name] = new_fl
@@ -1485,22 +1564,22 @@ def enhance_list_experiments(
     for name, fl in list(flag_map.items()):
         # Rule A: User explicit override has highest priority
         if name in user_overrides:
-            fl["boolValue"] = bool(user_overrides[name])
+            _set_bool(fl, bool(user_overrides[name]))
             continue
 
         # Rule B: Strict Blocklist & disablers must ALWAYS be False
         if name in BLOCKLIST_FLAGS or DISABLER_PATTERN.match(name):
-            fl["boolValue"] = False
+            _set_bool(fl, False)
             continue
 
         # Rule C: Curated safe flags
         if name in CURATED_SAFE_FLAGS:
-            fl["boolValue"] = CURATED_SAFE_FLAGS[name]["value"]
+            _set_bool(fl, CURATED_SAFE_FLAGS[name]["value"])
             continue
 
         # Rule D: In "all_safe" mode, enable remaining bool flags (except blocklisted ones)
         if mode == "all_safe" and "boolValue" in fl:
-            fl["boolValue"] = True
+            _set_bool(fl, True)
 
     # Rule E: Ensure all curated safe flags exist even if missing from upstream response
     for name, meta in CURATED_SAFE_FLAGS.items():
@@ -1513,12 +1592,16 @@ def enhance_list_experiments(
     for name in BLOCKLIST_FLAGS:
         if name in flag_map:
             if name not in user_overrides:
-                flag_map[name]["boolValue"] = False
+                _set_bool(flag_map[name], False)
 
     # Rule G: Optimize non-bool flags (context window etc.)
     for name, opt in NON_BOOL_OPTIMIZATIONS.items():
         if name in flag_map:
             fl = flag_map[name]
+            opt_keys = set(opt.keys()) - {"desc"}
+            if opt_keys & oneof_keys:
+                for k in oneof_keys:
+                    fl.pop(k, None)
             for k, v in opt.items():
                 if k != "desc":
                     fl[k] = v
@@ -1528,6 +1611,24 @@ def enhance_list_experiments(
                 if k != "desc":
                     new_fl[k] = v
             flag_map[name] = new_fl
+
+    # Final cleanup loop to guarantee strict oneof mutual exclusivity
+    for fl in flag_map.values():
+        found = [k for k in oneof_keys if k in fl]
+        if len(found) > 1:
+            name = fl.get("name", "")
+            if name in CURATED_SAFE_FLAGS or name in BLOCKLIST_FLAGS or name in user_overrides:
+                keep = "boolValue"
+            elif name in NON_BOOL_OPTIMIZATIONS:
+                opt_keys = [k for k in NON_BOOL_OPTIMIZATIONS[name].keys() if k in oneof_keys]
+                keep = opt_keys[0] if opt_keys else "boolValue"
+            else:
+                keep = "boolValue" if "boolValue" in found else found[-1]
+            for k in found:
+                if k != keep:
+                    fl.pop(k, None)
+        elif len(found) == 0:
+            fl["boolValue"] = False
 
     data["flags"] = list(flag_map.values())
     return data

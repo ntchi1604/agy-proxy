@@ -20,9 +20,14 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-3.8-flash-medium": "gemini-3.8-flash-medium",
     "gemini-3.8-flash-low": "gemini-3.8-flash-low",
     "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
+    "gemini-3.8-flash-n": "gemini-3.8-flash-high",
     "gemini-3.8": "gemini-3.8-flash-high",
     "gemini-3-8": "gemini-3.8-flash-high",
     "gemini-3.8-flash-preview": "gemini-3.8-flash-high",
+    "chat_20706": "chat_20706",
+    "chat_23310": "chat_23310",
+    "tab_flash_lite_preview": "tab_flash_lite_preview",
+    "tab_jump_flash_lite_preview": "tab_jump_flash_lite_preview",
 
     # Generic Gemini Aliases
     "flash": "gemini-3.8-flash-high",
@@ -185,6 +190,11 @@ VALID_CLOUDCODE_MODELS = {
     "claude-opus-5-5-medium",
     "claude-opus-5-5-low",
     "gpt-oss-120b-medium",
+    # Antigravity Tab & Jump Completion models
+    "chat_20706",
+    "chat_23310",
+    "tab_flash_lite_preview",
+    "tab_jump_flash_lite_preview",
 }
 
 EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
@@ -193,6 +203,7 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium)", "maxTokens": 1048576},
     "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
+    "gemini-3.8-flash-n": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
     # Gemini 3.7
     "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High)", "maxTokens": 1048576},
     "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium)", "maxTokens": 1048576},
@@ -230,8 +241,13 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "claude-5-5": {"displayName": "Claude 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
     "claude-sonnet-5-5": {"displayName": "Claude Sonnet 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
     "claude-opus-5-5": {"displayName": "Claude Opus 5.5", "maxTokens": 1000000, "maxOutputTokens": 128000},
-    "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)", "maxTokens": 131072},
-    "gpt-oss-120b": {"displayName": "GPT-OSS 120B", "maxTokens": 131072},
+    "gpt-oss-120b-medium": {"displayName": "GPT-OSS 120B (Medium)", "maxTokens": 131072, "maxOutputTokens": 32768, "supportsThinking": True, "thinkingBudget": 8192},
+    "gpt-oss-120b": {"displayName": "GPT-OSS 120B", "maxTokens": 131072, "maxOutputTokens": 32768, "supportsThinking": True, "thinkingBudget": 8192},
+    # Tab & Jump Completion models
+    "chat_20706": {"displayName": "Tab Code Completion 16k", "maxTokens": 16384},
+    "chat_23310": {"displayName": "Tab Code Completion 32k", "maxTokens": 32768},
+    "tab_flash_lite_preview": {"displayName": "Tab Flash Lite Preview", "maxTokens": 16384, "maxOutputTokens": 4096},
+    "tab_jump_flash_lite_preview": {"displayName": "Tab Jump Flash Lite Preview", "maxTokens": 16384, "maxOutputTokens": 4096},
     # OpenAI & Codex models available in agy-proxy
     "gpt-6-astra": {"displayName": "GPT-6 Astra (Flagship)", "maxTokens": 272000},
     "gpt-6": {"displayName": "GPT-6", "maxTokens": 272000},

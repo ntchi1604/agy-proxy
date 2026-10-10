@@ -38,6 +38,8 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(normalize_model_name("flash-lite"), "gemini-3.1-flash-lite")
         self.assertEqual(normalize_model_name("pro"), "gemini-3.1-pro-low")
         self.assertEqual(normalize_model_name("gemini-3.8"), "gemini-3.8-flash-high")
+        self.assertEqual(normalize_model_name("gemini-3.8-flash-n"), "gemini-3.8-flash-high")
+        self.assertEqual(normalize_model_name("gpt-oss-120b"), "gpt-oss-120b-medium")
         self.assertEqual(normalize_model_name("gemini-3.8-flash"), "gemini-3.8-flash-high")
         self.assertEqual(normalize_model_name("claude-3-5-sonnet"), "claude-sonnet-4-6")
         self.assertEqual(normalize_model_name("claude-3-7-sonnet"), "claude-sonnet-4-6")

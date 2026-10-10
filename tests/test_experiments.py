@@ -212,3 +212,87 @@ def test_experiments_api_endpoints():
     reset_resp = client.post("/api/experiments/reset")
     assert reset_resp.status_code == 200
     assert reset_resp.json()["status"] == "ok"
+
+
+def test_enhance_list_experiments_strict_oneof_mutual_exclusivity():
+    """Verify that every flag in the output has strictly EXACTLY ONE oneof value field."""
+    oneof_keys = {"boolValue", "intValue", "floatValue", "stringValue", "stringListValue", "int32ListValue"}
+
+    # 1. Test with default experiments
+    payload = get_default_experiments_payload()
+    for f in payload.get("flags", []):
+        present = set(f.keys()) & oneof_keys
+        assert len(present) == 1, f"Flag {f.get('name')} does not have exactly 1 oneof value: {present}"
+
+    # 2. Test with artificially corrupted upstream flags containing multiple oneof fields
+    corrupted_upstream = {
+        "flags": [
+            {
+                "name": "enable-deepagent",
+                "boolValue": False,
+                "stringValue": "corrupted",
+                "intValue": "999",
+            },
+            {
+                "name": "GeminiFreeTier__enable_free_tier",
+                "boolValue": True,
+                "stringValue": "toxic_free_tier",
+            },
+            {
+                "name": "DuetAiLocalRag__cache_co_located",
+                "intValue": "20",
+                "stringValue": "should_be_float",
+            },
+            {
+                "name": "agy-plugin-marketplaces",
+                "stringValue": '{"values": ["old"]}',
+            },
+            {
+                "name": "unknown_flag_with_no_value",
+            },
+        ]
+    }
+
+    enhanced = enhance_list_experiments(corrupted_upstream)
+    flags_map = {f["name"]: f for f in enhanced["flags"]}
+
+    for name, f in flags_map.items():
+        present = set(f.keys()) & oneof_keys
+        assert len(present) == 1, f"Enhanced flag {name} does not have exactly 1 oneof value: {present}"
+
+    # Curated flag should have boolValue True
+    assert flags_map["enable-deepagent"]["boolValue"] is True
+    assert "stringValue" not in flags_map["enable-deepagent"]
+    assert "intValue" not in flags_map["enable-deepagent"]
+
+    # Blocklist flag should have boolValue False
+    assert flags_map["GeminiFreeTier__enable_free_tier"]["boolValue"] is False
+    assert "stringValue" not in flags_map["GeminiFreeTier__enable_free_tier"]
+
+    # DuetAiLocalRag__cache_co_located should have floatValue
+    assert isinstance(flags_map["DuetAiLocalRag__cache_co_located"].get("floatValue"), (int, float))
+    assert "intValue" not in flags_map["DuetAiLocalRag__cache_co_located"]
+
+    # agy-plugin-marketplaces should have stringListValue
+    assert isinstance(flags_map["agy-plugin-marketplaces"].get("stringListValue"), dict)
+    assert "stringValue" not in flags_map["agy-plugin-marketplaces"]
+
+    # Flag with no value should default to boolValue False
+    assert flags_map["unknown_flag_with_no_value"]["boolValue"] is False
+
+
+def test_enhance_list_experiments_input_immutability():
+    """Verify that enhance_list_experiments does not mutate its input argument."""
+    original_input = {
+        "experimentIds": [1001],
+        "flags": [
+            {"name": "enable-deepagent", "boolValue": False},
+            {"name": "GeminiFreeTier__enable_free_tier", "boolValue": True},
+        ],
+    }
+    input_copy = copy.deepcopy(original_input)
+
+    enhanced = enhance_list_experiments(original_input)
+    assert original_input == input_copy, "enhance_list_experiments mutated its input argument!"
+    assert enhanced["flags"] != original_input["flags"]
+
