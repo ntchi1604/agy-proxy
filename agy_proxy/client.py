@@ -807,15 +807,11 @@ class CloudCodeClient:
                             if response.status_code == 429:
                                 error_text = await response.aread()
                                 err_str = error_text.decode("utf-8", "ignore")
-                                try:
-                                    cooldown_sec = float(os.environ.get("AGY_RATE_LIMIT_COOLDOWN", "0"))
-                                except (ValueError, TypeError):
-                                    cooldown_sec = 0.0
-                                if cooldown_sec <= 0:
-                                    from agy_proxy.auth.token_utils import calculate_cooldown_duration
-                                    cooldown_sec = calculate_cooldown_duration(response, err_message=err_str, account=acc, model=model_name, default_cooldown=60.0)
-                                if cooldown_sec > 0:
-                                    acc.mark_rate_limited(model_name, duration=cooldown_sec)
+                                from agy_proxy.auth.token_utils import calculate_cooldown_duration
+                                cd_dur = calculate_cooldown_duration(
+                                    response, err_message=err_str, account=acc, model=model_name, default_cooldown=15.0
+                                )
+                                acc.mark_rate_limited(model_name, duration=cd_dur)
                                 if session_key:
                                     session_affinity.unpin_session(session_key)
                                 logger.warning(

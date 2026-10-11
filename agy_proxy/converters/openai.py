@@ -15,6 +15,7 @@ from agy_proxy.converters.common import (
     _extract_media_from_url,
     _extract_message_text,
     _is_title_generation,
+    clean_system_prompt_text,
     ensure_tool_pairing_integrity,
     get_thought_signature,
     normalize_model_name,
@@ -53,11 +54,15 @@ def openai_to_cloudcode_payload(
 
         if role in ("system", "developer"):
             if isinstance(content, str) and content:
-                system_parts.append({"text": content})
+                cleaned = clean_system_prompt_text(content)
+                if cleaned:
+                    system_parts.append({"text": cleaned})
             elif isinstance(content, list):
                 for p in content:
                     if isinstance(p, dict) and p.get("type") == "text":
-                        system_parts.append({"text": p.get("text", "")})
+                        cleaned = clean_system_prompt_text(p.get("text", ""))
+                        if cleaned:
+                            system_parts.append({"text": cleaned})
             continue
 
     tool_id_to_name: dict[str, str] = {}

@@ -14,6 +14,7 @@ from agy_proxy.converters.common import (
     _extract_media_from_url,
     _extract_message_text,
     _is_title_generation,
+    clean_system_prompt_text,
     ensure_tool_pairing_integrity,
     get_thought_signature,
     normalize_model_name,
@@ -37,12 +38,16 @@ def anthropic_to_cloudcode_payload(
     system_parts: list[dict[str, Any]] = []
     if req.system:
         if isinstance(req.system, str):
-            system_parts.append({"text": req.system})
+            cleaned = clean_system_prompt_text(req.system)
+            if cleaned:
+                system_parts.append({"text": cleaned})
         elif isinstance(req.system, list):
             for sb in req.system:
                 sb_dict = to_dict(sb)
                 if isinstance(sb_dict, dict) and sb_dict.get("type") == "text":
-                    system_parts.append({"text": sb_dict.get("text", "")})
+                    cleaned = clean_system_prompt_text(sb_dict.get("text", ""))
+                    if cleaned:
+                        system_parts.append({"text": cleaned})
 
     tool_id_to_name: dict[str, str] = {}
     for msg in req.messages:
@@ -72,7 +77,9 @@ def anthropic_to_cloudcode_payload(
         parts: list[dict[str, Any]] = []
 
         if isinstance(content, str):
-            parts.append({"text": content})
+            cleaned_c = clean_system_prompt_text(content) if "x-anthropic-billing-header:" in content.lower() else content
+            if cleaned_c:
+                parts.append({"text": cleaned_c})
         elif isinstance(content, list):
             last_thinking_sig = None
             for block in content:
@@ -83,7 +90,9 @@ def anthropic_to_cloudcode_payload(
                 if b_type == "text":
                     txt = b_dict.get("text", "")
                     if txt:
-                        parts.append({"text": txt})
+                        cleaned_txt = clean_system_prompt_text(txt) if "x-anthropic-billing-header:" in txt.lower() else txt
+                        if cleaned_txt:
+                            parts.append({"text": cleaned_txt})
                 elif b_type == "thinking":
                     last_thinking_sig = b_dict.get("signature")
                     thought_content = b_dict.get("thinking", "")

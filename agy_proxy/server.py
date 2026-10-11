@@ -2185,12 +2185,11 @@ def create_app(
                         err_message=err_hint,
                         account=acc,
                         model=req_model if is_generation else "default",
-                        default_cooldown=60.0,
+                        default_cooldown=15.0,
                     )
                     logger.warning(
-                        "[%s] Quota reached (429) for %s (%s). Failing over to next account...",
+                        "[%s] Hit 429 quota limit (%s). Failing over to next account in pool...",
                         acc_label,
-                        req_model if is_generation else "default",
                         err_hint,
                     )
                     acc.mark_rate_limited(req_model if is_generation else "default", duration=cd_dur)
@@ -2321,7 +2320,7 @@ def create_app(
                             err_message=err_hint,
                             account=acc,
                             model=req_model,
-                            default_cooldown=60.0,
+                            default_cooldown=15.0,
                         )
                         acc.mark_rate_limited(req_model, duration=cd_dur)
                         if hasattr(acc, "fetch_quota"):
@@ -2405,16 +2404,6 @@ def create_app(
                                 resp = fb_resp
                                 req_model = DEFAULT_MODEL
                             else:
-                                if fb_resp.status_code == 429:
-                                    fb_hint = _extract_error_message(fb_resp)
-                                    fb_dur = calculate_cooldown_duration(
-                                        fb_resp,
-                                        err_message=fb_hint,
-                                        account=acc,
-                                        model=DEFAULT_MODEL,
-                                        default_cooldown=60.0,
-                                    )
-                                    acc.mark_rate_limited(DEFAULT_MODEL, duration=fb_dur)
                                 resp = fb_resp
                         except Exception:
                             pass

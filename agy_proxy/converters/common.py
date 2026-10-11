@@ -72,6 +72,22 @@ def get_thought_signature(
     return None
 
 
+def clean_system_prompt_text(text: str) -> str:
+    """
+    Cleans system and message prompt text to remove Claude Code CLI internal billing and telemetry headers.
+    Google CloudCode / Antigravity API strictly rejects requests containing 'x-anthropic-billing-header'
+    with HTTP 429 RESOURCE_EXHAUSTED errors.
+    """
+    if not text:
+        return ""
+    lines = text.splitlines()
+    cleaned_lines = [
+        line for line in lines
+        if not line.strip().lower().startswith("x-anthropic-billing-header:")
+    ]
+    return "\n".join(cleaned_lines).strip()
+
+
 def _extract_message_text(msg: Any) -> str:
     """Extracts text content safely from dict or object message representations."""
     if not msg:

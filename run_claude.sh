@@ -102,14 +102,41 @@ else
 fi
 
 # 1. Check if Proxy is running
-if ! curl -s -f -m 1 "${PROXY_URL}/api/info" > /dev/null 2>&1 && ! curl -s -f -m 1 "${PROXY_URL}/" > /dev/null 2>&1; then
-    echo -e "${YELLOW}⚠️  Warning: Antigravity Proxy is not responding at ${PROXY_URL}${NC}"
-    echo -e "${CYAN}💡 Start the proxy in another terminal:${NC}"
-    echo -e "   ./start_proxy.sh --port ${PORT}  (or: uv run python main.py --port ${PORT})\n"
-    read -r -p "Try to continue anyway? [y/N]: " choice
-    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
+check_proxy_alive() {
+    curl -s -f -m 2 "${PROXY_URL}/api/info" > /dev/null 2>&1 || curl -s -f -m 2 "${PROXY_URL}/" > /dev/null 2>&1
+}
+
+if ! check_proxy_alive; then
+    while true; do
+        echo -e "${YELLOW}⚠️  Warning: Antigravity Proxy is not responding at ${PROXY_URL}${NC}"
+        echo -e "${CYAN}💡 Start the proxy in another terminal:${NC}"
+        echo -e "   ./start_proxy.sh --port ${PORT}  (or: uv run python main.py --port ${PORT})\n"
+        read -r -p "Retry connection, continue anyway, or abort? [r=Retry / y=Continue / n=Abort] (default: n): " choice
+        
+        clean_choice="$(echo "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+        case "$clean_choice" in
+            r|retry)
+                echo -e "${CYAN}🔄 Retrying connection to ${PROXY_URL}...${NC}"
+                if check_proxy_alive; then
+                    echo -e "${GREEN}⚡ Antigravity Proxy is active at ${PROXY_URL}${NC}"
+                    break
+                else
+                    echo -e "${RED}❌ Still not responding at ${PROXY_URL}.${NC}\n"
+                fi
+                ;;
+            y|yes|yeah|yep)
+                echo -e "${YELLOW}⚠️  Continuing anyway without proxy confirmation...${NC}"
+                break
+                ;;
+            n|no|nope|"")
+                echo -e "${RED}Launch aborted.${NC}"
+                exit 1
+                ;;
+            *)
+                echo -e "${RED}Invalid input: '${choice}'. Please enter 'y' to continue, 'r' to retry, or 'n' to abort.${NC}\n"
+                ;;
+        esac
+    done
 else
     echo -e "${GREEN}⚡ Antigravity Proxy is active at ${PROXY_URL}${NC}"
 fi
@@ -124,12 +151,26 @@ for arg in "${CLAUDE_ARGS[@]}"; do
 done
 
 if [[ "$SKIP_PERMS" == "false" && -t 0 ]]; then
-    echo ""
-    echo -e "${YELLOW}⚡ Auto-approve actions without permission prompts? (--dangerously-skip-permissions)${NC}"
-    read -r -p "Enable danger mode for fast autonomous work? [y/N]: " perm_choice
-    if [[ "$perm_choice" =~ ^[Yy]$ ]]; then
-        CLAUDE_ARGS+=("--dangerously-skip-permissions")
-    fi
+    while true; do
+        echo ""
+        echo -e "${YELLOW}⚡ Auto-approve actions without permission prompts? (--dangerously-skip-permissions)${NC}"
+        read -r -p "Enable danger mode for fast autonomous work? [y/N]: " perm_choice
+        clean_perm="$(echo "$perm_choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+        case "$clean_perm" in
+            y|yes|yeah|yep)
+                CLAUDE_ARGS+=("--dangerously-skip-permissions")
+                echo -e "${GREEN}✅ Danger mode enabled.${NC}"
+                break
+                ;;
+            n|no|nope|"")
+                echo -e "${CYAN}ℹ️  Standard permission mode active.${NC}"
+                break
+                ;;
+            *)
+                echo -e "${RED}Invalid input: '${perm_choice}'. Please enter 'y' (yes) or 'n' (no).${NC}"
+                ;;
+        esac
+    done
 fi
 
 echo ""
