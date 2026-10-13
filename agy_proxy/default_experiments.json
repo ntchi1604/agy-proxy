@@ -91,12 +91,15 @@
     106474625,
     106474627,
     106511968,
+    106544525,
     106544526,
     106555564,
     106555566,
     106568390,
     106568772,
     106588527,
+    106596395,
+    106596396,
     106597020,
     106617388,
     106617390,
@@ -121,8 +124,8 @@
     106713382,
     106724030,
     106754391,
-    106596395,
-    106544525
+    106834476,
+    106838234
   ],
   "flags": [
     {
@@ -131,7 +134,7 @@
     },
     {
       "name": "ApigeeCloudCode__enable_mock_server",
-      "boolValue": true
+      "boolValue": false
     },
     {
       "name": "ApigeeGeminiChatTool__enable_apigee_gemini_chat_tool",
@@ -179,7 +182,7 @@
     },
     {
       "name": "Chat__enable_chat_agentic_mcp_chat",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "Chat__enable_chat_checkpoints",
@@ -191,7 +194,7 @@
     },
     {
       "name": "Chat__enable_chat_folder_context_selection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "Chat__enable_chat_gemini_cli",
@@ -203,7 +206,7 @@
     },
     {
       "name": "Chat__enable_chat_moa",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "Chat__enable_chat_named_entity_recognition",
@@ -239,7 +242,7 @@
     },
     {
       "name": "Chat__enable_mcp_server",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "Chat__enable_mcp_server_ij",
@@ -291,7 +294,6 @@
     },
     {
       "name": "CliComplexityBasedRouting__enabled",
-      "flagId": 45750526,
       "boolValue": true
     },
     {
@@ -344,6 +346,14 @@
       "boolValue": false
     },
     {
+      "name": "DatacloudDataplex__enable_firestore_adapter",
+      "boolValue": false
+    },
+    {
+      "name": "DatacloudDataplex__enable_lakehouse_public_data",
+      "boolValue": true
+    },
+    {
       "name": "DatacloudDataplex__enable_spanner_adapter",
       "boolValue": false
     },
@@ -353,7 +363,7 @@
     },
     {
       "name": "DatacloudKnowledgeCatalog__enable_data_products",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DatacloudKnowledgeCatalog__enable_post_next_improvements",
@@ -417,11 +427,11 @@
     },
     {
       "name": "DuetAiCompletion__codeCompletion_enableAdaptingCache",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiCompletion__codeCompletion_enableInfixCache",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiCompletion__codeCompletion_enablePrefetchNextSuggestions",
@@ -449,7 +459,7 @@
     },
     {
       "name": "DuetAiGeneration__codeGeneration_enable_diff_view",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiGeneration__codeGeneration_enable_new_cy_vsc_ux",
@@ -457,7 +467,7 @@
     },
     {
       "name": "DuetAiGeneration__codeGeneration_enable_pane_view",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiGeneration__codeGeneration_enable_quickpick_chat",
@@ -501,23 +511,23 @@
     },
     {
       "name": "DuetAiLocalRag__enable_local_rag_completion_snippets",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__enable_local_rag_completion_snippets_with_pruning",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__enable_local_rag_completion_snippets_with_pruning_bm25_scoring",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__enable_local_rag_completion_snippets_with_pruning_colocated_files",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__enable_wald_file_selection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__include_currently_open_files",
@@ -525,7 +535,7 @@
     },
     {
       "name": "DuetAiLocalRag__include_doc_files",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiLocalRag__include_unit_test_files",
@@ -638,7 +648,7 @@
     },
     {
       "name": "DuetAiRemoteRag__enable_hyde_for_generation",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "DuetAiRemoteRag__enable_remote_rag",
@@ -812,7 +822,6 @@
     },
     {
       "name": "GcliAgentHistoryTruncation__enable_agent_history_truncation",
-      "flagId": 45773188,
       "boolValue": false
     },
     {
@@ -847,42 +856,34 @@
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched",
-      "flagId": 45784352,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched",
-      "flagId": 45771641,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched",
-      "flagId": 45761848,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched",
-      "flagId": 45760185,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_8_flash_launched",
-      "flagId": 45842815,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_flash_ga_launched",
-      "flagId": 45780819,
       "boolValue": true
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_pro_launched",
-      "flagId": 45743869,
       "boolValue": true
     },
     {
       "name": "GeminiCLIPreviewAvailable__enable_preview",
-      "flagId": 45740196,
       "boolValue": true
     },
     {
@@ -916,19 +917,19 @@
     },
     {
       "name": "SDLCAgents__enable_anthropic_model_connection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "SDLCAgents__enable_azure_model_connection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "SDLCAgents__enable_gemini_model_connection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "SDLCAgents__enable_rest_model_connection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "SparkMonitorIntegration__enable_spark_monitor_integration",
@@ -970,11 +971,15 @@
     },
     {
       "name": "agy-plugin-marketplaces",
-      "stringListValue": {}
+      "stringListValue": {
+        "values": [
+          "antigravity-plugins-official=https://www.gstatic.com/antigravity/plugins/marketplace.json"
+        ]
+      }
     },
     {
       "name": "agy-plugin-shelves",
-      "stringValue": ""
+      "stringValue": "{\"shelves\": [{\n      \"id\": \"google-workspace\",\n      \"displayName\": \"Google Workspace\",\n      \"description\": \"Connect to Google Workspace, including Docs, Sheets, Slides, Drive, and Calendar.\",\n      \"position\": 10,\n      \"customizationIds\": [\n        \"antigravity-plugins-official/plugin/gdocs\",\n        \"antigravity-plugins-official/plugin/gsheets\",\n        \"antigravity-plugins-official/plugin/gslides\",\n        \"antigravity-plugins-official/plugin/gdrive\",\n        \"antigravity-plugins-official/plugin/gcalendar\"\n      ]\n    },{\n      \"id\": \"build-with-google\",\n      \"displayName\": \"Build with Google\",\n      \"description\": \"Build on Google's developer platforms, including Android, Chrome, Gemini, and Google Cloud.\",\n      \"position\": 20,\n      \"customizationIds\": [\n        \"antigravity-plugins-official/plugin/gemini-api\",\n        \"antigravity-plugins-official/plugin/chrome-devtools-plugin\",\n        \"antigravity-plugins-official/plugin/android-cli-plugin\",\n        \"antigravity-plugins-official/plugin/firebase\",\n        \"antigravity-plugins-official/plugin/science\",\n        \"antigravity-plugins-official/plugin/google-antigravity-sdk\",\n        \"antigravity-plugins-official/plugin/google-developer-knowledge\",\n        \"antigravity-plugins-official/plugin/modern-web-guidance-plugin\",\n        \"antigravity-plugins-official/plugin/google_maps_platform\",\n        \"antigravity-plugins-official/plugin/flutter\",\n        \"antigravity-plugins-official/plugin/data-agent-kit-plugin\",\n        \"antigravity-plugins-official/plugin/google-cloud-developer\"\n      ]\n    }]}"
     },
     {
       "name": "allow-experimental-monitors",
@@ -990,11 +995,11 @@
     },
     {
       "name": "auto-command-config",
-      "stringValue": "{\"system_allowlist\": [], \"sandbox_system_allowlist\": [\"head\", \"tail\", \"mkdir\", \"cd\", \"cp\", \"mv\", \"cat\", \"find\", \"grep\", \"rm\", \"touch\", \"less\", \"clear\", \"ls\"]}"
+      "stringValue": "{\"system_allowlist\": [\"cd\"], \"sandbox_system_allowlist\": [\"head\", \"tail\", \"mkdir\", \"cd\", \"cp\", \"mv\", \"cat\", \"find\", \"grep\", \"rm\", \"touch\", \"less\", \"clear\", \"ls\"]}"
     },
     {
       "name": "auto-mode-permission-preset",
-      "stringValue": "vetted"
+      "stringValue": "auto"
     },
     {
       "name": "battle-mode-max-turns",
@@ -1038,7 +1043,7 @@
     },
     {
       "name": "checkpoint-variant",
-      "stringValue": ""
+      "stringValue": "claude-1m_840k"
     },
     {
       "name": "cli-enable-conversation-groups",
@@ -1067,6 +1072,10 @@
     {
       "name": "context-engine-config",
       "stringValue": "{}"
+    },
+    {
+      "name": "context-window-selector",
+      "boolValue": true
     },
     {
       "name": "continuous-pprof-cpu-duration-seconds",
@@ -1098,7 +1107,7 @@
     },
     {
       "name": "convenient-multi-agent-coordination",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "cortex-snapshot-recording",
@@ -1141,6 +1150,10 @@
       "boolValue": false
     },
     {
+      "name": "disable-stained-loas2-creds",
+      "boolValue": true
+    },
+    {
       "name": "disable-system-message-merging",
       "boolValue": false
     },
@@ -1170,7 +1183,7 @@
     },
     {
       "name": "enable-agent-team",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-ark",
@@ -1182,7 +1195,7 @@
     },
     {
       "name": "enable-ask-permission-tool",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-ask-question-tool",
@@ -1194,11 +1207,11 @@
     },
     {
       "name": "enable-auto-permission-preset",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-autonomous-mode-critic",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-aux-pane-redesign",
@@ -1210,16 +1223,15 @@
     },
     {
       "name": "enable-base-ui-tooltips",
-      "flagId": 45834473,
       "boolValue": true
     },
     {
       "name": "enable-battle-contrib-variants",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-battle-mode",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-battle-mode-custom-agents",
@@ -1231,7 +1243,7 @@
     },
     {
       "name": "enable-code-search-palette",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-command-assessor",
@@ -1239,16 +1251,15 @@
     },
     {
       "name": "enable-compact-slash-command",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-concierge-agent",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-context-menu-system",
-      "flagId": 45838944,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-context-role",
@@ -1264,15 +1275,19 @@
     },
     {
       "name": "enable-conversation-forking",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-conversation-groups",
-      "boolValue": false
+      "boolValue": true
+    },
+    {
+      "name": "enable-conversation-navigator",
+      "boolValue": true
     },
     {
       "name": "enable-conversation-only-revert",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-conversation-project-migration",
@@ -1280,7 +1295,7 @@
     },
     {
       "name": "enable-conversation-search-v2",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-conversation-selection-quoting",
@@ -1303,6 +1318,38 @@
       "boolValue": false
     },
     {
+      "name": "enable-customization-kind-agent",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-flow",
+      "boolValue": false
+    },
+    {
+      "name": "enable-customization-kind-hooks",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-mcp",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-plugin",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-rule",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-skill",
+      "boolValue": true
+    },
+    {
+      "name": "enable-customization-kind-workflow",
+      "boolValue": true
+    },
+    {
       "name": "enable-customization-load-error-notice",
       "boolValue": false
     },
@@ -1316,7 +1363,7 @@
     },
     {
       "name": "enable-deepagent",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-deferred-tool-loading",
@@ -1324,10 +1371,18 @@
     },
     {
       "name": "enable-developer-mode",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-directory-local-discovery",
+      "boolValue": true
+    },
+    {
+      "name": "enable-enterprise-remote-ai",
+      "boolValue": false
+    },
+    {
+      "name": "enable-fast-output-close",
       "boolValue": false
     },
     {
@@ -1344,19 +1399,19 @@
     },
     {
       "name": "enable-file-explorer-tab",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-file-viewer-keyboard-navigation",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-fork-artifact-streaming",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-fork-at-historical-step",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-fork-in-new-abfs-workspace",
@@ -1364,11 +1419,11 @@
     },
     {
       "name": "enable-fork-in-new-citc-workspace",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-fork-in-new-worktree",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-fork-provenance",
@@ -1376,7 +1431,7 @@
     },
     {
       "name": "enable-fork-with-subagents",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-gemini-next-opt-out-switch",
@@ -1384,7 +1439,7 @@
     },
     {
       "name": "enable-generative-hooks",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-get-screenshot-data",
@@ -1412,8 +1467,7 @@
     },
     {
       "name": "enable-hub-builtin-browser",
-      "flagId": 45844839,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-image-generator-subagent",
@@ -1421,11 +1475,11 @@
     },
     {
       "name": "enable-input-autocomplete",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-input-draft-persistence",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-jetbox-gcert",
@@ -1433,8 +1487,7 @@
     },
     {
       "name": "enable-jetbox-gcert-v2",
-      "flagId": 45807049,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-jetbox-terminal-v2",
@@ -1466,14 +1519,18 @@
     },
     {
       "name": "enable-marketplace-search-tool",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-mcp-apps",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-mcp-non-blocking-turn-load",
+      "boolValue": true
+    },
+    {
+      "name": "enable-mcp-plugin-auth",
       "boolValue": true
     },
     {
@@ -1482,11 +1539,11 @@
     },
     {
       "name": "enable-native-swarm",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-notebook-rendering",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-notifications-settings",
@@ -1498,7 +1555,7 @@
     },
     {
       "name": "enable-pdf-viewer",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-per-conversation-telemetry-toggle",
@@ -1510,26 +1567,42 @@
     },
     {
       "name": "enable-permissions-selector",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-persistent-terminals",
       "boolValue": true
     },
     {
-      "name": "enable-plugin-auth",
+      "name": "enable-pierre-viewer",
       "boolValue": false
+    },
+    {
+      "name": "enable-plugin-auth",
+      "boolValue": true
     },
     {
       "name": "enable-plugin-bundles",
-      "boolValue": false
+      "boolValue": true
+    },
+    {
+      "name": "enable-plugin-context-providers",
+      "boolValue": true
+    },
+    {
+      "name": "enable-plugin-sidebar-section",
+      "boolValue": true
     },
     {
       "name": "enable-plugin-themes",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-plugins",
+      "boolValue": true
+    },
+    {
+      "name": "enable-primes-tracing",
       "boolValue": false
     },
     {
@@ -1538,7 +1611,7 @@
     },
     {
       "name": "enable-programmatic-tools",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-project-4k",
@@ -1573,8 +1646,12 @@
       "boolValue": false
     },
     {
-      "name": "enable-resume-conversations-from-restart",
+      "name": "enable-resource-manager",
       "boolValue": false
+    },
+    {
+      "name": "enable-resume-conversations-from-restart",
+      "boolValue": true
     },
     {
       "name": "enable-retroactive-projects-migration",
@@ -1586,15 +1663,15 @@
     },
     {
       "name": "enable-ripgrep-path-search",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-run-command-semantic-rendering",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-run-workflow-tool",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-scoped-csrf-tokens",
@@ -1610,7 +1687,7 @@
     },
     {
       "name": "enable-sidecar-sdk",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-sidecars",
@@ -1630,15 +1707,14 @@
     },
     {
       "name": "enable-skill-icons",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-skill-search-tool",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-split-view",
-      "flagId": 45823456,
       "boolValue": true
     },
     {
@@ -1651,20 +1727,23 @@
     },
     {
       "name": "enable-styles-css-cleanup",
-      "flagId": 45817109,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-subagent-hub",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-subagent-user-messaging",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-swarm",
       "boolValue": false
+    },
+    {
+      "name": "enable-swarm-monitor",
+      "boolValue": true
     },
     {
       "name": "enable-swarm-narrator",
@@ -1683,12 +1762,16 @@
       "boolValue": false
     },
     {
-      "name": "enable-thought-editing",
+      "name": "enable-text-transitions",
       "boolValue": false
     },
     {
+      "name": "enable-thought-editing",
+      "boolValue": true
+    },
+    {
       "name": "enable-thought-steering-from-selection",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-thumbs-down-reroll",
@@ -1700,39 +1783,39 @@
     },
     {
       "name": "enable-trajectory-debug-in-battle-mode",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-trustedcli-config-files",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-ui-sidecars",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-upload-html-artifact-to-drive",
-      "flagId": 45856317,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-url-artifacts",
-      "flagId": 45825098,
+      "boolValue": true
+    },
+    {
+      "name": "enable-voice-relay",
       "boolValue": false
     },
     {
       "name": "enable-vscode-injection-removal",
-      "flagId": 45827954,
       "boolValue": false
     },
     {
       "name": "enable-wait-tool",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "google-workspace-mentions",
-      "flagId": 45825097,
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "inject_3_memories_1_skill",
@@ -1748,7 +1831,7 @@
     },
     {
       "name": "jetski-autonomous-mode",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "jetski-bundle-promotions",
@@ -1779,12 +1862,16 @@
       "stringValue": ""
     },
     {
-      "name": "jetski-sidecar-declared-permissions",
+      "name": "jetski-shared-beyond-session-id",
       "boolValue": false
     },
     {
+      "name": "jetski-sidecar-declared-permissions",
+      "boolValue": true
+    },
+    {
       "name": "jetski-unified-customizations-panel-enabled",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "json-hooks-enabled",
@@ -1796,7 +1883,7 @@
     },
     {
       "name": "markdown-table-v2",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "max-best-of-n",
@@ -1817,6 +1904,10 @@
     {
       "name": "mcp-lazy-load-tools",
       "boolValue": true
+    },
+    {
+      "name": "native-swarm-spanner-board",
+      "boolValue": false
     },
     {
       "name": "native-swarm-suggested-models",
@@ -1880,7 +1971,7 @@
     },
     {
       "name": "scheduled-tasks-v2",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "send-subagent-initial-prompt-as-message",
@@ -1888,6 +1979,10 @@
     },
     {
       "name": "shadow-call-aicode-mendel",
+      "boolValue": false
+    },
+    {
+      "name": "show-all-models-in-gemini-app",
       "boolValue": false
     },
     {
@@ -1900,11 +1995,11 @@
     },
     {
       "name": "sidecar-gateway",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "sidecar-iframe-prewarm",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "sonar-monitors-config",
@@ -1920,7 +2015,7 @@
     },
     {
       "name": "tool-output-max-bytes",
-      "intValue": "46080"
+      "intValue": "10240"
     },
     {
       "name": "turn-on-projects-internally",
@@ -1943,6 +2038,10 @@
       "boolValue": true
     },
     {
+      "name": "use-model-reported-token-count",
+      "boolValue": true
+    },
+    {
       "name": "use-slash-plan",
       "boolValue": true
     },
@@ -1951,87 +2050,11 @@
       "intValue": "0"
     },
     {
-      "name": "DatacloudDataplex__enable_lakehouse_public_data",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-workflow",
-      "boolValue": true
-    },
-    {
-      "name": "enable-text-transitions",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-hooks",
-      "boolValue": true
-    },
-    {
-      "name": "enable-customization-kind-agent",
-      "boolValue": true
-    },
-    {
-      "name": "enable-customization-kind-plugin",
-      "boolValue": true
-    },
-    {
-      "name": "native-swarm-spanner-board",
-      "boolValue": false
-    },
-    {
-      "name": "enable-mcp-plugin-auth",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-rule",
-      "boolValue": true
-    },
-    {
-      "name": "disable-stained-loas2-creds",
-      "boolValue": true
-    },
-    {
-      "name": "enable-plugin-context-providers",
-      "boolValue": false
-    },
-    {
-      "name": "enable-plugin-sidebar-section",
-      "boolValue": false
-    },
-    {
-      "name": "context-window-selector",
-      "boolValue": false
-    },
-    {
-      "name": "enable-pierre-viewer",
-      "boolValue": false
-    },
-    {
-      "name": "jetski-shared-beyond-session-id",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-flow",
-      "boolValue": false
-    },
-    {
-      "name": "use-model-reported-token-count",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-skill",
-      "boolValue": true
-    },
-    {
-      "name": "enable-conversation-navigator",
-      "boolValue": false
-    },
-    {
-      "name": "enable-customization-kind-mcp",
-      "boolValue": true
-    },
-    {
       "name": "verifiers_experiment_config",
+      "stringValue": ""
+    },
+    {
+      "name": "voice-engine-addr",
       "stringValue": ""
     }
   ]

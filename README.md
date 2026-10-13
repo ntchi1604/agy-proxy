@@ -233,10 +233,11 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
    - Custom editor or binary paths via `-e, --editor <PATH>`, `-f, --file <PATH>`, `--dir <PATH>`, or positional argument
 2. **Smart Editor Discovery**: when you specify an editor root folder (e.g. `/opt/Antigravity`, `/opt/Antigravity IDE`, or `~/Downloads/Antigravity IDE`), the script automatically searches through known subpaths and directory hierarchy to find the exact `language_server` binary.
 3. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_linux_x64.real`).
-4. Installs a non-destructive wrapper script with **Auto-Fallback (Direct Bypass)**:
-   - When `agy-proxy` is running: intercepts and routes completions/chats through the proxy.
-   - When `agy-proxy` is stopped/offline: automatically runs the original binary in native direct mode (connecting directly to Google backend) without breaking or stalling the editor.
-5. **Dynamic Reconnect**: when you start the proxy (`./start_proxy.sh`), it detects if an Antigravity language server is currently running in direct mode and gracefully signals it to reload and latch onto the proxy in ~1s without losing open tabs or restarting the editor window.
+4. Installs a non-destructive wrapper script with **Auto-Fallback & Live Auto-Switching**:
+   - **Proxy Mode**: When `agy-proxy` is running, intercepts and routes completions/chats through the proxy.
+   - **Direct Mode (Google Backend)**: When `agy-proxy` is stopped or offline, automatically routes directly to native Google endpoints (`https://generativelanguage.googleapis.com` & `https://daily-cloudcode-pa.googleapis.com`) without breaking, stalling, or disconnecting the editor.
+   - **Live Auto-Switching Watchdog**: A lightweight background watchdog monitors proxy connectivity in real time. If the proxy disconnects or stops while you are working, the wrapper automatically signals the language server to switch into direct mode; when the proxy comes back online, it automatically switches back into proxy mode.
+5. **Dynamic Reconnect**: When you start or stop the proxy (`./start_proxy.sh`), running language server instances seamlessly latch on or fall back without window reloads or lost tabs.
 6. When you execute `restart`, it terminates the active process so the editor automatically respawns it using the wrapper.
 
 #### 🔹 Quick Usage
@@ -249,7 +250,7 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 ./patch_language_server.sh status -e "/opt/Antigravity IDE"
 ./patch_language_server.sh status "~/Downloads/Antigravity IDE"
 
-# Patch automatically (using default port 8000):
+# Patch automatically (using default port 8000 with live auto-switching enabled):
 ./patch_language_server.sh patch
 
 # Patch by editor directory or specific binary:
@@ -272,9 +273,9 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 #### 🔹 Command & Flag Reference
 | Command / Flag | Description |
 |---|---|
-| `patch` | Backs up original binary to `.real` and installs proxy wrapper script. |
+| `patch` | Backs up original binary to `.real` and installs proxy wrapper script with live watchdog. |
 | `restore` / `unpatch` | Restores original binary from `.real` and removes wrapper script. |
-| `status` | Checks wrapper installation, binary integrity, PID, and tests proxy connectivity. |
+| `status` | Checks wrapper installation, binary integrity, PID, active routing mode, and watchdog log. |
 | `restart` | Sends `SIGTERM` to running `language_server` so Antigravity IDE respawns it. |
 | `kill` | Forcefully terminates running `language_server` processes. |
 | `-e, --editor <PATH>` | Editor installation root (e.g. `/opt/Antigravity`, auto-locates binary). |
@@ -285,6 +286,7 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 | `--url <URL>` | Full proxy base URL (e.g. `http://127.0.0.1:8080` or Cloudflare Worker URL). |
 | `--timeout <SECONDS>` | Max seconds to wait for proxy health-check at startup (default: `2`, `0` to disable). |
 | `--no-wait` | Disable startup wait check before executing the binary. |
+| `--no-watchdog` | Disable background watchdog for live auto-switching (startup fallback only). |
 | `-y, --yes` | Automatically answer yes to all confirmation prompts. |
 
 ---

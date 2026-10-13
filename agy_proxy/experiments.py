@@ -97,6 +97,11 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "agents",
         "desc": "Enables native swarm orchestration engine",
     },
+    "enable-swarm-monitor": {
+        "value": True,
+        "category": "agents",
+        "desc": "v2.23.0 Flag: Enables autonomous agent swarm progress, health, and task monitoring",
+    },
     "enable-subagent-hub": {
         "value": True,
         "category": "agents",
@@ -1152,6 +1157,21 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "tools_plugins",
         "desc": "Enables lazy-loading tool schemas for MCP servers",
     },
+    "enable-resource-manager": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.23.0 Flag: Enables unified workspace and MCP resource management",
+    },
+    "enable-fast-output-close": {
+        "value": True,
+        "category": "ui_editor",
+        "desc": "v2.23.0 Flag: Enables instant dismissal of tool and task output panels",
+    },
+    "show-all-models-in-gemini-app": {
+        "value": True,
+        "category": "sdlc_models",
+        "desc": "v2.23.0 Flag: Shows all available Gemini, Claude, and GPT-OSS models in model picker",
+    },
 }
 
 # Optimized non-bool flag overrides
@@ -1396,6 +1416,22 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "stringValue": "v2",
         "desc": "Remote control protocol version",
     },
+    "agy-plugin-shelves": {
+        "stringValue": '{"shelves": [{"id": "google-workspace", "displayName": "Google Workspace", "description": "Connect to Google Workspace, including Docs, Sheets, Slides, Drive, and Calendar.", "position": 10, "customizationIds": ["antigravity-plugins-official/plugin/gdocs", "antigravity-plugins-official/plugin/gsheets", "antigravity-plugins-official/plugin/gslides", "antigravity-plugins-official/plugin/gdrive", "antigravity-plugins-official/plugin/gcalendar"]}, {"id": "build-with-google", "displayName": "Build with Google", "description": "Build on Google\'s developer platforms, including Android, Chrome, Gemini, and Google Cloud.", "position": 20, "customizationIds": ["antigravity-plugins-official/plugin/gemini-api", "antigravity-plugins-official/plugin/chrome-devtools-plugin", "antigravity-plugins-official/plugin/android-cli-plugin", "antigravity-plugins-official/plugin/firebase", "antigravity-plugins-official/plugin/science", "antigravity-plugins-official/plugin/google-antigravity-sdk", "antigravity-plugins-official/plugin/google-developer-knowledge", "antigravity-plugins-official/plugin/modern-web-guidance-plugin", "antigravity-plugins-official/plugin/google_maps_platform", "antigravity-plugins-official/plugin/flutter", "antigravity-plugins-official/plugin/data-agent-kit-plugin", "antigravity-plugins-official/plugin/google-cloud-developer"]}]}',
+        "desc": "v2.23.0 Config: agy-plugin-shelves",
+    },
+    "checkpoint-variant": {
+        "stringValue": "claude-1m_840k",
+        "desc": "v2.23.0 Config: checkpoint-variant (Claude 1M context variant)",
+    },
+    "auto-mode-permission-preset": {
+        "stringValue": "auto",
+        "desc": "v2.23.0 Config: auto-mode-permission-preset",
+    },
+    "voice-engine-addr": {
+        "stringValue": "",
+        "desc": "v2.23.0 Config: voice-engine-addr",
+    },
 }
 
 # =============================================================================
@@ -1417,10 +1453,10 @@ CURATED_EXPERIMENT_IDS: list[int] = [
     106392108, 106392113, 106392115, 106392120, 106392122, 106413417, 106413419,
     106428370, 106428372, 106458967, 106458969, 106474625, 106474627, 106511968,
     106544525, 106544526, 106555564, 106555566, 106568390, 106568772, 106588527,
-    106596395, 106597020, 106617388, 106617390, 106621675, 106640124, 106640126,
+    106596395, 106596396, 106597020, 106617388, 106617390, 106621675, 106640124, 106640126,
     106643242, 106659335, 106659337, 106659338, 106659344, 106659346, 106659347,
     106670811, 106676368, 106701431, 106701435, 106711598, 106713377, 106713379,
-    106713380, 106713382, 106724030, 106754391
+    106713380, 106713382, 106724030, 106754391, 106834476, 106838234
 ]
 
 

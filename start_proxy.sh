@@ -59,13 +59,18 @@ CHECK_URL="http://${CHECK_HOST}:${PROXY_PORT}"
 get_ls_pids() {
     pgrep -f "language_server" 2>/dev/null | while read -r pid; do
         [ "$pid" = "$$" ] && continue
+        local comm=""
+        comm=$(ps -o comm= -p "$pid" 2>/dev/null || true)
+        if [[ "$comm" == "bash" || "$comm" == "sh" ]]; then
+            continue
+        fi
         local cmd=""
         if [ -f "/proc/$pid/cmdline" ]; then
             cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)
         else
             cmd=$(ps -o command= -p "$pid" 2>/dev/null || true)
         fi
-        if [[ "$cmd" =~ start_proxy ]] || [[ "$cmd" =~ patch_language_server ]] || [[ "$cmd" =~ grep ]]; then
+        if [[ "$cmd" =~ start_proxy ]] || [[ "$cmd" =~ patch_language_server ]] || [[ "$cmd" =~ agy_ls_watchdog ]] || [[ "$cmd" =~ grep ]]; then
             continue
         fi
         if [[ "$cmd" =~ language_server ]]; then
@@ -131,15 +136,33 @@ if [ "${AGY_NO_RECONNECT:-0}" != "1" ]; then
     ) &
 fi
 
-# Check for python runner: uv -> python3 -> python
+# Graceful stop: signal language_server to fallback to direct mode immediately on exit
+cleanup_on_stop() {
+    local current_pids
+    current_pids=$(get_ls_pids)
+    if [ -n "$current_pids" ]; then
+        echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;33m🛑 Proxy stopped. Signaling language_server to fallback to direct Google backend...\033[0m" >&2
+        for pid in $current_pids; do
+            kill -TERM "$pid" 2>/dev/null || true
+        done
+    fi
+}
+trap cleanup_on_stop EXIT INT TERM
+
+# Run python server with trap handling
 if command -v uv >/dev/null 2>&1; then
-    exec uv run python main.py "$@"
+    uv run python main.py "$@" &
+    PY_PID=$!
 elif command -v python3 >/dev/null 2>&1; then
-    exec python3 main.py "$@"
+    python3 main.py "$@" &
+    PY_PID=$!
 elif command -v python >/dev/null 2>&1; then
-    exec python main.py "$@"
+    python main.py "$@" &
+    PY_PID=$!
 else
     echo "❌ Error: Neither 'uv' nor 'python3' was found in your PATH."
     echo "Please install Python 3.10+ to run Antigravity Proxy."
     exit 1
 fi
+
+wait "$PY_PID" 2>/dev/null || true

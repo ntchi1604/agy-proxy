@@ -296,3 +296,33 @@ def test_enhance_list_experiments_input_immutability():
     assert original_input == input_copy, "enhance_list_experiments mutated its input argument!"
     assert enhanced["flags"] != original_input["flags"]
 
+
+def test_v2_23_0_updates():
+    """Verify v2.23.0 User-Agent, new experiment IDs, and experimental flags."""
+    from agy_proxy.auth.constants import USER_AGENT
+    assert "2.23.0" in USER_AGENT
+    assert "cl=998057262" in USER_AGENT
+
+    payload = get_default_experiments_payload()
+    exp_ids = payload["experimentIds"]
+    assert 106596396 in exp_ids
+    assert 106834476 in exp_ids
+    assert 106838234 in exp_ids
+    assert 106544526 in exp_ids
+
+    flags_dict = {f["name"]: f.get("boolValue") for f in payload["flags"] if "name" in f}
+    assert flags_dict.get("enable-swarm-monitor") is True
+    assert flags_dict.get("enable-resource-manager") is True
+    assert flags_dict.get("enable-fast-output-close") is True
+    assert flags_dict.get("show-all-models-in-gemini-app") is True
+
+    # Test enhanced optimizations
+    enhanced = enhance_list_experiments({"experimentIds": [], "flags": []})
+    enh_flags = {f["name"]: f for f in enhanced["flags"]}
+    assert enh_flags["checkpoint-variant"]["stringValue"] == "claude-1m_840k"
+    assert enh_flags["auto-mode-permission-preset"]["stringValue"] == "auto"
+    assert "shelves" in enh_flags["agy-plugin-shelves"]["stringValue"]
+    assert 106596396 in enhanced["experimentIds"]
+    assert 106834476 in enhanced["experimentIds"]
+    assert 106838234 in enhanced["experimentIds"]
+
