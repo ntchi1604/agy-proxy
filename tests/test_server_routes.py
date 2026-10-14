@@ -1389,6 +1389,48 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         resp = await self.client.post("/api/routing/strategy", json={"strategy": "unknown_invalid"})
         self.assertEqual(resp.status_code, 400)
 
+    async def test_v1beta_models_endpoints(self):
+        """Test GET /v1beta/models and GET /v1beta/models/{model_name}."""
+        resp = await self.client.get("/v1beta/models")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("models", data)
+        self.assertGreater(len(data["models"]), 0)
+        model_names = [m["name"] for m in data["models"]]
+        self.assertTrue(any("gemini" in n for n in model_names))
+
+        # Test specific model
+        first_model = data["models"][0]["name"]
+        resp_model = await self.client.get(f"/v1beta/{first_model}")
+        self.assertEqual(resp_model.status_code, 200)
+        self.assertEqual(resp_model.json()["name"], first_model)
+
+        # Test not found
+        resp_404 = await self.client.get("/v1beta/models/non-existent-model-xyz")
+        self.assertEqual(resp_404.status_code, 404)
+
+    async def test_auth_with_google_sdk_headers(self):
+        """Test authentication via x-goog-api-key and ?key= query parameter."""
+        # Create an app with an API key
+        keyed_app = create_app(account_pool=self.pool, api_key="secret-key-123")
+        transport = httpx.ASGITransport(app=keyed_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            # 1. No key -> 401
+            r = await client.get("/v1beta/models")
+            self.assertEqual(r.status_code, 401)
+
+            # 2. x-goog-api-key header -> 200
+            r = await client.get("/v1beta/models", headers={"x-goog-api-key": "secret-key-123"})
+            self.assertEqual(r.status_code, 200)
+
+            # 3. ?key= query parameter -> 200
+            r = await client.get("/v1beta/models?key=secret-key-123")
+            self.assertEqual(r.status_code, 200)
+
+            # 4. Invalid key -> 401
+            r = await client.get("/v1beta/models?key=wrong-key")
+            self.assertEqual(r.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

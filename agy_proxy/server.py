@@ -463,16 +463,25 @@ def create_app(
             allow_headers=["*"],
         )
 
-    def verify_api_key(authorization: str | None = Header(None), x_api_key: str | None = Header(None)):
+    def verify_api_key(
+        authorization: str | None = None,
+        x_api_key: str | None = None,
+        x_goog_api_key: str | None = None,
+        key: str | None = None,
+    ):
         if not effective_api_key:
             return
         token = None
-        if authorization and authorization.startswith("Bearer "):
+        if isinstance(authorization, str) and authorization.startswith("Bearer "):
             token = authorization[7:].strip()
-        elif authorization:
+        elif isinstance(authorization, str) and authorization:
             token = authorization.strip()
-        elif x_api_key:
+        elif isinstance(x_api_key, str) and x_api_key:
             token = x_api_key.strip()
+        elif isinstance(x_goog_api_key, str) and x_goog_api_key:
+            token = x_goog_api_key.strip()
+        elif isinstance(key, str) and key:
+            token = key.strip()
 
         if token != effective_api_key:
             raise HTTPException(
@@ -1554,12 +1563,7 @@ def create_app(
     # OpenAI Compatible API
     # -------------------------------------------------------------------------
 
-    @app.get("/v1/models")
-    async def list_openai_models(request: Request):
-        verify_api_key(
-            authorization=request.headers.get("Authorization"),
-            x_api_key=request.headers.get("x-api-key"),
-        )
+    async def _get_models_list() -> ModelListResponse:
         models_dict = await pool.get_pool_models() if pool.accounts else {}
         if not models_dict:
             models_dict = {
@@ -1633,6 +1637,16 @@ def create_app(
                     )
 
         return ModelListResponse(data=model_cards)
+
+    @app.get("/v1/models")
+    async def list_openai_models(request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        return await _get_models_list()
 
     @app.get("/api/codex/models.json")
     @app.get("/v1/models/codex.json")
@@ -1991,11 +2005,66 @@ def create_app(
     # Gemini Native API
     # -------------------------------------------------------------------------
 
+    @app.get("/v1beta/models")
+    async def list_gemini_models_v1beta(request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        models_data = await _get_models_list()
+        result = []
+        for card in models_data.data:
+            m_id = card.id
+            if m_id.startswith("anthropic/") or m_id.startswith("anthropic."):
+                continue
+            result.append({
+                "name": f"models/{m_id}",
+                "baseModelId": m_id,
+                "version": "1.0",
+                "displayName": card.display_name or m_id,
+                "description": f"Antigravity pooled model: {m_id}",
+                "inputTokenLimit": card.max_tokens,
+                "outputTokenLimit": min(card.max_tokens, 65536),
+                "supportedGenerationMethods": ["generateContent", "streamGenerateContent", "countTokens"],
+            })
+        return JSONResponse({"models": result})
+
+    @app.get("/v1beta/models/{model_name:path}")
+    async def get_gemini_model_v1beta(model_name: str, request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        clean_name = model_name.replace("models/", "")
+        models_data = await _get_models_list()
+        for card in models_data.data:
+            if card.id == clean_name:
+                return JSONResponse({
+                    "name": f"models/{card.id}",
+                    "baseModelId": card.id,
+                    "version": "1.0",
+                    "displayName": card.display_name or card.id,
+                    "description": f"Antigravity pooled model: {card.id}",
+                    "inputTokenLimit": card.max_tokens,
+                    "outputTokenLimit": min(card.max_tokens, 65536),
+                    "supportedGenerationMethods": ["generateContent", "streamGenerateContent", "countTokens"],
+                })
+        return JSONResponse(
+            status_code=404,
+            content={"error": {"code": 404, "message": f"Model {model_name} not found", "status": "NOT_FOUND"}},
+        )
+
     @app.post("/v1beta/models/{model_name}:streamGenerateContent")
     async def gemini_stream_native(model_name: str, request: Request):
         verify_api_key(
             authorization=request.headers.get("Authorization"),
             x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
         )
         body = await request.json()
         target_account_id = (
@@ -2014,6 +2083,8 @@ def create_app(
         verify_api_key(
             authorization=request.headers.get("Authorization"),
             x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
         )
         body = await request.json()
         target_account_id = (

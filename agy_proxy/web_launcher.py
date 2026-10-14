@@ -614,6 +614,9 @@ def launch_antigravity_web(
         console.print("You can also configure it permanently with: [bold cyan]agy-proxy config set ls-path <PATH>[/bold cyan]")
         return 1
 
+    # Set ANTIGRAVITY_HARNESS_PATH so Python SDK and tools can find the running harness
+    os.environ["ANTIGRAVITY_HARNESS_PATH"] = str(resolved_ls)
+
     # Prepare log path
     effective_log_path = Path(log_path) if log_path else Path.home() / ".config" / "Antigravity" / "logs" / "language_server.log"
     try:
