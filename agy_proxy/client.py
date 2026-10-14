@@ -203,7 +203,7 @@ class CloudCodeClient:
 
         # Coding assistant persona and clean tool instruction without classifier-triggering tags
         guardrail = (
-            "You are an AI coding assistant helping the user in their programming workspace.\n"
+            "You are an AI coding assistant.\n"
             "Output all code, text, and tool calls in direct text format for the local environment."
         )
 
