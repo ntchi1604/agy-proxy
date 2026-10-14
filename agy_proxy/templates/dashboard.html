@@ -103,6 +103,13 @@
           </button>
         </div>
 
+        <!-- Antigravity Web Mode Button -->
+        <a id="antigravityWebNavBtn" href="https://127.0.0.1:44741/" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 transition shadow-sm shrink-0" title="Open Antigravity Web UI (Standalone No-Electron Mode)">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" id="agyWebNavDot"></span>
+          <i class="fa-solid fa-globe text-[11px]"></i>
+          <span class="hidden xl:inline">Antigravity Web</span>
+        </a>
+
         <button onclick="openAddAccountModal()" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm shrink-0" title="Add Account or AI Studio Key">
           <i class="fa-solid fa-user-plus text-[11px]"></i>
           <span class="hidden 2xl:inline">Add Account</span>
@@ -555,6 +562,10 @@
             <i class="fa-solid fa-terminal text-teal-400 group-hover:scale-110 transition text-xs"></i>
             <span class="font-bold text-white">Codex CLI</span>
           </button>
+          <button onclick="copySnippet('agyweb')" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-cyan-500/50 text-xs font-mono transition flex items-center space-x-2 group shadow-sm" title="Copy Antigravity Web Mode launcher command">
+            <i class="fa-solid fa-globe text-cyan-400 group-hover:scale-110 transition text-xs"></i>
+            <span class="font-bold text-white">Antigravity Web</span>
+          </button>
           <button onclick="copySnippet('baseurl')" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80 text-xs font-mono transition flex items-center space-x-2 group shadow-sm" title="Copy API Base URL for Cursor/Cline">
             <i class="fa-solid fa-link text-cyan-400 group-hover:scale-110 transition text-xs"></i>
             <span class="font-bold text-white">Base URL (:8000/v1)</span>
@@ -615,6 +626,51 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4.5 text-xs">
+
+        <!-- 0. Antigravity Web (No-Electron Mode) -->
+        <div class="p-4 rounded-xl bg-slate-900 border border-cyan-500/30 space-y-3 flex flex-col hover:border-cyan-500/60 transition group shadow-md shadow-cyan-950/20">
+          <div class="space-y-1">
+            <div class="font-bold text-slate-200 text-sm flex items-center justify-between">
+              <span class="flex items-center space-x-2">
+                <div class="w-6 h-6 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center text-xs">
+                  <i class="fa-solid fa-globe"></i>
+                </div>
+                <span>Antigravity Web</span>
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold font-mono">-1.6GB RAM</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-snug">Standalone browser-based IDE mode with zero Electron overhead.</p>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-[11px] px-2 py-1.5 rounded-lg bg-slate-950/80 border border-slate-800">
+              <span class="text-slate-400">Live Status:</span>
+              <span id="webModeLiveStatus" class="font-mono text-cyan-300 font-semibold">Checking...</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <a href="https://127.0.0.1:44741/" target="_blank" rel="noopener noreferrer" class="flex-1 py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-center text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span>Open Web UI</span>
+              </a>
+              <button onclick="copySnippet('agyweb', this)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-xs transition border border-slate-700 flex items-center space-x-1">
+                <i class="fa-regular fa-copy"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="relative bg-slate-950 rounded-xl border border-slate-800 p-2.5 flex-1 flex flex-col justify-center">
+            <button onclick="copySnippet('codeAgyWeb', this)" class="absolute top-2 right-2 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-600 text-slate-300 hover:text-white text-[10px] transition flex items-center space-x-1 shadow" title="Copy code">
+              <i class="fa-regular fa-copy"></i>
+              <span>Copy</span>
+            </button>
+            <pre id="codeAgyWeb" class="text-cyan-300 font-mono text-[11px] overflow-x-auto custom-scrollbar pr-12"># Start Web Mode:
+agy-proxy web
+
+# Direct Shell Launcher:
+./start_web.sh</pre>
+          </div>
+        </div>
 
         <!-- 1. Claude Code CLI -->
         <div class="p-4 rounded-xl bg-slate-900 border border-slate-800/90 space-y-3 flex flex-col hover:border-indigo-500/40 transition group">
@@ -1660,6 +1716,9 @@ ightarrow$ v1.0.3</p>
       } else if (param === 'codex') {
         text = `OPENAI_API_KEY="dummy" codex -c 'openai_base_url="http://127.0.0.1:8000/v1"' -m "gemini-3.8-flash-high"`;
         name = 'Codex CLI launcher';
+      } else if (param === 'agyweb') {
+        text = `agy-proxy web`;
+        name = 'Antigravity Web launcher';
       } else if (param === 'baseurl') {
         text = `http://127.0.0.1:8000/v1`;
         name = 'Base URL';
@@ -1687,6 +1746,40 @@ ightarrow$ v1.0.3</p>
       } catch (e) {
         prompt('Copy command manually:', text);
       }
+    }
+
+    // Real-time Antigravity Web Mode Status Checker
+    async function checkAntigravityWebStatus() {
+      try {
+        const res = await fetch('/api/web/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        const dot = document.getElementById('agyWebNavDot');
+        const btn = document.getElementById('antigravityWebNavBtn');
+        const cardStatus = document.getElementById('webModeLiveStatus');
+
+        if (data.status === 'running') {
+          if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0';
+          if (btn) {
+            btn.title = `Antigravity Web is RUNNING on ${data.url} (PID: ${data.pid || 'N/A'}, ~${data.estimated_ram_saved_mb || 1600}MB RAM saved)`;
+            btn.classList.remove('bg-cyan-600/20', 'text-cyan-300', 'border-cyan-500/40');
+            btn.classList.add('bg-emerald-600/20', 'text-emerald-300', 'border-emerald-500/40');
+          }
+          if (cardStatus) {
+            cardStatus.innerHTML = `<span class="text-emerald-400 flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>Online (${data.url})</span></span>`;
+          }
+        } else {
+          if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500 shrink-0';
+          if (btn) {
+            btn.title = `Antigravity Web is stopped. Run 'agy-proxy web' to launch in browser mode.`;
+            btn.classList.remove('bg-emerald-600/20', 'text-emerald-300', 'border-emerald-500/40');
+            btn.classList.add('bg-cyan-600/20', 'text-cyan-300', 'border-cyan-500/40');
+          }
+          if (cardStatus) {
+            cardStatus.innerHTML = `<span class="text-slate-400">Offline (Launch via 'agy-proxy web')</span>`;
+          }
+        }
+      } catch (e) {}
     }
 
     // Promote Account to Primary
@@ -4983,6 +5076,8 @@ ${data.stderr || data.stdout || data.error}`;
     checkForSoftwareUpdates();
     updateCacheStats();
     setInterval(updateCacheStats, 10000);
+    checkAntigravityWebStatus();
+    setInterval(checkAntigravityWebStatus, 15000);
   </script>
 
   <!-- Floating Toast Notifications Container -->

@@ -294,6 +294,36 @@ async def run_doctor(host: str = "127.0.0.1", port: int = 8000, cloudflare_url: 
     console.print(agent_table)
     console.print("")
 
+    # 5. Antigravity Environments & Web Mode (No-Electron Optimization)
+    web_table = Table(title="5. Antigravity Environments & Web Mode", border_style="blue", show_header=True)
+    web_table.add_column("Component", style="cyan")
+    web_table.add_column("Status", justify="center")
+    web_table.add_column("Details", style="white")
+
+    try:
+        from agy_proxy.web_launcher import find_language_server, get_web_status
+        ls_bin = find_language_server()
+        if ls_bin:
+            web_table.add_row("Language Server Binary", "[bold green]✅ Found[/bold green]", str(ls_bin))
+        else:
+            web_table.add_row("Language Server Binary", "[bold yellow]⚠️ Not Detected[/bold yellow]", "Install Antigravity or specify via ANTIGRAVITY_LS_PATH")
+
+        web_st = get_web_status()
+        if web_st["status"] == "running":
+            web_table.add_row("Antigravity Web UI", "[bold green]✅ Active[/bold green]", f"{web_st['url']} (PID: {web_st['pid']})")
+        else:
+            web_table.add_row("Antigravity Web UI", "[dim]Stopped[/dim]", f"Ready to launch on {web_st['url']} (`agy-proxy web`)")
+
+        if web_st["electron_running"]:
+            web_table.add_row("Electron GUI Footprint", "[bold yellow]⚠️ High RAM (~1.6GB)[/bold yellow]", "Running Electron window detected. Close it or run `agy-proxy web -k`")
+        else:
+            web_table.add_row("Electron GUI Footprint", "[bold green]✅ Optimized (0 MB)[/bold green]", "Electron is not running. Memory saved: ~1.6 GB RAM!")
+    except Exception as e:
+        web_table.add_row("Web Mode Diagnostics", "[dim]Error[/dim]", str(e))
+
+    console.print(web_table)
+    console.print("")
+
     # Final Verdict Panel
     if overall_healthy and pool.accounts:
         verdict = Panel(

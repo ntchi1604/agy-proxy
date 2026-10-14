@@ -46,6 +46,9 @@ for ((i=0; i<${#args[@]}; i++)); do
         --no-reconnect)
             AGY_NO_RECONNECT=1
             ;;
+        --web|-w|--antigravity-web)
+            START_WEB=1
+            ;;
     esac
 done
 
@@ -124,6 +127,10 @@ if [ "${AGY_NO_RECONNECT:-0}" != "1" ]; then
         done
 
         if [ "$ready" -eq 1 ]; then
+            if [ "${START_WEB:-0}" -eq 1 ]; then
+                echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;36m🌐 Starting Antigravity Web Mode alongside proxy...\033[0m" >&2
+                "$SCRIPT_DIR/start_web.sh" --detach >/dev/null 2>&1 || true
+            fi
             current_pids=$(get_ls_pids)
             for pid in $current_pids; do
                 if is_direct_or_old_ls "$pid" "$PROXY_PORT"; then

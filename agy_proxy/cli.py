@@ -28,6 +28,15 @@ def print_banner(host: str, port: int, pool: AccountPool, api_key: str = None, u
     table.add_column("Key", no_wrap=True)
     table.add_column("Value")
     table.add_row("[bold cyan]Web Dashboard & Pool UI:[/bold cyan]", f"[bold green]{url}[/bold green]")
+    try:
+        from agy_proxy.web_launcher import get_web_status
+        web_st = get_web_status()
+        if web_st["status"] == "running":
+            table.add_row("[bold cyan]Antigravity Web UI:[/bold cyan]", f"[bold green]{web_st['url']}[/bold green] [dim](No-Electron Mode - Active)[/dim]")
+        else:
+            table.add_row("[bold cyan]Antigravity Web Mode:[/bold cyan]", f"[dim]{web_st['url']} (Launch: agy-proxy web)[/dim]")
+    except Exception:
+        pass
     table.add_row("[bold cyan]Universal API Base (OpenAI/Claude):[/bold cyan]", f"[bold yellow]{url}/v1[/bold yellow]")
     table.add_row("[bold cyan]Gemini Native API Base:[/bold cyan]", f"[bold blue]{url}/v1beta[/bold blue]")
     table.add_row("[bold cyan]Prompt Caching & Session Affinity:[/bold cyan]", "[bold green]Enabled (75% token discount)[/bold green]")
@@ -582,6 +591,11 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser = subparsers.add_parser("update", help="Check and install latest Antigravity Proxy updates")
     update_parser.add_argument("--check", "-c", action="store_true", help="Only check for updates without installing")
 
+    # doctor subcommand (agy-proxy doctor)
+    doctor_parser = subparsers.add_parser("doctor", help="Run comprehensive health and diagnostic checks")
+    doctor_parser.add_argument("--host", type=str, default="127.0.0.1", help="Proxy host to check")
+    doctor_parser.add_argument("--port", "-p", type=int, default=8000, help="Proxy port to check")
+
     # bump subcommand (agy-proxy bump [patch|minor|major|<version>] [--dry-run])
     bump_parser = subparsers.add_parser("bump", help="Bump project version across __init__.py and pyproject.toml")
     bump_parser.add_argument("target", nargs="?", default="patch", help="Increment component (patch, minor, major) or explicit semver (e.g. 1.4.1)")
@@ -691,8 +705,25 @@ def build_parser() -> argparse.ArgumentParser:
     exp_disable_p = exp_subparsers.add_parser("disable", help="Disable an experimental flag")
     exp_disable_p.add_argument("flag", help="Flag name to disable")
     exp_mode_p = exp_subparsers.add_parser("mode", help="Set experiment operating mode")
-    exp_mode_p.add_argument("mode", choices=["curated", "all_safe", "passthrough"], help="Operating mode: curated (default), all_safe, passthrough")
     exp_subparsers.add_parser("reset", help="Reset all overrides back to curated defaults")
+
+    # web subcommand (agy-proxy web / agy-proxy antigravity-web)
+    web_parser = subparsers.add_parser(
+        "web",
+        aliases=["antigravity-web", "web-mode"],
+        help="Launch Google Antigravity in lightweight browser Web Mode (No Electron, saves ~1.6 GB RAM)",
+    )
+    web_parser.add_argument("--port", "-p", type=int, default=44741, help="HTTPS port for Antigravity Web UI (default: 44741)")
+    web_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address to bind Web UI (default: 127.0.0.1)")
+    web_parser.add_argument("--proxy-url", type=str, default="http://127.0.0.1:8000", help="Antigravity Proxy URL (default: http://127.0.0.1:8000)")
+    web_parser.add_argument("--proxy-port", type=int, default=8000, help="Proxy port (default: 8000)")
+    web_parser.add_argument("--no-open", action="store_true", help="Do not automatically open browser on startup")
+    web_parser.add_argument("--browser", "-b", type=str, default=None, help="Custom browser executable to open (e.g. helium, google-chrome, firefox)")
+    web_parser.add_argument("--kill-electron", "-k", action="store_true", help="Automatically terminate running Electron instances without prompt to free RAM")
+    web_parser.add_argument("--ls-path", type=str, default=None, help="Explicit path to language_server binary")
+    web_parser.add_argument("--detach", "-d", action="store_true", help="Run in background daemon mode")
+    web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
+    web_parser.add_argument("--ide-version", type=str, default="2.23.0", help="Reported IDE version (default: 2.23.0)")
 
     # Server arguments
     parser.add_argument(
@@ -822,6 +853,14 @@ def main():
         check_only = getattr(args, "check", False)
         asyncio.run(handle_update_command(check_only=check_only))
         return
+    elif args.subcommand == "doctor":
+        from agy_proxy.doctor import run_doctor
+        healthy = asyncio.run(run_doctor(
+            host=getattr(args, "host", "127.0.0.1"),
+            port=getattr(args, "port", 8000),
+            cloudflare_url=getattr(args, "cloudflare_url", None),
+        ))
+        sys.exit(0 if healthy else 1)
     elif args.subcommand == "switch":
         target_env = "all"
         env_set = False
@@ -911,6 +950,36 @@ def main():
     elif args.subcommand in ("experiments", "exp"):
         handle_experiments_command(args)
         return
+    elif args.subcommand in ("web", "antigravity-web", "web-mode"):
+        from agy_proxy.web_launcher import launch_antigravity_web, get_web_status
+        if getattr(args, "status", False):
+            status = get_web_status(port=getattr(args, "port", 44741))
+            st_color = "bold green" if status["status"] == "running" else "bold red"
+            el_color = "yellow" if status["electron_running"] else "green"
+            console.print(Panel(
+                f"[bold cyan]Web Status:[/bold cyan] [{st_color}]{status['status'].upper()}[/{st_color}]\n"
+                f"[bold cyan]Web URL:[/bold cyan] {status['url']}\n"
+                f"[bold cyan]Server PID:[/bold cyan] {status['pid'] or 'N/A'}\n"
+                f"[bold cyan]Port in use:[/bold cyan] {'Yes' if status['port_in_use'] else 'No'}\n"
+                f"[bold cyan]Electron GUI:[/bold cyan] [{el_color}]{'Running (High RAM)' if status['electron_running'] else 'Not Running (Optimized)'}[/{el_color}]\n"
+                f"[bold cyan]RAM Saved:[/bold cyan] [bold green]~{status['estimated_ram_saved_mb']} MB[/bold green]",
+                title="[bold white]Google Antigravity Web Mode Status[/bold white]",
+                border_style="cyan",
+            ))
+            return
+        code = launch_antigravity_web(
+            port=getattr(args, "port", 44741),
+            host=getattr(args, "host", "127.0.0.1"),
+            proxy_url=getattr(args, "proxy_url", "http://127.0.0.1:8000"),
+            proxy_port=getattr(args, "proxy_port", 8000),
+            no_open=getattr(args, "no_open", False),
+            browser=getattr(args, "browser", None),
+            kill_electron=getattr(args, "kill_electron", False),
+            ls_path=getattr(args, "ls_path", None),
+            detach=getattr(args, "detach", False),
+            ide_version=getattr(args, "ide_version", "2.23.0"),
+        )
+        sys.exit(code)
 
 
     # Apply CLI context auto-compaction and tool pruning overrides

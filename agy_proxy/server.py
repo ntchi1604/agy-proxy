@@ -963,6 +963,38 @@ def create_app(
             "language_server": {"status": "running" if ls_running else "stopped", "pid": ls_pid},
         }
 
+    @app.get("/api/web/status")
+    async def get_antigravity_web_status(port: int = 44741):
+        """Returns the real-time status of Antigravity Web Mode."""
+        try:
+            from agy_proxy.web_launcher import get_web_status
+            return get_web_status(port=port)
+        except Exception as e:
+            return {"status": "error", "error": str(e), "port": port}
+
+    class WebLaunchRequest(BaseModel):
+        port: int = 44741
+        kill_electron: bool = False
+        no_open: bool = False
+        browser: str | None = None
+
+    @app.post("/api/web/launch")
+    async def launch_antigravity_web_endpoint(req: WebLaunchRequest):
+        """Launches Antigravity in browser-based Web Mode (No Electron)."""
+        try:
+            from agy_proxy.web_launcher import launch_antigravity_web
+            code = launch_antigravity_web(
+                port=req.port,
+                kill_electron=req.kill_electron,
+                no_open=req.no_open,
+                browser=req.browser,
+                detach=True,
+            )
+            return {"status": "ok" if code == 0 else "error", "code": code, "url": f"https://127.0.0.1:{req.port}/"}
+        except Exception as e:
+            logger.error("Error launching Antigravity Web: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
+
     @app.post("/api/processes/start")
     async def start_process(req: ProcessActionRequest):
         target = req.target
