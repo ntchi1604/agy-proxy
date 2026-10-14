@@ -266,6 +266,81 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         self.assertIn('The user asked: "що є Pictures/ в цьому каиталогі?".', cont_prompt)
         self.assertIn("Using the tool execution output above", cont_prompt)
 
+    async def test_gemini_web_agent_end_to_end_streaming_tool_call(self):
+        """Verifies that an agent prompt with tools via GeminiWebSession yields synthesized functionCall candidates."""
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+
+        web_acc = GeminiWebSession(
+            account_id="test_web_acc",
+            email="web_tester@example.com",
+            cookies={"__Secure-1PSID": "test_cookie"},
+        )
+        self.pool.accounts.clear()
+        self.pool.accounts["test_web_acc"] = web_acc
+
+        async def fake_stream_generate(prompt, model=None, session_id=None):
+            yield {"type": "thinking", "text": "I should create the requested file."}
+            yield {"type": "text", "text": 'I will create the file for you.\n```json\n{\n  "name": "write_to_file",\n  "arguments": {\n    "TargetFile": "/home/qumhab/demo.py",\n    "CodeContent": "print(\'works\')"\n  }\n}\n```'}
+            yield {"type": "done"}
+
+        web_acc.stream_generate = fake_stream_generate
+
+        declared_tools = [
+            {
+                "functionDeclarations": [
+                    {
+                        "name": "write_to_file",
+                        "description": "Create new file",
+                        "parameters": {
+                            "type": "OBJECT",
+                            "properties": {
+                                "TargetFile": {"type": "STRING"},
+                                "CodeContent": {"type": "STRING"},
+                                "Overwrite": {"type": "BOOLEAN"},
+                                "toolAction": {"type": "STRING"},
+                                "toolSummary": {"type": "STRING"},
+                            },
+                            "required": ["TargetFile", "CodeContent"],
+                        },
+                    }
+                ]
+            }
+        ]
+
+        payload = {
+            "model": "gemini-4-argon",
+            "request": {
+                "contents": [{"role": "user", "parts": [{"text": "Create /home/qumhab/demo.py"}]}],
+                "tools": declared_tools,
+            },
+        }
+
+        results = []
+        async for chunk in self.client._post_sse_stream_with_failover(
+            endpoint="v1internal:streamGenerateContent?alt=sse",
+            payload_builder_fn=lambda proj: payload,
+            model_name="gemini-4-argon",
+        ):
+            results.append(chunk)
+
+        self.assertGreater(len(results), 0)
+        # Verify functionCall candidate was yielded
+        function_calls = []
+        for r in results:
+            candidates = r.get("candidates", [])
+            for c in candidates:
+                for part in c.get("content", {}).get("parts", []):
+                    if "functionCall" in part:
+                        function_calls.append(part["functionCall"])
+
+        self.assertEqual(len(function_calls), 1)
+        fc = function_calls[0]
+        self.assertEqual(fc["name"], "write_to_file")
+        self.assertEqual(fc["args"]["TargetFile"], "/home/qumhab/demo.py")
+        self.assertEqual(fc["args"]["CodeContent"], "print('works')")
+        self.assertTrue(fc["args"]["Overwrite"])
+        self.assertIn("toolAction", fc["args"])
+
 
     async def test_post_sse_stream_429_failover(self):
         # Verify 429 handling does not crash with NameError: name 'os' is not defined
