@@ -724,6 +724,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--detach", "-d", action="store_true", help="Run in background daemon mode")
     web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
+    web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--ide-version", type=str, default="2.23.0", help="Reported IDE version (default: 2.23.0)")
 
     # Server arguments
@@ -980,6 +981,7 @@ def main():
             detach=getattr(args, "detach", False),
             ide_version=getattr(args, "ide_version", "2.23.0"),
             verbose=getattr(args, "verbose", False),
+            direct=getattr(args, "direct", False),
         )
         sys.exit(code)
 

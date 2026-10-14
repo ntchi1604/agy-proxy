@@ -288,12 +288,17 @@ def check_proxy_alive(proxy_url: str = DEFAULT_PROXY_URL, timeout: float = 1.0) 
             return False
 
 
+DEFAULT_GOOGLE_API_URL = "https://generativelanguage.googleapis.com"
+DEFAULT_GOOGLE_CC_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com"
+
+
 def build_web_args(
     ls_path: Path,
     port: int = DEFAULT_WEB_PORT,
     csrf_token: Optional[str] = None,
     proxy_url: Optional[str] = DEFAULT_PROXY_URL,
     ide_version: str = DEFAULT_IDE_VERSION,
+    direct: bool = False,
 ) -> List[str]:
     """Constructs command line arguments for running language_server in standalone Web mode."""
     token = csrf_token or get_csrf_token()
@@ -310,10 +315,15 @@ def build_web_args(
         "--enable_sidecars",
     ]
 
-    # Connect to agy-proxy if configured
-    if proxy_url:
+    # Connect to agy-proxy if active and direct mode is not forced, otherwise fallback to official Google backend
+    if proxy_url and not direct:
         clean_url = proxy_url.rstrip("/")
         args.extend(["--api_server_url", clean_url, "--cloud_code_endpoint", clean_url])
+    else:
+        args.extend([
+            "--api_server_url", DEFAULT_GOOGLE_API_URL,
+            "--cloud_code_endpoint", DEFAULT_GOOGLE_CC_ENDPOINT,
+        ])
 
     return args
 
@@ -376,6 +386,7 @@ def print_web_banner(
     ls_path: Path,
     killed_electron: bool = False,
     log_path: Optional[Path] = None,
+    direct: bool = False,
 ):
     """Renders a beautiful Rich banner for Antigravity Web Mode."""
     table = Table(show_header=False, box=None, padding=(0, 1))
@@ -386,13 +397,15 @@ def print_web_banner(
     table.add_row("[bold cyan]⚡ Performance Mode:[/bold cyan]", "[bold yellow]Standalone Web (No Electron)[/bold yellow]")
     table.add_row("[bold cyan]💾 Memory Optimization:[/bold cyan]", "[bold green]~1.6 GB RAM Saved[/bold green] [dim](Electron GUI skipped)[/dim]")
 
-    if proxy_active and proxy_url:
-        proxy_display = f"[bold green]Active[/bold green] [dim]({proxy_url})[/dim]"
+    if direct:
+        proxy_display = "[bold yellow]Direct Google Mode[/bold yellow] [dim](Proxy Bypassed)[/dim]"
+    elif proxy_active and proxy_url:
+        proxy_display = f"[bold green]Active (Connected)[/bold green] [dim]({proxy_url})[/dim]"
     elif proxy_url:
-        proxy_display = f"[yellow]Offline (Fallback to Direct)[/yellow] [dim]({proxy_url})[/dim]"
+        proxy_display = f"[bold yellow]Direct Google Mode[/bold yellow] [dim](Proxy {proxy_url} offline)[/dim]"
     else:
-        proxy_display = "[dim]Direct Google Mode[/dim]"
-    table.add_row("[bold cyan]🔄 Antigravity Proxy:[/bold cyan]", proxy_display)
+        proxy_display = "[bold yellow]Direct Google Mode[/bold yellow] [dim](Official Backend)[/dim]"
+    table.add_row("[bold cyan]🔄 Antigravity Mode:[/bold cyan]", proxy_display)
 
     table.add_row("[bold cyan]🔑 CSRF Token:[/bold cyan]", f"[dim]{csrf_token}[/dim]")
     table.add_row("[bold cyan]📦 Server Binary:[/bold cyan]", f"[dim]{ls_path}[/dim]")
@@ -432,6 +445,7 @@ def launch_antigravity_web(
     ide_version: str = DEFAULT_IDE_VERSION,
     verbose: bool = False,
     log_path: Optional[str | Path] = None,
+    direct: bool = False,
 ) -> int:
     """
     Main entry point for starting Antigravity in browser Web Mode.
@@ -484,10 +498,14 @@ def launch_antigravity_web(
             return 1
 
     # Check proxy status
-    effective_proxy_url = proxy_url
-    if effective_proxy_url and not effective_proxy_url.startswith("http"):
-        effective_proxy_url = f"http://{effective_proxy_url}"
-    proxy_alive = check_proxy_alive(effective_proxy_url) if effective_proxy_url else False
+    if direct:
+        effective_proxy_url = None
+        proxy_alive = False
+    else:
+        effective_proxy_url = proxy_url
+        if effective_proxy_url and not effective_proxy_url.startswith("http"):
+            effective_proxy_url = f"http://{effective_proxy_url}"
+        proxy_alive = check_proxy_alive(effective_proxy_url) if effective_proxy_url else False
 
     token = get_csrf_token()
     cmd = build_web_args(
@@ -496,6 +514,7 @@ def launch_antigravity_web(
         csrf_token=token,
         proxy_url=effective_proxy_url if proxy_alive else None,
         ide_version=ide_version,
+        direct=direct,
     )
 
     print_web_banner(
@@ -507,6 +526,7 @@ def launch_antigravity_web(
         ls_path=resolved_ls,
         killed_electron=killed_any,
         log_path=effective_log_path if not verbose else None,
+        direct=direct,
     )
 
     # Launch browser after delay only if requested

@@ -9,6 +9,8 @@ from starlette.testclient import TestClient
 from agy_proxy.cli import build_parser
 from agy_proxy.server import create_app
 from agy_proxy.web_launcher import (
+    DEFAULT_GOOGLE_API_URL,
+    DEFAULT_GOOGLE_CC_ENDPOINT,
     DEFAULT_IDE_VERSION,
     DEFAULT_WEB_PORT,
     build_web_args,
@@ -110,8 +112,27 @@ def test_build_web_args_without_proxy(tmp_path):
         proxy_url=None,
     )
     assert "--standalone" in args
-    assert "--api_server_url" not in args
-    assert "--cloud_code_endpoint" not in args
+    assert "--api_server_url" in args
+    assert DEFAULT_GOOGLE_API_URL in args
+    assert "--cloud_code_endpoint" in args
+    assert DEFAULT_GOOGLE_CC_ENDPOINT in args
+
+
+def test_build_web_args_direct_mode(tmp_path):
+    fake_bin = tmp_path / "language_server"
+    args = build_web_args(
+        ls_path=fake_bin,
+        port=44741,
+        csrf_token="my-token",
+        proxy_url="http://127.0.0.1:8000",
+        direct=True,
+    )
+    assert "--standalone" in args
+    assert "--api_server_url" in args
+    assert DEFAULT_GOOGLE_API_URL in args
+    assert "http://127.0.0.1:8000" not in args
+    assert "--cloud_code_endpoint" in args
+    assert DEFAULT_GOOGLE_CC_ENDPOINT in args
 
 
 def test_get_web_status_mock():
@@ -177,6 +198,14 @@ def test_cli_parser_web_subcommand():
     args_default = parser.parse_args(["web"])
     assert args_default.verbose is False
     assert args_default.open is False
+    assert args_default.direct is False
+
+    # Test --direct and --no-proxy
+    args_direct = parser.parse_args(["web", "--direct"])
+    assert args_direct.direct is True
+
+    args_no_proxy = parser.parse_args(["web", "--no-proxy"])
+    assert args_no_proxy.direct is True
 
 
 def test_server_api_web_status():

@@ -32,6 +32,7 @@ PROXY_PORT="${AGY_PROXY_PORT:-8000}"
 PROXY_URL="${AGY_PROXY_URL:-http://127.0.0.1:${PROXY_PORT}}"
 KILL_ELECTRON=0
 AUTO_OPEN=0
+DIRECT_MODE=0
 BROWSER_CMD=""
 
 # Parse bash arguments
@@ -56,6 +57,9 @@ for ((i=0; i<${#args[@]}; i++)); do
         --no-open)
             AUTO_OPEN=0
             ;;
+        --direct|--no-proxy)
+            DIRECT_MODE=1
+            ;;
         --browser|-b)
             if (( i + 1 < ${#args[@]} )); then
                 BROWSER_CMD="${args[i+1]}"
@@ -70,7 +74,8 @@ for ((i=0; i<${#args[@]}; i++)); do
             echo "Options:"
             echo "  -p, --port PORT        HTTPS port for Antigravity Web UI (default: 44741)"
             echo "  -k, --kill-electron    Automatically terminate running Electron instances"
-            echo "      --no-open          Do not automatically open browser on startup"
+            echo "  -o, --open             Automatically open web browser on startup"
+            echo "      --direct           Bypass agy-proxy and connect directly to Google backend"
             echo "  -b, --browser NAME     Specify custom browser executable (e.g. helium, google-chrome)"
             echo "  -v, --verbose, --debug Show raw language_server console output (default: logged to file)"
             echo "  -h, --help             Show this help message"
@@ -146,7 +151,6 @@ if [ "$AUTO_OPEN" -eq 1 ]; then
     ) &
 fi
 
-# Check if agy-proxy is alive
 FINAL_ARGS=(
     "--standalone"
     "--override_ide_name" "antigravity"
@@ -158,6 +162,22 @@ FINAL_ARGS=(
     "--app_data_dir" "antigravity"
     "--enable_sidecars"
 )
+
+# Check if agy-proxy is alive
+DEFAULT_API_URL="https://generativelanguage.googleapis.com"
+DEFAULT_CC_ENDPOINT="https://daily-cloudcode-pa.googleapis.com"
+
+if [ "${DIRECT_MODE:-0}" -ne 1 ] && (curl -sf --max-time 1 "${PROXY_URL}/health" >/dev/null 2>&1 || curl -sf --max-time 1 "${PROXY_URL}/api/info" >/dev/null 2>&1); then
+    FINAL_ARGS+=("--api_server_url" "$PROXY_URL" "--cloud_code_endpoint" "$PROXY_URL")
+    echo -e "🔄 \033[1;32magy-proxy active at ${PROXY_URL}\033[0m -> routing AI traffic through proxy"
+else
+    FINAL_ARGS+=("--api_server_url" "$DEFAULT_API_URL" "--cloud_code_endpoint" "$DEFAULT_CC_ENDPOINT")
+    if [ "${DIRECT_MODE:-0}" -eq 1 ]; then
+        echo -e "🔄 \033[1;33mDirect Google Mode\033[0m -> proxy bypassed explicitly"
+    else
+        echo -e "🔄 \033[1;33mDirect Google Mode\033[0m -> proxy ${PROXY_URL} offline, falling back to official Google backend"
+    fi
+fi
 
 LOG_FILE="${HOME}/.config/Antigravity/logs/language_server.log"
 mkdir -p "$(dirname "$LOG_FILE")"
