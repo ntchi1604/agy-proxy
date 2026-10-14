@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import time
+from pathlib import Path
 from typing import Any
 import httpx
 from rich.console import Console
@@ -304,9 +305,11 @@ async def run_doctor(host: str = "127.0.0.1", port: int = 8000, cloudflare_url: 
         from agy_proxy.web_launcher import find_language_server, get_web_status
         ls_bin = find_language_server()
         if ls_bin:
-            web_table.add_row("Language Server Binary", "[bold green]✅ Found[/bold green]", str(ls_bin))
+            is_patched = Path(str(ls_bin) + ".real").is_file()
+            patch_info = " [dim](Patched -> Proxy)[/dim]" if is_patched else " [dim](Native/Direct)[/dim]"
+            web_table.add_row("Language Server Binary", "[bold green]✅ Found[/bold green]", f"{ls_bin}{patch_info}")
         else:
-            web_table.add_row("Language Server Binary", "[bold yellow]⚠️ Not Detected[/bold yellow]", "Install Antigravity or specify via ANTIGRAVITY_LS_PATH")
+            web_table.add_row("Language Server Binary", "[bold yellow]⚠️ Not Detected[/bold yellow]", "Specify via `agy-proxy config set ls-path <PATH>` or ANTIGRAVITY_LS_PATH")
 
         web_st = get_web_status()
         if web_st["status"] == "running":

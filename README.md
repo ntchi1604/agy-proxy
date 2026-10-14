@@ -217,42 +217,60 @@ Open **`http://localhost:8000`** in your browser to access the Web Dashboard & A
 
 ### 1. 🖥️ Google Antigravity 2.0 & Antigravity IDE (Standalone) Integration
 
-Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh`](patch_language_server.sh), that patches the official **Google Antigravity 2.0** and **Antigravity IDE (Standalone)** internal `language_server` binary. This routes completions, chats, and model queries through `agy-proxy`, granting both applications access to pooled accounts, multi-candidate failover, custom upstream proxies, and Claude model routing.
+Antigravity Proxy includes dedicated cross-platform patchers ([`patch_language_server.sh`](patch_language_server.sh) for Linux/macOS and [`patch_language_server.ps1`](patch_language_server.ps1) for Windows) that patch the official **Google Antigravity 2.0** and **Antigravity IDE (Standalone)** internal `language_server` binary. This routes completions, chats, and model queries through `agy-proxy`, granting all applications access to pooled accounts, multi-candidate failover, custom upstream proxies, and Claude model routing.
 
-#### 🔹 Supported Applications
-- **Google Antigravity 2.0** (v2.19.1+ Desktop Application):
-  - Binary location: `/opt/Antigravity/resources/bin/language_server`
-- **Google Antigravity IDE (Standalone)** (v2.5.5+ Dedicated Editor):
-  - Binary location: `resources/app/extensions/antigravity/bin/language_server_linux_x64` (or macOS `language_server_darwin_*`)
+#### 🔹 Supported Operating Systems & Architectures
+- **Linux**: x86_64, aarch64 / arm64, arm
+- **macOS**: Apple Silicon (M1/M2/M3/M4, `arm64`) & Intel (`x86_64`)
+- **Windows**: Windows 10/11 x64 & ARM64
+
+#### 🔹 Supported Applications & Binary Locations
+- **Google Antigravity 2.0** (Desktop Application / Hub):
+  - Linux: `/opt/Antigravity/resources/bin/language_server` (or `~/.local/share/Antigravity/...`)
+  - macOS: `/Applications/Antigravity.app/Contents/Resources/bin/language_server`
+  - Windows: `%LOCALAPPDATA%\Programs\Antigravity\resources\bin\language_server.exe`
+- **Google Antigravity IDE (Standalone)** (Dedicated VS Code fork):
+  - Linux: `resources/app/extensions/antigravity/bin/language_server_linux_x64` (or `language_server_linux_arm`)
+  - macOS: `Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm` (or `language_server_macos_x64`)
+  - Windows: `resources\app\extensions\antigravity\bin\language_server_windows_x64.exe` (or `language_server_windows_arm.exe`)
 - **Antigravity for IDEs (Extensions)** (VS Code, JetBrains, Visual Studio, Zed, Xcode):
   - Seamlessly supported via CloudCode internal passthrough (`/v1internal:*`) and automated OAuth token sync from `state.vscdb`.
 
+#### 🔹 Persistent Path Configuration
+You can permanently save your custom editor or language server path so you never have to specify `--ls-path` or `-e` again:
+```bash
+# Save explicit binary path:
+agy-proxy config set ls-path /path/to/language_server
+
+# Or save editor installation folder (auto-discovers binary inside):
+agy-proxy config set editor "/opt/Antigravity IDE"
+
+# View current configured paths:
+agy-proxy config list
+
+# Clear custom configured paths:
+agy-proxy config unset ls-path
+```
+
 #### 🔹 How It Works
-1. Automatically detects candidate installation directories for both **Antigravity 2.0** and **Antigravity IDE (Standalone)** on Linux and macOS:
-   - `/opt/Antigravity` (and `/opt/Antigravity/resources/bin`)
-   - `/opt/Antigravity IDE` (and `resources/app/extensions/antigravity/bin`)
-   - `~/.local/share/Antigravity`
-   - `~/.local/share/Antigravity IDE`
-   - `/Applications/Antigravity.app`
-   - `/Applications/Antigravity IDE.app`
-   - Custom editor or binary paths via `-e, --editor <PATH>`, `-f, --file <PATH>`, `--dir <PATH>`, or positional argument
-2. **Smart Editor Discovery**: when you specify an editor root folder (e.g. `/opt/Antigravity`, `/opt/Antigravity IDE`, or `~/Downloads/Antigravity IDE`), the script automatically searches through known subpaths and directory hierarchy to find the exact `language_server` binary.
-3. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_linux_x64.real`).
-4. Installs a non-destructive wrapper script with **Auto-Fallback & Live Auto-Switching**:
+1. **Smart Cross-Platform Discovery**: Automatically searches known candidate paths across Linux, macOS, and Windows. If you specify an editor directory (e.g. `/opt/Antigravity`, `/Applications/Antigravity IDE.app`, `C:\Program Files\Antigravity`, or `~/Downloads/...`), it automatically inspects known subpaths and directory hierarchy to locate the exact binary.
+2. **Interactive Auto-Config**: If the binary is in a non-standard location and running in a terminal, the tool prompts you for the path and saves it permanently to `~/.config/agy-proxy/config.json`.
+3. Safely backs up the original binary to `*.real` (`language_server.real` or `language_server_windows_x64.exe.real`).
+4. Installs a non-destructive wrapper ([bash](patch_language_server.sh) on Linux/macOS, [native C# compiled executable](patch_language_server.ps1) on Windows) with **Auto-Fallback & Live Auto-Switching**:
    - **Proxy Mode**: When `agy-proxy` is running, intercepts and routes completions/chats through the proxy.
    - **Direct Mode (Google Backend)**: When `agy-proxy` is stopped or offline, automatically routes directly to native Google endpoints (`https://generativelanguage.googleapis.com` & `https://daily-cloudcode-pa.googleapis.com`) without breaking, stalling, or disconnecting the editor.
    - **Live Auto-Switching Watchdog**: A lightweight background watchdog monitors proxy connectivity in real time. If the proxy disconnects or stops while you are working, the wrapper automatically signals the language server to switch into direct mode; when the proxy comes back online, it automatically switches back into proxy mode.
-5. **Dynamic Reconnect**: When you start or stop the proxy (`./start_proxy.sh`), running language server instances seamlessly latch on or fall back without window reloads or lost tabs.
+5. **Dynamic Reconnect**: When you start or stop the proxy (`./start_proxy.sh` or `start_proxy.bat`), running language server instances seamlessly latch on or fall back without window reloads or lost tabs.
 6. When you execute `restart`, it terminates the active process so the editor automatically respawns it using the wrapper.
 
-#### 🔹 Quick Usage
+#### 🔹 Quick Usage (Linux & macOS)
 ```bash
 # Check current patching and process status (auto-detects Antigravity 2.0 or Antigravity IDE):
 ./patch_language_server.sh status
 
 # Check status by pointing to an editor installation directory (auto-searches for binary):
 ./patch_language_server.sh status -e /opt/Antigravity
-./patch_language_server.sh status -e "/opt/Antigravity IDE"
+./patch_language_server.sh status -e "/Applications/Antigravity IDE.app"
 ./patch_language_server.sh status "~/Downloads/Antigravity IDE"
 
 # Patch automatically (using default port 8000 with live auto-switching enabled):
@@ -260,19 +278,25 @@ Antigravity Proxy includes a dedicated helper script, [`patch_language_server.sh
 
 # Patch by editor directory or specific binary:
 ./patch_language_server.sh patch -e "/opt/Antigravity IDE"
-./patch_language_server.sh patch "/opt/Antigravity"
+./patch_language_server.sh patch "/Applications/Antigravity.app"
 ./patch_language_server.sh patch -f "/path/to/.../bin/language_server_linux_x64"
-
-# Patch with custom port or URL:
-./patch_language_server.sh patch --port 8080
-./patch_language_server.sh patch --url "http://127.0.0.1:8000"
-
-# Restart language_server so editor respawns it with proxy wrapper:
-./patch_language_server.sh restart
 
 # Restore original unmodified binary (clean unpatch):
 ./patch_language_server.sh restore
 ./patch_language_server.sh restore -e "/opt/Antigravity IDE"
+```
+
+#### 🔹 Quick Usage (Windows PowerShell & CMD)
+```powershell
+# In PowerShell:
+.\patch_language_server.ps1 status
+.\patch_language_server.ps1 patch -Editor "$env:LOCALAPPDATA\Programs\Antigravity IDE"
+.\patch_language_server.ps1 restore
+
+# Or in Command Prompt:
+patch_language_server.cmd status
+patch_language_server.cmd patch
+patch_language_server.cmd restore
 ```
 
 #### 🔹 Command & Flag Reference

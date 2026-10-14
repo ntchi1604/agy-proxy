@@ -573,6 +573,73 @@ def handle_experiments_command(args):
         console.print("[bold green]✓ Successfully reset all experimental flag overrides back to curated defaults.[/bold green]")
 
 
+def handle_config_command(args: argparse.Namespace) -> None:
+    """Handles 'agy-proxy config' CLI commands (get, set, list, unset)."""
+    from agy_proxy.config import (
+        CONFIG_FILE,
+        delete_config_value,
+        get_config_value,
+        load_config,
+        save_config,
+        set_config_value,
+        set_configured_editor_path,
+        set_configured_ls_path,
+    )
+
+    action = getattr(args, "config_action", None)
+    if not action or action in ("list", "show"):
+        cfg = load_config()
+        if not cfg:
+            console.print("[dim]No persistent custom configuration set yet.[/dim]")
+            console.print(f"[dim]Configuration file location: {CONFIG_FILE}[/dim]\n")
+            console.print("To configure language server or editor path permanently:")
+            console.print("  [cyan]agy-proxy config set ls-path /path/to/language_server[/cyan]")
+            console.print("  [cyan]agy-proxy config set editor /path/to/editor_directory[/cyan]")
+            return
+
+        table = Table(title="Antigravity Proxy Configuration", border_style="cyan")
+        table.add_column("Setting Key", style="bold cyan")
+        table.add_column("Configured Value", style="white")
+        for k, v in sorted(cfg.items()):
+            table.add_row(str(k), str(v))
+        console.print(table)
+        console.print(f"[dim]Stored at: {CONFIG_FILE}[/dim]")
+
+    elif action == "set":
+        k = getattr(args, "key", "")
+        v = getattr(args, "value", "")
+        if k in ("ls-path", "ls_path", "language_server_path"):
+            set_configured_ls_path(v)
+            console.print(f"[bold green]✓ language_server_path saved:[/bold green] [cyan]{v}[/cyan]")
+        elif k in ("editor", "editor_path", "editor-path"):
+            set_configured_editor_path(v)
+            console.print(f"[bold green]✓ editor_path saved:[/bold green] [cyan]{v}[/cyan]")
+        else:
+            set_config_value(k, v)
+            console.print(f"[bold green]✓ '{k}' saved:[/bold green] [cyan]{v}[/cyan]")
+
+    elif action == "get":
+        k = getattr(args, "key", "")
+        norm_k = "language_server_path" if k in ("ls-path", "ls_path") else ("editor_path" if k in ("editor", "editor-path") else k)
+        val = get_config_value(norm_k)
+        if val is not None:
+            console.print(str(val))
+        else:
+            console.print(f"[yellow]Setting '{k}' is not configured.[/yellow]")
+
+    elif action in ("unset", "reset", "delete"):
+        k = getattr(args, "key", None)
+        if k:
+            norm_k = "language_server_path" if k in ("ls-path", "ls_path") else ("editor_path" if k in ("editor", "editor-path") else k)
+            if delete_config_value(norm_k):
+                console.print(f"[bold green]✓ Removed setting '{k}'.[/bold green]")
+            else:
+                console.print(f"[yellow]Setting '{k}' was not found in configuration.[/yellow]")
+        else:
+            save_config({})
+            console.print("[bold green]✓ All custom configuration settings have been reset.[/bold green]")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the argument parser for agy-proxy CLI."""
     parser = argparse.ArgumentParser(
@@ -721,11 +788,28 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--browser", "-b", type=str, default=None, help="Custom browser executable to open (e.g. helium, google-chrome, firefox)")
     web_parser.add_argument("--kill-electron", "-k", action="store_true", help="Automatically terminate running Electron instances without prompt to free RAM")
     web_parser.add_argument("--ls-path", type=str, default=None, help="Explicit path to language_server binary")
+    web_parser.add_argument("--editor", "-e", type=str, default=None, help="Path to Antigravity editor root directory (e.g. /opt/Antigravity, /opt/Antigravity IDE, /Applications/Antigravity.app)")
     web_parser.add_argument("--detach", "-d", action="store_true", help="Run in background daemon mode")
     web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
     web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--ide-version", type=str, default="2.23.0", help="Reported IDE version (default: 2.23.0)")
+
+    # config subcommand (agy-proxy config [get|set|list|reset])
+    config_parser = subparsers.add_parser("config", help="Manage persistent user configuration (e.g. language_server and editor paths)")
+    config_sub = config_parser.add_subparsers(dest="config_action", help="Config action")
+
+    cfg_set = config_sub.add_parser("set", help="Set a configuration value")
+    cfg_set.add_argument("key", help="Configuration key to set (e.g. ls-path, editor)")
+    cfg_set.add_argument("value", help="Value to assign")
+
+    cfg_get = config_sub.add_parser("get", help="Get a configuration value")
+    cfg_get.add_argument("key", help="Configuration key to retrieve (e.g. ls-path, editor)")
+
+    cfg_list = config_sub.add_parser("list", aliases=["show"], help="List all current configuration values")
+
+    cfg_unset = config_sub.add_parser("unset", aliases=["reset", "delete"], help="Unset a configuration key")
+    cfg_unset.add_argument("key", nargs="?", default=None, help="Configuration key to remove (or omit to reset all)")
 
     # Server arguments
     parser.add_argument(
@@ -952,6 +1036,9 @@ def main():
     elif args.subcommand in ("experiments", "exp"):
         handle_experiments_command(args)
         return
+    elif args.subcommand == "config":
+        handle_config_command(args)
+        return
     elif args.subcommand in ("web", "antigravity-web", "web-mode"):
         from agy_proxy.web_launcher import launch_antigravity_web, get_web_status
         if getattr(args, "status", False):
@@ -978,6 +1065,7 @@ def main():
             browser=getattr(args, "browser", None),
             kill_electron=getattr(args, "kill_electron", False),
             ls_path=getattr(args, "ls_path", None),
+            editor_path=getattr(args, "editor", None),
             detach=getattr(args, "detach", False),
             ide_version=getattr(args, "ide_version", "2.23.0"),
             verbose=getattr(args, "verbose", False),

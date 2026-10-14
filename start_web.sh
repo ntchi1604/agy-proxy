@@ -34,6 +34,8 @@ KILL_ELECTRON=0
 AUTO_OPEN=0
 DIRECT_MODE=0
 BROWSER_CMD=""
+CUSTOM_BIN="${ANTIGRAVITY_LS_PATH:-${ANTIGRAVITY_FILE:-}}"
+EDITOR_DIR="${ANTIGRAVITY_EDITOR_PATH:-${ANTIGRAVITY_EDITOR_DIR:-}}"
 
 # Parse bash arguments
 args=("$@")
@@ -43,10 +45,29 @@ for ((i=0; i<${#args[@]}; i++)); do
         --port|-p)
             if (( i + 1 < ${#args[@]} )); then
                 PORT="${args[i+1]}"
+                i=$((i+1))
             fi
             ;;
         --port=*)
             PORT="${arg#*=}"
+            ;;
+        --editor|-e)
+            if (( i + 1 < ${#args[@]} )); then
+                EDITOR_DIR="${args[i+1]}"
+                i=$((i+1))
+            fi
+            ;;
+        --editor=*)
+            EDITOR_DIR="${arg#*=}"
+            ;;
+        --ls-path|-f|--file)
+            if (( i + 1 < ${#args[@]} )); then
+                CUSTOM_BIN="${args[i+1]}"
+                i=$((i+1))
+            fi
+            ;;
+        --ls-path=*)
+            CUSTOM_BIN="${arg#*=}"
             ;;
         --kill-electron|-k)
             KILL_ELECTRON=1
@@ -63,6 +84,7 @@ for ((i=0; i<${#args[@]}; i++)); do
         --browser|-b)
             if (( i + 1 < ${#args[@]} )); then
                 BROWSER_CMD="${args[i+1]}"
+                i=$((i+1))
             fi
             ;;
         --debug|--verbose|-v)
@@ -73,6 +95,8 @@ for ((i=0; i<${#args[@]}; i++)); do
             echo ""
             echo "Options:"
             echo "  -p, --port PORT        HTTPS port for Antigravity Web UI (default: 44741)"
+            echo "  -e, --editor PATH      Path to Antigravity editor root directory (e.g. /opt/Antigravity, /opt/Antigravity IDE)"
+            echo "  -f, --ls-path PATH     Direct path to language_server binary or directory"
             echo "  -k, --kill-electron    Automatically terminate running Electron instances"
             echo "  -o, --open             Automatically open web browser on startup"
             echo "      --direct           Bypass agy-proxy and connect directly to Google backend"
@@ -84,28 +108,168 @@ for ((i=0; i<${#args[@]}; i++)); do
     esac
 done
 
-# Detect binary
-CANDIDATE_BINS=(
-    "/opt/Antigravity/resources/bin/language_server"
-    "/opt/Antigravity/resources/bin/language_server.real"
-    "/opt/antigravity/resources/bin/language_server"
-    "${HOME}/.local/share/Antigravity/resources/bin/language_server"
-    "/usr/lib/antigravity/resources/bin/language_server"
-    "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server"
-    "/Applications/Antigravity.app/Contents/Resources/bin/language_server"
-)
-
 BIN=""
-for cand in "${CANDIDATE_BINS[@]}"; do
-    if [ -f "$cand" ]; then
-        BIN="$cand"
-        break
+
+# Helper to find binary in an editor directory
+find_in_editor_dir() {
+    local ed="$1"
+    [[ ! -d "$ed" ]] && return 1
+    local subpaths=(
+        "resources/bin"
+        "resources/app/extensions/antigravity/bin"
+        "Contents/Resources/bin"
+        "Contents/Resources/app/resources/bin"
+        "Contents/Resources/app/extensions/antigravity/bin"
+        "Antigravity IDE/resources/app/extensions/antigravity/bin"
+        "Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
+        "Antigravity.app/Contents/Resources/bin"
+        "bin"
+        "."
+    )
+    local bnames=(
+        "language_server"
+        "language_server_linux_x64"
+        "language_server_linux_arm"
+        "language_server_linux_arm64"
+        "language_server_macos_arm"
+        "language_server_macos_x64"
+        "language_server_darwin_arm64"
+        "language_server_darwin_x64"
+        "language_server_windows_x64.exe"
+        "language_server.exe"
+    )
+    for sub in "${subpaths[@]}"; do
+        local dir="${ed}/${sub}"
+        if [[ -d "$dir" ]]; then
+            for bn in "${bnames[@]}"; do
+                if [[ -f "${dir}/${bn}" ]]; then
+                    BIN="${dir}/${bn}"
+                    return 0
+                elif [[ -f "${dir}/${bn}.real" ]]; then
+                    BIN="${dir}/${bn}.real"
+                    return 0
+                fi
+            done
+        fi
+    done
+
+    # Recursive fallback up to depth 6
+    local found
+    found=$(find "$ed" -maxdepth 6 -type f \( -name "language_server*" \) ! -name "*.log" ! -name "*.txt" ! -name "*.md" ! -name "*.py" ! -name "*.sh" ! -name "*.json" 2>/dev/null | head -n 1)
+    if [[ -n "$found" && -f "$found" ]]; then
+        BIN="$found"
+        return 0
     fi
-done
+    return 1
+}
+
+# 1. Check explicit custom binary or editor dir
+if [[ -n "$CUSTOM_BIN" ]]; then
+    if [[ -f "$CUSTOM_BIN" ]]; then
+        BIN="$CUSTOM_BIN"
+    elif [[ -d "$CUSTOM_BIN" ]]; then
+        find_in_editor_dir "$CUSTOM_BIN"
+    fi
+fi
+
+# 2. Check explicit editor dir
+if [[ -z "$BIN" && -n "$EDITOR_DIR" ]]; then
+    find_in_editor_dir "$EDITOR_DIR"
+fi
+
+# 3. Check saved configuration file (~/.config/agy-proxy/config.json)
+CONFIG_FILE="${HOME}/.config/agy-proxy/config.json"
+if [[ -z "$BIN" && -f "$CONFIG_FILE" ]]; then
+    cfg_ls=$(grep -o '"language_server_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"language_server_path"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+    if [[ -n "$cfg_ls" && -f "$cfg_ls" ]]; then
+        BIN="$cfg_ls"
+    fi
+    if [[ -z "$BIN" ]]; then
+        cfg_ed=$(grep -o '"editor_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"editor_path"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+        if [[ -n "$cfg_ed" && -d "$cfg_ed" ]]; then
+            find_in_editor_dir "$cfg_ed"
+        fi
+    fi
+fi
+
+# 4. Detect from candidate system locations
+if [[ -z "$BIN" ]]; then
+    CANDIDATE_BINS=(
+        # Linux Desktop App
+        "/opt/Antigravity/resources/bin/language_server"
+        "/opt/Antigravity/resources/bin/language_server.real"
+        "/opt/antigravity/resources/bin/language_server"
+        "${HOME}/.local/share/Antigravity/resources/bin/language_server"
+        "${HOME}/.local/share/antigravity/resources/bin/language_server"
+        "/usr/lib/antigravity/resources/bin/language_server"
+        "${HOME}/Downloads/Antigravity app/Antigravity-x64/resources/bin/language_server"
+        "${HOME}/Downloads/Antigravity app/Antigravity-arm64/resources/bin/language_server"
+        # Linux Dedicated IDE
+        "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_x64"
+        "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_arm"
+        "/opt/antigravity-ide/resources/app/extensions/antigravity/bin/language_server_linux_x64"
+        "${HOME}/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_x64"
+        "${HOME}/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_arm"
+        "${HOME}/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_arm"
+        "${HOME}/Downloads/Antigravity IDE/resources/app/extensions/antigravity/bin/language_server_linux_x64"
+        # macOS App & IDE
+        "/Applications/Antigravity.app/Contents/Resources/bin/language_server"
+        "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm"
+        "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_x64"
+        "${HOME}/Applications/Antigravity.app/Contents/Resources/bin/language_server"
+        "${HOME}/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm"
+        "${HOME}/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_x64"
+    )
+
+    for cand in "${CANDIDATE_BINS[@]}"; do
+        if [ -f "$cand" ]; then
+            BIN="$cand"
+            break
+        fi
+    done
+fi
+
+# 5. PATH fallback
+if [[ -z "$BIN" ]]; then
+    for bn in "language_server" "language_server.exe"; do
+        which_path=$(command -v "$bn" 2>/dev/null || true)
+        if [[ -n "$which_path" && -f "$which_path" ]]; then
+            BIN="$which_path"
+            break
+        fi
+    done
+fi
+
+# 6. Interactive fallback if running in a terminal
+if [[ -z "$BIN" && -t 0 ]]; then
+    echo -e "\033[1;33m⚠️  Could not auto-detect Antigravity language_server path.\033[0m"
+    echo "Antigravity may be installed in a custom location."
+    read -r -e -p "Enter path to Antigravity directory or language_server binary: " user_path
+    if [[ -n "$user_path" ]]; then
+        user_path="${user_path/#\~/$HOME}"
+        user_path="${user_path%\"}"
+        user_path="${user_path#\"}"
+        user_path="${user_path%\'}"
+        user_path="${user_path#\'}"
+        if [[ -f "$user_path" ]]; then
+            BIN="$user_path"
+        elif [[ -d "$user_path" ]]; then
+            find_in_editor_dir "$user_path"
+        fi
+        if [[ -n "$BIN" ]]; then
+            mkdir -p "$(dirname "$CONFIG_FILE")"
+            if command -v python3 >/dev/null 2>&1; then
+                python3 -c "import json, os; p='$CONFIG_FILE'; d=json.load(open(p)) if os.path.exists(p) else {}; d['language_server_path']='$BIN'; json.dump(d, open(p,'w'), indent=2)" 2>/dev/null || true
+            fi
+            echo -e "\033[1;32m✓ Saved language server binary to configuration:\033[0m $BIN"
+        fi
+    fi
+fi
 
 if [ -z "$BIN" ]; then
     echo -e "\033[0;31m❌ Error: Could not locate Antigravity language_server binary.\033[0m"
-    echo "Please set ANTIGRAVITY_LS_PATH or install Antigravity."
+    echo "Please set ANTIGRAVITY_LS_PATH, specify via '-e /path/to/editor', or run:"
+    echo "  agy-proxy config set ls-path /path/to/language_server"
     exit 1
 fi
 

@@ -24,6 +24,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from agy_proxy.config import (
+    get_configured_editor_path,
+    get_configured_ls_path,
+    set_configured_editor_path,
+    set_configured_ls_path,
+)
+
 logger = logging.getLogger("agy_proxy.web_launcher")
 console = Console()
 
@@ -33,105 +40,253 @@ DEFAULT_PROXY_URL = f"http://127.0.0.1:{DEFAULT_PROXY_PORT}"
 DEFAULT_IDE_VERSION = "2.23.0"
 
 KNOWN_CANDIDATE_DIRS = [
-    # Linux (Debian/Ubuntu, Arch, Fedora, etc.)
+    # Linux (Desktop App & Hub)
     "/opt/Antigravity/resources/bin",
     "/opt/Antigravity",
     "/opt/antigravity/resources/bin",
     "/opt/antigravity",
     os.path.expanduser("~/.local/share/Antigravity/resources/bin"),
     os.path.expanduser("~/.local/share/Antigravity"),
+    os.path.expanduser("~/.local/share/antigravity/resources/bin"),
+    os.path.expanduser("~/.local/share/antigravity"),
     "/usr/lib/antigravity/resources/bin",
     "/usr/lib/antigravity",
+    "/usr/share/antigravity",
+    # Linux (Dedicated Antigravity IDE)
     "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin",
+    "/opt/Antigravity IDE",
     "/opt/antigravity-ide/resources/app/extensions/antigravity/bin",
+    "/opt/antigravity-ide",
     os.path.expanduser("~/.local/share/Antigravity IDE/resources/app/extensions/antigravity/bin"),
-    # macOS
+    os.path.expanduser("~/.local/share/Antigravity IDE"),
+    os.path.expanduser("~/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin"),
+    os.path.expanduser("~/Downloads/Antigravity IDE/Antigravity IDE"),
+    os.path.expanduser("~/Downloads/Antigravity IDE"),
+    os.path.expanduser("~/Downloads/Antigravity app"),
+    # macOS (Desktop App & Hub)
     "/Applications/Antigravity.app/Contents/Resources/bin",
     "/Applications/Antigravity.app/Contents/Resources/app/resources/bin",
     "/Applications/Antigravity.app",
+    os.path.expanduser("~/Applications/Antigravity.app/Contents/Resources/bin"),
+    os.path.expanduser("~/Applications/Antigravity.app"),
+    # macOS (Dedicated Antigravity IDE)
     "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin",
     "/Applications/Antigravity IDE.app",
-    # Windows
+    os.path.expanduser("~/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"),
+    os.path.expanduser("~/Applications/Antigravity IDE.app"),
+    # Windows (Desktop App & Hub)
     os.path.expandvars(r"%LOCALAPPDATA%\Programs\Antigravity\resources\bin"),
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Antigravity"),
     os.path.expandvars(r"%LOCALAPPDATA%\Antigravity\resources\bin"),
+    os.path.expandvars(r"%LOCALAPPDATA%\Antigravity"),
+    os.path.expandvars(r"%APPDATA%\Antigravity\resources\bin"),
+    os.path.expandvars(r"%APPDATA%\Antigravity"),
     os.path.expandvars(r"%PROGRAMFILES%\Antigravity\resources\bin"),
+    os.path.expandvars(r"%PROGRAMFILES%\Antigravity"),
     os.path.expandvars(r"%PROGRAMFILES(X86)%\Antigravity\resources\bin"),
+    os.path.expandvars(r"%PROGRAMFILES(X86)%\Antigravity"),
+    # Windows (Dedicated Antigravity IDE)
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Antigravity IDE\resources\app\extensions\antigravity\bin"),
+    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Antigravity IDE"),
+    os.path.expandvars(r"%LOCALAPPDATA%\Antigravity IDE\resources\app\extensions\antigravity\bin"),
+    os.path.expandvars(r"%LOCALAPPDATA%\Antigravity IDE"),
+    os.path.expandvars(r"%PROGRAMFILES%\Antigravity IDE\resources\app\extensions\antigravity\bin"),
+    os.path.expandvars(r"%PROGRAMFILES%\Antigravity IDE"),
+    os.path.expandvars(r"%PROGRAMFILES(X86)%\Antigravity IDE\resources\app\extensions\antigravity\bin"),
+    os.path.expandvars(r"%PROGRAMFILES(X86)%\Antigravity IDE"),
 ]
 
 KNOWN_BIN_NAMES = [
+    # Universal / Desktop App (Linux & macOS)
     "language_server",
+    # Windows Desktop App
+    "language_server.exe",
+    # Linux Dedicated IDE (x64, arm / arm64)
     "language_server_linux_x64",
+    "language_server_linux_arm",
     "language_server_linux_arm64",
+    # macOS Dedicated IDE (Apple Silicon & Intel)
+    "language_server_macos_arm",
+    "language_server_macos_x64",
     "language_server_darwin_arm64",
     "language_server_darwin_x64",
+    # Windows Dedicated IDE (x64 & arm)
     "language_server_windows_x64.exe",
-    "language_server.exe",
+    "language_server_windows_arm.exe",
+]
+
+KNOWN_SUBPATHS = [
+    "resources/bin",
+    "resources/app/extensions/antigravity/bin",
+    "Contents/Resources/bin",
+    "Contents/Resources/app/resources/bin",
+    "Contents/Resources/app/extensions/antigravity/bin",
+    "Antigravity IDE/resources/app/extensions/antigravity/bin",
+    "Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin",
+    "Antigravity.app/Contents/Resources/bin",
+    "bin",
 ]
 
 
-def find_language_server(custom_path: Optional[str | Path] = None) -> Optional[Path]:
+def is_binary_executable(candidate: Path) -> bool:
+    """Verifies that candidate path is a valid existing executable file."""
+    if not candidate.is_file():
+        return False
+    if sys.platform == "win32":
+        return candidate.suffix.lower() in (".exe", ".cmd", ".bat") or os.access(candidate, os.X_OK)
+    return os.access(candidate, os.X_OK) or candidate.name.startswith("language_server")
+
+
+def search_dir_for_language_server(directory: Path) -> Optional[Path]:
     """
-    Locates the Antigravity language_server binary on the system.
-    Searches explicit paths, environment variables, known OS installation paths, and PATH.
+    Searches an installation or editor directory for language_server binary.
+    Checks direct filenames, known subpaths, and performs a bounded recursive search.
+    """
+    if not directory.is_dir():
+        return None
+
+    # 1. Direct match in directory
+    for bname in KNOWN_BIN_NAMES:
+        candidate = directory / bname
+        if is_binary_executable(candidate):
+            return candidate
+        real = directory / f"{bname}.real"
+        if is_binary_executable(real):
+            return real
+
+    # 2. Known subpaths within directory
+    for sub in KNOWN_SUBPATHS:
+        cand_sub = directory / sub
+        if cand_sub.is_dir():
+            for bname in KNOWN_BIN_NAMES:
+                candidate = cand_sub / bname
+                if is_binary_executable(candidate):
+                    return candidate
+                real = cand_sub / f"{bname}.real"
+                if is_binary_executable(real):
+                    return real
+
+    # 3. Recursive search up to depth 6
+    try:
+        dir_depth = len(directory.resolve().parts)
+        for root, dirs, files in os.walk(directory):
+            cur_depth = len(Path(root).parts) - dir_depth
+            if cur_depth > 6:
+                dirs.clear()
+                continue
+            for f in files:
+                fname = f[:-5] if f.endswith(".real") else f
+                if fname in KNOWN_BIN_NAMES or (fname.startswith("language_server") and not fname.endswith((".log", ".txt", ".md", ".py", ".sh", ".json", ".yml", ".png"))):
+                    candidate = Path(root) / f
+                    if is_binary_executable(candidate):
+                        return candidate
+    except Exception as e:
+        logger.debug(f"Error during recursive search in {directory}: {e}")
+
+    return None
+
+
+def find_language_server(
+    custom_path: Optional[str | Path] = None,
+    interactive: bool = False,
+    persist: bool = True,
+) -> Optional[Path]:
+    """
+    Locates the Antigravity language_server binary across platforms (Linux, macOS, Windows).
+    Search hierarchy:
+      1. Custom path (CLI argument / function param), file or directory
+      2. Environment variables (ANTIGRAVITY_LS_PATH, ANTIGRAVITY_EDITOR_PATH, etc.)
+      3. Persistent user config (~/.config/agy-proxy/config.json)
+      4. Standard installation directories for the current OS
+      5. PATH search
+      6. Interactive prompt fallback (if interactive=True and running in TTY)
     """
     # 1. Custom path if explicitly provided
     if custom_path:
-        p = Path(custom_path).resolve()
+        p = Path(custom_path).expanduser().resolve()
         if p.is_file():
+            if persist:
+                try:
+                    set_configured_ls_path(str(p))
+                except Exception:
+                    pass
             return p
         if p.is_dir():
-            for bname in KNOWN_BIN_NAMES:
-                candidate = p / bname
-                if candidate.is_file():
-                    return candidate
-            for sub in ("resources/bin", "resources/app/extensions/antigravity/bin"):
-                cand_sub = p / sub
-                if cand_sub.is_dir():
-                    for bname in KNOWN_BIN_NAMES:
-                        candidate = cand_sub / bname
-                        if candidate.is_file():
-                            return candidate
+            found = search_dir_for_language_server(p)
+            if found:
+                if persist:
+                    try:
+                        set_configured_editor_path(str(p))
+                        set_configured_ls_path(str(found))
+                    except Exception:
+                        pass
+                return found
 
-    # 2. Environment variable
-    env_path = os.environ.get("ANTIGRAVITY_LS_PATH") or os.environ.get("ANTIGRAVITY_FILE")
-    if env_path:
-        p = Path(env_path).resolve()
-        if p.is_file():
-            return p
-        if p.is_dir():
-            for bname in KNOWN_BIN_NAMES:
-                candidate = p / bname
-                if candidate.is_file():
-                    return candidate
+    # 2. Environment variables
+    for env_var in ("ANTIGRAVITY_LS_PATH", "ANTIGRAVITY_EDITOR_PATH", "ANTIGRAVITY_FILE", "ANTIGRAVITY_BIN_DIR", "ANTIGRAVITY_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val:
+            p = Path(env_val).expanduser().resolve()
+            if p.is_file():
+                return p
+            if p.is_dir():
+                found = search_dir_for_language_server(p)
+                if found:
+                    return found
 
-    # 3. Known directory locations
+    # 3. Persistent user configuration
+    try:
+        cfg_ls = get_configured_ls_path()
+        if cfg_ls and Path(cfg_ls).is_file():
+            return Path(cfg_ls).resolve()
+        cfg_ed = get_configured_editor_path()
+        if cfg_ed and Path(cfg_ed).is_dir():
+            found = search_dir_for_language_server(Path(cfg_ed))
+            if found:
+                return found
+    except Exception:
+        pass
+
+    # 4. Known directory locations
     for d_str in KNOWN_CANDIDATE_DIRS:
         if not d_str or "%" in d_str:
             continue
-        d = Path(d_str).resolve()
-        if not d.exists():
+        try:
+            d = Path(d_str).expanduser().resolve()
+            if not d.exists():
+                continue
+            if d.is_file() and d.name.startswith("language_server"):
+                return d
+            if d.is_dir():
+                found = search_dir_for_language_server(d)
+                if found:
+                    return found
+        except Exception:
             continue
-        if d.is_file() and d.name.startswith("language_server"):
-            return d
-        if d.is_dir():
-            # Check directly in dir
-            for bname in KNOWN_BIN_NAMES:
-                candidate = d / bname
-                if candidate.is_file() and os.access(candidate, os.X_OK):
-                    return candidate
-            # Check subpaths
-            for sub in ("resources/bin", "resources/app/extensions/antigravity/bin", "bin"):
-                cand_sub = d / sub
-                if cand_sub.is_dir():
-                    for bname in KNOWN_BIN_NAMES:
-                        candidate = cand_sub / bname
-                        if candidate.is_file() and os.access(candidate, os.X_OK):
-                            return candidate
 
-    # 4. PATH search
-    which_ls = shutil.which("language_server")
-    if which_ls:
-        return Path(which_ls).resolve()
+    # 5. PATH search
+    for bname in ("language_server", "language_server.exe"):
+        which_ls = shutil.which(bname)
+        if which_ls:
+            return Path(which_ls).resolve()
+
+    # 6. Interactive fallback if running in an interactive terminal
+    if interactive and sys.stdin and sys.stdin.isatty():
+        console.print("[bold yellow]⚠️  Could not auto-detect Antigravity language_server path.[/bold yellow]")
+        console.print("[dim]Antigravity may be installed in a custom location or not in standard system paths.[/dim]")
+        try:
+            user_input = input("Enter path to Antigravity directory or language_server binary: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+        if user_input:
+            clean_input = user_input.strip("'\"")
+            resolved = find_language_server(custom_path=clean_input, interactive=False, persist=persist)
+            if resolved:
+                console.print(f"[bold green]✓ Found and saved binary:[/bold green] [cyan]{resolved}[/cyan]")
+                return resolved
+            else:
+                console.print(f"[bold red]❌ Could not locate valid language_server in:[/bold red] {clean_input}")
 
     return None
 
@@ -441,6 +596,7 @@ def launch_antigravity_web(
     browser: Optional[str] = None,
     kill_electron: bool = False,
     ls_path: Optional[str | Path] = None,
+    editor_path: Optional[str | Path] = None,
     detach: bool = False,
     ide_version: str = DEFAULT_IDE_VERSION,
     verbose: bool = False,
@@ -451,10 +607,11 @@ def launch_antigravity_web(
     Main entry point for starting Antigravity in browser Web Mode.
     Handles discovery, Electron cleanup, proxy detection, browser opening, and process lifecycle.
     """
-    resolved_ls = find_language_server(ls_path)
+    resolved_ls = find_language_server(custom_path=ls_path or editor_path, interactive=True)
     if not resolved_ls or not resolved_ls.is_file():
         console.print("[bold red]❌ Error: Could not locate Antigravity language_server binary.[/bold red]")
-        console.print("Please install Antigravity or specify the path via [bold cyan]--ls-path /path/to/language_server[/bold cyan].")
+        console.print("Please install Antigravity or specify the path via [bold cyan]--ls-path /path/to/binary[/bold cyan] or [bold cyan]-e /path/to/editor[/bold cyan].")
+        console.print("You can also configure it permanently with: [bold cyan]agy-proxy config set ls-path <PATH>[/bold cyan]")
         return 1
 
     # Prepare log path

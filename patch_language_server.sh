@@ -27,20 +27,20 @@ COMMAND=""
 
 # Known candidate directories for Antigravity 2.0 and Antigravity IDE (Standalone)
 CANDIDATE_DIRS=(
-    # Google Antigravity 2.0 (Hub / Desktop App)
+    # Google Antigravity 2.0 (Hub / Desktop App - Linux)
     "/opt/Antigravity/resources/bin"
     "/opt/Antigravity"
     "/opt/antigravity/resources/bin"
     "/opt/antigravity"
     "${HOME}/.local/share/Antigravity/resources/bin"
     "${HOME}/.local/share/Antigravity"
+    "${HOME}/.local/share/antigravity/resources/bin"
+    "${HOME}/.local/share/antigravity"
     "/usr/lib/antigravity/resources/bin"
     "/usr/lib/antigravity"
-    "/Applications/Antigravity.app/Contents/Resources/app/resources/bin"
-    "/Applications/Antigravity.app/Contents/Resources/bin"
-    "/Applications/Antigravity.app"
+    "/usr/share/antigravity"
 
-    # Google Antigravity IDE (Standalone Dedicated Editor)
+    # Google Antigravity IDE (Standalone Dedicated Editor - Linux)
     "/opt/Antigravity IDE/resources/app/extensions/antigravity/bin"
     "/opt/Antigravity IDE"
     "/opt/antigravity-ide/resources/app/extensions/antigravity/bin"
@@ -50,17 +50,45 @@ CANDIDATE_DIRS=(
     "${HOME}/Downloads/Antigravity IDE/Antigravity IDE/resources/app/extensions/antigravity/bin"
     "${HOME}/Downloads/Antigravity IDE/Antigravity IDE"
     "${HOME}/Downloads/Antigravity IDE"
+    "${HOME}/Downloads/Antigravity app"
+
+    # macOS (Hub / Desktop App)
+    "/Applications/Antigravity.app/Contents/Resources/bin"
+    "/Applications/Antigravity.app/Contents/Resources/app/resources/bin"
+    "/Applications/Antigravity.app"
+    "${HOME}/Applications/Antigravity.app/Contents/Resources/bin"
+    "${HOME}/Applications/Antigravity.app"
+
+    # macOS (Dedicated Antigravity IDE)
     "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
     "/Applications/Antigravity IDE.app"
+    "${HOME}/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
+    "${HOME}/Applications/Antigravity IDE.app"
+
+    # Windows (WSL / Git-Bash)
+    "/c/Users/${USER}/AppData/Local/Programs/Antigravity/resources/bin"
+    "/mnt/c/Users/${USER}/AppData/Local/Programs/Antigravity/resources/bin"
+    "/c/Users/${USER}/AppData/Local/Programs/Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "/mnt/c/Users/${USER}/AppData/Local/Programs/Antigravity IDE/resources/app/extensions/antigravity/bin"
 )
 
 KNOWN_BIN_NAMES=(
+    # Universal / Desktop App (Linux & macOS)
     "language_server"
+    # Windows Desktop App
+    "language_server.exe"
+    # Linux Dedicated IDE (x64, arm / arm64)
     "language_server_linux_x64"
+    "language_server_linux_arm"
     "language_server_linux_arm64"
+    # macOS Dedicated IDE (Apple Silicon & Intel)
+    "language_server_macos_arm"
+    "language_server_macos_x64"
     "language_server_darwin_arm64"
     "language_server_darwin_x64"
+    # Windows Dedicated IDE (x64 & arm)
     "language_server_windows_x64.exe"
+    "language_server_windows_arm.exe"
 )
 
 # Known relative subpaths within editor installation root
@@ -71,6 +99,10 @@ KNOWN_SUBPATHS=(
     "Contents/Resources/bin"
     "Contents/Resources/app/resources/bin"
     "Contents/Resources/app/extensions/antigravity/bin"
+    "Antigravity IDE/resources/app/extensions/antigravity/bin"
+    "Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin"
+    "Antigravity.app/Contents/Resources/bin"
+    "bin"
 )
 
 # Print Help
@@ -345,6 +377,24 @@ resolve_target() {
         fi
     fi
 
+    # Try saved user configuration file (~/.config/agy-proxy/config.json)
+    local config_file="${HOME}/.config/agy-proxy/config.json"
+    if [[ -f "$config_file" ]]; then
+        local cfg_ls cfg_ed
+        cfg_ls=$(grep -o '"language_server_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$config_file" 2>/dev/null | sed -E 's/.*"language_server_path"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+        if [[ -n "$cfg_ls" && -f "$cfg_ls" ]]; then
+            if resolve_target "$cfg_ls"; then
+                return 0
+            fi
+        fi
+        cfg_ed=$(grep -o '"editor_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$config_file" 2>/dev/null | sed -E 's/.*"editor_path"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)
+        if [[ -n "$cfg_ed" && -d "$cfg_ed" ]]; then
+            if resolve_target "$cfg_ed"; then
+                return 0
+            fi
+        fi
+    fi
+
     # Try candidate directories
     for dir in "${CANDIDATE_DIRS[@]}"; do
         if [[ -d "$dir" ]]; then
@@ -357,15 +407,28 @@ resolve_target() {
     # If interactive and not found, ask user directly
     if [[ -t 0 ]]; then
         echo -e "${YELLOW}⚠️  Could not auto-detect Antigravity language_server path.${NC}"
+        echo -e "Antigravity may be installed in a custom location."
         read -r -e -p "Enter path to editor directory or language_server file: " user_path
         if [[ -n "$user_path" ]]; then
-            resolve_target "$user_path"
-            return $?
+            user_path="${user_path/#\~/$HOME}"
+            user_path="${user_path%\"}"
+            user_path="${user_path#\"}"
+            user_path="${user_path%\'}"
+            user_path="${user_path#\'}"
+            if resolve_target "$user_path"; then
+                mkdir -p "$(dirname "$config_file")"
+                if command -v python3 >/dev/null 2>&1; then
+                    python3 -c "import json, os; p='$config_file'; d=json.load(open(p)) if os.path.exists(p) else {}; d['language_server_path']='$LS_FILE'; json.dump(d, open(p,'w'), indent=2)" 2>/dev/null || true
+                fi
+                echo -e "${GREEN}✓ Saved language server binary to configuration:${NC} $LS_FILE"
+                return 0
+            fi
         fi
     fi
 
     echo -e "${RED}Error: Could not locate Antigravity language_server binary.${NC}" >&2
     echo -e "Please specify the editor or file manually using: ${BOLD}-e /opt/Antigravity${NC} or ${BOLD}-f /path/to/language_server${NC}" >&2
+    echo -e "Or configure permanently with: ${BOLD}agy-proxy config set ls-path /path/to/language_server${NC}" >&2
     return 1
 }
 
@@ -413,9 +476,13 @@ get_running_pids() {
             continue
         fi
         if [[ -n "$target_bin" ]]; then
-            local exe
-            exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)
-            if [[ "$exe" != "$target_bin" && ! "$cmd" =~ "$target_bin" ]]; then
+            local exe=""
+            if [[ -e "/proc/$pid/exe" ]]; then
+                exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)
+            fi
+            if [[ -n "$exe" && "$exe" != "$target_bin" && ! "$cmd" =~ "$target_bin" ]]; then
+                continue
+            elif [[ -z "$exe" && ! "$cmd" =~ "$target_bin" ]]; then
                 continue
             fi
         fi
