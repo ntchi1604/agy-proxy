@@ -20,6 +20,7 @@ from agy_proxy.auth import (
     AntigravityOAuthSession,
     AIStudioApiKeySession,
     GeminiWebSession,
+    clean_gemini_text,
     extract_cookies_from_raw,
     _parse_expiry,
     get_candidate_token_files,
@@ -791,48 +792,274 @@ class TestGeminiWebSession(unittest.TestCase):
             account_id="gw_test",
             cookies={"__Secure-1PSID": "test_psid"},
         )
-        # Verify all reverse-engineered models are present
-        self.assertIn("gemini-3.5-flash-lite-extended", gw.available_models)
+        # Verify all reverse-engineered models are present including Gemini 4 Argon
+        self.assertIn("gemini-4-argon", gw.available_models)
+        self.assertIn("gemini-4-argon-high", gw.available_models)
+        self.assertIn("gemini-4-argon-medium", gw.available_models)
+        self.assertIn("gemini-4-argon-low", gw.available_models)
         self.assertIn("gemini-3.5-flash-lite", gw.available_models)
-        self.assertIn("gemini-3.8-flash-extended", gw.available_models)
+        self.assertIn("gemini-3.5-flash-lite-high", gw.available_models)
         self.assertIn("gemini-3.8-flash", gw.available_models)
-        self.assertIn("gemini-3.1-pro-extended", gw.available_models)
+        self.assertIn("gemini-3.8-flash-high", gw.available_models)
         self.assertIn("gemini-3.1-pro", gw.available_models)
+        self.assertIn("gemini-3.1-pro-high", gw.available_models)
 
-        # Verify model config resolution
-        cfg_lite = gw.get_model_config("gemini-3.5-flash-lite-extended")
+        # Verify extended models are completely removed from available_models
+        self.assertNotIn("gemini-4-argon-extended", gw.available_models)
+        self.assertNotIn("gemini-3.5-flash-lite-extended", gw.available_models)
+        self.assertNotIn("gemini-3.8-flash-extended", gw.available_models)
+        self.assertNotIn("gemini-3.1-pro-extended", gw.available_models)
+
+        # Verify Gemini 4 Argon model config resolution
+        cfg_argon = gw.get_model_config("gemini-4-argon")
+        self.assertEqual(cfg_argon["model_id"], 8)
+        self.assertEqual(cfg_argon["mode"], 2)
+        self.assertEqual(cfg_argon["budget"], 2)
+        self.assertEqual(cfg_argon["hash"], "95a4c0abcba24364")
+
+        cfg_argon_med = gw.get_model_config("gemini-4-argon-medium")
+        self.assertEqual(cfg_argon_med["model_id"], 8)
+        self.assertEqual(cfg_argon_med["mode"], 4)
+        self.assertEqual(cfg_argon_med["budget"], 1)
+
+        cfg_argon_low = gw.get_model_config("gemini-4-argon-low")
+        self.assertEqual(cfg_argon_low["model_id"], 8)
+        self.assertEqual(cfg_argon_low["mode"], 1)
+        self.assertEqual(cfg_argon_low["budget"], 0)
+
+        # Verify model config resolution for other families
+        cfg_lite = gw.get_model_config("gemini-3.5-flash-lite-high")
         self.assertEqual(cfg_lite["model_id"], 6)
         self.assertEqual(cfg_lite["mode"], 2)
         self.assertEqual(cfg_lite["hash"], "8c46e95b1a07cecc")
+
+        # Legacy extended alias gracefully resolves to high
+        cfg_lite_legacy = gw.get_model_config("gemini-3.5-flash-lite-extended")
+        self.assertEqual(cfg_lite_legacy["model_id"], 6)
+        self.assertEqual(cfg_lite_legacy["mode"], 2)
 
         cfg_38 = gw.get_model_config("gemini-3.8-flash")
         self.assertEqual(cfg_38["model_id"], 1)
         self.assertEqual(cfg_38["mode"], 1)
 
-        cfg_pro = gw.get_model_config("gemini-3.1-pro-extended")
+        cfg_pro = gw.get_model_config("gemini-3.1-pro-high")
         self.assertEqual(cfg_pro["model_id"], 3)
         self.assertEqual(cfg_pro["mode"], 2)
 
-        # Verify body builder produces exact 99 elements
+        # Verify body builder produces exact 99 elements and modern protocol slots
         gw._at_token = "mock_at_token"
-        body = gw._build_stream_generate_body("Hello test", model_config=cfg_lite, client_uuid="mock-uuid")
+        body = gw._build_stream_generate_body("Hello test", model_config=cfg_argon, client_uuid="mock-uuid")
         self.assertIn("f.req", body)
         self.assertEqual(body["at"], "mock_at_token")
         outer = json.loads(body["f.req"])
         inner = json.loads(outer[1])
         self.assertEqual(len(inner), 99)
+        self.assertIsNone(inner[2])  # inner[2] is None in modern protocol
+        self.assertIsNone(inner[3])  # inner[3] is None (no expired botguard string)
+        self.assertEqual(inner[17], [[2]])  # High thinking budget
+        self.assertIsNone(inner[71])  # Turn 1 has no continuation
         self.assertEqual(inner[67], 0)
-        self.assertEqual(inner[79], 6)
-        self.assertEqual(inner[80], 2)
+        self.assertEqual(inner[79], 8)  # Argon model_id
+        self.assertEqual(inner[80], 2)  # High mode
 
         # Support check
-        self.assertTrue(gw.is_model_supported("gemini-3.5-flash-lite-extended"))
+        self.assertTrue(gw.is_model_supported("gemini-4-argon"))
+        self.assertTrue(gw.is_model_supported("gemini-3.5-flash-lite-high"))
         self.assertTrue(gw.is_model_supported("gemini-3.1-pro"))
         self.assertFalse(gw.is_model_supported("claude-sonnet-4-6"))
 
         # to_dict check
         d = gw.to_dict()
-        self.assertIn("gemini-3.5-flash-lite-extended", d["available_models"])
+        self.assertIn("gemini-4-argon", d["available_models"])
+
+    def test_gemini_web_multi_turn_continuation_protocol(self):
+        gw = GeminiWebSession(
+            account_id="gw_test_continuation",
+            cookies={"__Secure-1PSID": "test_psid"},
+        )
+        cfg_argon = gw.get_model_config("gemini-4-argon")
+        body = gw._build_stream_generate_body(
+            "Second turn query",
+            model_config=cfg_argon,
+            client_uuid="UUID-1234",
+            conv_id="c_test_987",
+            continuation_token="tok_continuation_xyz",
+            turn_index=1,
+        )
+        outer = json.loads(body["f.req"])
+        inner = json.loads(outer[1])
+        self.assertEqual(len(inner), 99)
+        self.assertIsNone(inner[2])  # Always None in modern Gemini Web
+        self.assertEqual(inner[71], ["c_test_987", None, None, None, None, None, None, "tok_continuation_xyz"])
+
+    def test_gemini_web_spark_task_mode_payload_and_remy_goal(self):
+        gw = GeminiWebSession(
+            account_id="gw_test_spark",
+            cookies={"__Secure-1PSID": "test_psid"},
+        )
+        # 1. Config resolution for task models
+        cfg_task_argon = gw.get_model_config("gemini-4-argon-task")
+        self.assertEqual(cfg_task_argon["model_id"], 8)
+        self.assertEqual(cfg_task_argon["mode"], 1)
+        self.assertEqual(cfg_task_argon["budget"], 0)
+        self.assertEqual(cfg_task_argon["feature_mode"], 40)
+
+        cfg_task_flash = gw.get_model_config("gemini-3.8-flash-task")
+        self.assertEqual(cfg_task_flash["model_id"], 1)
+        self.assertEqual(cfg_task_flash["feature_mode"], 40)
+
+        # Keyword task / spark alias resolution
+        self.assertEqual(gw.get_model_config("argon-spark")["feature_mode"], 40)
+        self.assertEqual(gw.get_model_config("gemini-4-task")["feature_mode"], 40)
+        self.assertEqual(gw.get_model_config("gemini-3.8-spark")["feature_mode"], 40)
+        self.assertEqual(gw.get_model_config("spark")["feature_mode"], 40)
+
+        # 2. Payload building verifies inner[49] == 40, inner[30] == [4, 16, 19], inner[91/96/98] == 1
+        body_task = gw._build_stream_generate_body(
+            "Agent task prompt",
+            model_config=cfg_task_argon,
+            client_uuid="UUID-SPARK",
+        )
+        outer_task = json.loads(body_task["f.req"])
+        inner_task = json.loads(outer_task[1])
+        self.assertEqual(len(inner_task), 99)
+        self.assertEqual(inner_task[49], 40)  # Spark / Task mode!
+        self.assertEqual(inner_task[30], [4, 16, 19])
+        self.assertEqual(inner_task[91], 1)
+        self.assertEqual(inner_task[96], 1)
+        self.assertEqual(inner_task[98], 1)
+
+        # Chat payload verifies inner[49] == 0
+        cfg_chat_argon = gw.get_model_config("gemini-4-argon")
+        body_chat = gw._build_stream_generate_body(
+            "Chat prompt",
+            model_config=cfg_chat_argon,
+            client_uuid="UUID-CHAT",
+        )
+        inner_chat = json.loads(json.loads(body_chat["f.req"])[1])
+        self.assertEqual(inner_chat[49], 0)  # Standard chat mode
+
+        # 3. get_remy_goal RPC parsing
+        gw._at_token = "mock_at_token"
+        mock_remy_resp_text = ''')]}'
+
+433
+[["wrb.fr","mXV10b","[[\\"e8479551-1cef-42d6-8296-01f8c0cdac8a\\",\\"General Conversation Initiation\\",3,null,\\"gemini_app\\",null,\\"Responded to user greeting\\",null,null,\\"2026-10-14T06:26:24.653Z\\",null,null,null,\\"c_test_conv\\"]]"]]
+'''
+        class MockHttpResponse:
+            status_code = 200
+            text = mock_remy_resp_text
+
+        class MockHttpClient:
+            async def post(self, *args, **kwargs):
+                return MockHttpResponse()
+
+        from unittest.mock import patch, AsyncMock
+        with patch.object(gw, "get_http_client", new_callable=AsyncMock) as mock_get_client:
+            mock_get_client.return_value = MockHttpClient()
+            goal = asyncio.run(gw.get_remy_goal("c_test_conv"))
+            self.assertIsNotNone(goal)
+            self.assertEqual(goal["task_id"], "e8479551-1cef-42d6-8296-01f8c0cdac8a")
+            self.assertEqual(goal["title"], "General Conversation Initiation")
+            self.assertEqual(goal["status"], "completed")
+            self.assertEqual(goal["summary"], "Responded to user greeting")
+            self.assertEqual(goal["conv_id"], "c_test_conv")
+
+    def test_clean_gemini_text_sanitization(self):
+        # 1. Strips internal python code execution wrapper
+        raw = "Here is the answer:\n```python?code_reference&code_event_index=0\nimport math\nprint(math.pi)\n```\nThe value of pi is approximately 3.14159."
+        cleaned = clean_gemini_text(raw)
+        self.assertNotIn("code_reference", cleaned)
+        self.assertNotIn("import math", cleaned)
+        self.assertIn("Here is the answer:\nThe value of pi is approximately 3.14159.", cleaned)
+
+        # 2. Strips temporary card content URLs
+        raw_card = "Check this summary:\nhttps://googleusercontent.com/card_content/123456789\nFinal summary completed."
+        cleaned_card = clean_gemini_text(raw_card)
+        self.assertNotIn("card_content", cleaned_card)
+        self.assertIn("Final summary completed.", cleaned_card)
+
+    def test_argon_model_normalization_and_routing(self):
+        from agy_proxy.models import normalize_model_name, is_3p_model
+        self.assertEqual(normalize_model_name("argon"), "gemini-4-argon")
+        self.assertEqual(normalize_model_name("gemini-4"), "gemini-4-argon")
+        self.assertEqual(normalize_model_name("gemini-4.0"), "gemini-4-argon")
+        self.assertEqual(normalize_model_name("gemini-4-argon-low"), "gemini-4-argon-low")
+        self.assertEqual(normalize_model_name("gemini-4-argon-medium"), "gemini-4-argon-medium")
+
+        self.assertFalse(is_3p_model("gemini-4-argon"))
+        self.assertFalse(is_3p_model("argon"))
+        self.assertFalse(is_3p_model("gemini-4"))
+        self.assertTrue(is_3p_model("claude-sonnet-5-5-high"))
+
+    def test_gemini_web_grounding_sources_extraction(self):
+        gw = GeminiWebSession(
+            account_id="gw_test_grounding",
+            cookies={"__Secure-1PSID": "test_psid"},
+        )
+        gw._at_token = "mock_at"
+
+        grounding_inner = [
+            None,
+            ["c_test_conv", "r_test_resp"],
+            {"26": "tok_continuation"},
+            None,
+            [
+                [
+                    "rc_test_123",
+                    ["The current weather in Tokyo is sunny."],
+                    [
+                        None,
+                        [
+                            [
+                                None, None,
+                                [
+                                    ["https://weather.com/tokyo#:~:text=sunny%2022C", "Tokyo Weather", "https://favicon.ico", "Sunny and 22C"],
+                                    ["https://tokyocheapo.com/weather#:~:text=spring", "Tokyo Cheapo Weather", "https://favicon.ico", "Clear skies"],
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        line = json.dumps([["wrb.fr", None, json.dumps(grounding_inner)]])
+
+        class AsyncByteStreamMock:
+            async def aiter_bytes(self):
+                yield b")]}'\n1234\n" + line.encode("utf-8") + b"\n"
+
+        class MockResponse:
+            status_code = 200
+            headers = {}
+            cookies = {}
+            def aiter_bytes(self):
+                return AsyncByteStreamMock().aiter_bytes()
+
+        class MockClient:
+            def stream(self, *args, **kwargs):
+                class StreamCtx:
+                    async def __aenter__(self):
+                        return MockResponse()
+                    async def __aexit__(self, *args):
+                        pass
+                return StreamCtx()
+
+        async def _run():
+            with unittest.mock.patch.object(gw, "get_http_client", new_callable=unittest.mock.AsyncMock) as mock_get_client:
+                mock_get_client.return_value = MockClient()
+                chunks = []
+                async for chunk in gw.stream_generate("What is the weather in Tokyo?", model="gemini-4-argon"):
+                    chunks.append(chunk)
+                return chunks
+
+        chunks = asyncio.run(_run())
+        done_chunk = next(c for c in chunks if c["type"] == "done")
+        self.assertEqual(len(done_chunk["grounding_sources"]), 2)
+        self.assertEqual(done_chunk["grounding_sources"][0]["url"], "https://weather.com/tokyo")
+        self.assertEqual(done_chunk["grounding_sources"][0]["title"], "Tokyo Weather")
+        self.assertEqual(done_chunk["grounding_sources"][0]["snippet"], "Sunny and 22C")
+        self.assertEqual(done_chunk["grounding_sources"][1]["url"], "https://tokyocheapo.com/weather")
 
     def test_gemini_web_cookie_rotation_and_response_update(self):
         gw = GeminiWebSession(

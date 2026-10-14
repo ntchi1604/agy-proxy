@@ -42,11 +42,18 @@ const CORS_HEADERS = {
 // -----------------------------------------------------------------------------
 
 const VALID_CLOUDCODE_MODELS = new Set([
+  // Gemini 4 Argon
+  "gemini-4-argon",
+  "gemini-4-argon-high",
+  "gemini-4-argon-medium",
+  "gemini-4-argon-low",
+  "gemini-4-argon-task",
   // Gemini 3.8
   "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low",
   "gemini-3.8-flash-tiered",
+  "gemini-3.8-flash-task",
   // Gemini 3.7
   "gemini-3.7-flash-high",
   "gemini-3.7-flash-medium",
@@ -72,6 +79,10 @@ const VALID_CLOUDCODE_MODELS = new Set([
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash-thinking",
+  "chat_20706",
+  "chat_23310",
+  "tab_flash_lite_preview",
+  "tab_jump_flash_lite_preview",
   // 3rd Party models
   "claude-sonnet-4-6",
   "claude-opus-4-6-thinking",
@@ -85,15 +96,42 @@ const VALID_CLOUDCODE_MODELS = new Set([
 ]);
 
 const MODEL_ALIASES = {
+  // Gemini 4 Argon
+  "gemini-4-argon": "gemini-4-argon",
+  "gemini-4-argon-high": "gemini-4-argon-high",
+  "gemini-4-argon-medium": "gemini-4-argon-medium",
+  "gemini-4-argon-low": "gemini-4-argon-low",
+  "gemini-4-argon-task": "gemini-4-argon-task",
+  "gemini-4-argon-spark": "gemini-4-argon-task",
+  "gemini-4-task": "gemini-4-argon-task",
+  "gemini-4-spark": "gemini-4-argon-task",
+  "gemini-4": "gemini-4-argon",
+  "gemini-4.0": "gemini-4-argon",
+  "gemini-4-pro": "gemini-4-argon",
+  argon: "gemini-4-argon",
+  "argon-task": "gemini-4-argon-task",
+  "argon-spark": "gemini-4-argon-task",
+  spark: "gemini-4-argon-task",
+  task: "gemini-4-argon-task",
+
   // Gemini 3.8
   "gemini-3.8-flash": "gemini-3.8-flash-high",
   "gemini-3.8-flash-high": "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium": "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low": "gemini-3.8-flash-low",
+  "gemini-3.8-flash-task": "gemini-3.8-flash-task",
+  "gemini-3.8-flash-spark": "gemini-3.8-flash-task",
+  "gemini-3.8-task": "gemini-3.8-flash-task",
+  "gemini-3.8-spark": "gemini-3.8-flash-task",
   "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
   "gemini-3.8": "gemini-3.8-flash-high",
   "gemini-3-8": "gemini-3.8-flash-high",
   "gemini-3.8-flash-preview": "gemini-3.8-flash-high",
+  "gemini-3.8-flash-n": "gemini-3.8-flash-high",
+  "chat_20706": "chat_20706",
+  "chat_23310": "chat_23310",
+  "tab_flash_lite_preview": "tab_flash_lite_preview",
+  "tab_jump_flash_lite_preview": "tab_jump_flash_lite_preview",
 
   // Generic Gemini Aliases
   flash: "gemini-3.8-flash-high",
@@ -145,13 +183,17 @@ const MODEL_ALIASES = {
   "claude-opus-4-6": "claude-opus-4-6-thinking",
   "claude-opus-4.6": "claude-opus-4-6-thinking",
   "claude-3-7-sonnet": "claude-sonnet-4-6",
+  "claude-3.7-sonnet": "claude-sonnet-4-6",
   "claude-3-7-sonnet-20250219": "claude-sonnet-4-6",
   "claude-3-5-sonnet": "claude-sonnet-4-6",
+  "claude-3.5-sonnet": "claude-sonnet-4-6",
   "claude-3-5-sonnet-20241022": "claude-sonnet-4-6",
   "claude-3-5-sonnet-latest": "claude-sonnet-4-6",
   "claude-3-opus": "claude-opus-4-6-thinking",
+  "claude-3.5-opus": "claude-opus-4-6-thinking",
   "claude-3-opus-20240229": "claude-opus-4-6-thinking",
   "claude-3-5-haiku": "gemini-3.1-flash-lite",
+  "claude-3.5-haiku": "gemini-3.1-flash-lite",
   "claude-3-haiku": "gemini-3.1-flash-lite",
 
   // Claude 5.5 Aliases
@@ -189,9 +231,13 @@ const MODEL_ALIASES = {
   "gpt-5.6-terra": "gemini-3.8-flash-medium",
   "gpt-5.6-luna": "gemini-3.1-flash-lite",
   "gpt-5.5": "gemini-3.8-flash-high",
+  "gpt-5-5": "gemini-3.8-flash-high",
   "gpt-5.4": "gemini-3.8-flash-high",
   "gpt-5.4-mini": "gemini-3.1-flash-lite",
   "gpt-5.2": "gemini-3.7-flash-high",
+  "gpt-daybreak-blue-latest": "gemini-3.8-flash-high",
+  "gpt-daybreak-red-latest": "gemini-3.8-flash-high",
+  "codex-auto-review": "gemini-3.1-flash-lite",
 
   // Standard OpenAI Models
   "gpt-4o": "gemini-3.8-flash-high",
@@ -211,10 +257,18 @@ const MODEL_ALIASES = {
 };
 
 const PROXY_MODELS_LIST = [
-  // Flagship Gemini
+  // Flagship Gemini 4 Argon
+  { id: "gemini-4-argon", object: "model", owned_by: "google", description: "Google Gemini 4 Argon (Web Flagship)" },
+  { id: "gemini-4-argon-high", object: "model", owned_by: "google", description: "Gemini 4 Argon High (Web Thinking)" },
+  { id: "gemini-4-argon-medium", object: "model", owned_by: "google", description: "Gemini 4 Argon Medium (Web Thinking)" },
+  { id: "gemini-4-argon-low", object: "model", owned_by: "google", description: "Gemini 4 Argon Low (Web)" },
+  { id: "gemini-4-argon-task", object: "model", owned_by: "google", description: "Gemini 4 Argon Task (Spark Agent)" },
+
+  // Flagship Gemini 3.8
   { id: "gemini-3.8-flash-high", object: "model", owned_by: "google", description: "Google Gemini 3.8 Flash High Reasoning (Default)" },
   { id: "gemini-3.8-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Medium Reasoning" },
   { id: "gemini-3.8-flash-low", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Low Reasoning" },
+  { id: "gemini-3.8-flash-task", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Task (Spark Agent)" },
   { id: "gemini-3.8-flash-tiered", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Tiered" },
   { id: "gemini-3.7-flash-high", object: "model", owned_by: "google", description: "Gemini 3.7 Flash High Reasoning" },
   { id: "gemini-3.7-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.7 Flash Medium Reasoning" },
@@ -295,6 +349,18 @@ function normalizeModelName(rawModel) {
   }
 
   // Version-specific keyword matches
+  if (cleaned.includes("task") || cleaned.includes("spark")) {
+    if (cleaned.includes("3.8") || (cleaned.includes("flash") && !cleaned.includes("lite"))) {
+      return "gemini-3.8-flash-task";
+    }
+    return "gemini-4-argon-task";
+  }
+
+  if (cleaned.includes("argon") || cleaned.includes("gemini-4") || cleaned.includes("gemini-4.0") || cleaned === "gemini-4") {
+    if (cleaned.includes("low")) return "gemini-4-argon-low";
+    if (cleaned.includes("med")) return "gemini-4-argon-medium";
+    return "gemini-4-argon";
+  }
   if (cleaned.includes("3.8") || cleaned.includes("3-8")) {
     if (cleaned.includes("low")) return "gemini-3.8-flash-low";
     if (cleaned.includes("med")) return "gemini-3.8-flash-medium";
@@ -399,7 +465,26 @@ function isModelSupported(acc, model) {
   return true;
 }
 
-function markAccountRateLimited(acc, model, durationMs = 60000) {
+function parseResetDuration(text) {
+  if (!text || typeof text !== "string") return null;
+  const m = text.match(
+    /resets?\s+(?:in|after)\s+(?:(?:(\d+)\s*d(?:ays?)?)?\s*(?:(\d+)\s*h(?:ours?|rs?)?)?\s*(?:(\d+)\s*m(?:in(?:utes?)?)?)?\s*(?:(\d+)\s*s(?:ec(?:onds?)?)?)?|(\d+)\s*(?:seconds|sec|s)?)/i
+  );
+  if (m) {
+    if (m[5]) return parseFloat(m[5]);
+    const days = parseInt(m[1] || "0", 10);
+    const hours = parseInt(m[2] || "0", 10);
+    const minutes = parseInt(m[3] || "0", 10);
+    const seconds = parseInt(m[4] || "0", 10);
+    const total = days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    if (total > 0) return total;
+  }
+  const m2 = text.match(/retry\s+(?:after|in)\s+(\d+)\s*(?:seconds|sec|s)?/i);
+  if (m2) return parseFloat(m2[1]);
+  return null;
+}
+
+function markAccountRateLimited(acc, model, durationMs = 15000) {
   const is3p = model.includes("claude") || model.includes("gpt-oss");
   const key = `${acc.account_id || acc.email || "acc"}:${is3p ? "3p" : "gemini"}`;
   rateLimitMap.set(key, Date.now() + durationMs);
@@ -515,20 +600,31 @@ async function getAccessToken(account, forceRefresh = false) {
 // Message Conversion & Role Sanitization
 // -----------------------------------------------------------------------------
 
+function cleanSystemPromptText(text) {
+  if (!text || typeof text !== "string") return "";
+  const lines = text.split("\n");
+  const cleaned = lines.filter(
+    (line) => !line.trim().toLowerCase().startsWith("x-anthropic-billing-header:")
+  );
+  return cleaned.join("\n").trim();
+}
+
 function convertMessagesToGemini(reqJson) {
   let systemText = "";
 
   // Anthropic format: system prompt
   if (typeof reqJson.system === "string") {
-    systemText = reqJson.system;
+    systemText = cleanSystemPromptText(reqJson.system);
   } else if (Array.isArray(reqJson.system)) {
-    systemText = reqJson.system
-      .map((s) => (typeof s === "string" ? s : s?.text || ""))
-      .filter(Boolean)
-      .join("\n\n");
+    systemText = cleanSystemPromptText(
+      reqJson.system
+        .map((s) => (typeof s === "string" ? s : s?.text || ""))
+        .filter(Boolean)
+        .join("\n\n")
+    );
   } else if (typeof reqJson.instructions === "string") {
     // OpenAI Responses API format
-    systemText = reqJson.instructions;
+    systemText = cleanSystemPromptText(reqJson.instructions);
   }
 
   let rawMsgs = reqJson.messages || [];
@@ -558,7 +654,10 @@ function convertMessagesToGemini(reqJson) {
           .join("\n");
       }
       if (sysContent) {
-        systemText = systemText ? `${systemText}\n\n${sysContent}` : sysContent;
+        sysContent = cleanSystemPromptText(sysContent);
+        if (sysContent) {
+          systemText = systemText ? `${systemText}\n\n${sysContent}` : sysContent;
+        }
       }
       continue;
     }
@@ -604,14 +703,23 @@ function convertMessagesToGemini(reqJson) {
         },
       });
     } else if (typeof m.content === "string") {
-      if (m.content) parts.push({ text: m.content });
+      const cleaned = m.content.toLowerCase().includes("x-anthropic-billing-header:")
+        ? cleanSystemPromptText(m.content)
+        : m.content;
+      if (cleaned) parts.push({ text: cleaned });
     } else if (Array.isArray(m.content)) {
       for (const block of m.content) {
         if (!block) continue;
         if (typeof block === "string") {
-          parts.push({ text: block });
+          const cleaned = block.toLowerCase().includes("x-anthropic-billing-header:")
+            ? cleanSystemPromptText(block)
+            : block;
+          if (cleaned) parts.push({ text: cleaned });
         } else if (block.type === "text" && block.text) {
-          parts.push({ text: block.text });
+          const cleaned = block.text.toLowerCase().includes("x-anthropic-billing-header:")
+            ? cleanSystemPromptText(block.text)
+            : block.text;
+          if (cleaned) parts.push({ text: cleaned });
         } else if (block.type === "thinking" && block.thinking) {
           parts.push({ thought: true, text: block.thinking });
         } else if (block.type === "tool_use") {
@@ -918,7 +1026,7 @@ export default {
             status: "ok",
             message: "hello",
             proxy: "agy-proxy-edge",
-            version: "2.2.0",
+            version: "2.23.0",
           }),
           { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
         );
@@ -944,7 +1052,7 @@ export default {
             gateway_cloudcode: `${url.origin}/cloudcode/v1internal:streamGenerateContent`,
             gateway_genai: `${url.origin}/genai/v1beta/models`,
           },
-          version: "2.2.0",
+          version: "2.23.0",
         };
         return new Response(JSON.stringify(info, null, 2), {
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -1126,7 +1234,9 @@ export default {
             });
 
             if (gRes.status === 429 && !isLastCandidate) {
-              markAccountRateLimited(acc, backendModel, 60000);
+              const errBody = await gRes.text().catch(() => "");
+              const durSec = parseResetDuration(errBody);
+              markAccountRateLimited(acc, backendModel, durSec ? durSec * 1000 : 15000);
               continue;
             }
             if (gRes.status === 401 && !isLastCandidate) {
@@ -1186,7 +1296,9 @@ export default {
             }
 
             if (gRes.status === 429 && !isLastCandidate) {
-              markAccountRateLimited(acc, backendModel, 60000);
+              const errBody = await gRes.text().catch(() => "");
+              const durSec = parseResetDuration(errBody);
+              markAccountRateLimited(acc, backendModel, durSec ? durSec * 1000 : 15000);
               continue;
             }
 
@@ -1331,6 +1443,32 @@ export default {
       const resHeaders = new Headers(response.headers);
       for (const [k, v] of Object.entries(CORS_HEADERS)) {
         resHeaders.set(k, v);
+      }
+
+      if (targetPath.includes("listExperiments") && response.ok) {
+        try {
+          const expData = await response.json();
+          if (expData && typeof expData === "object") {
+            const flags = Array.isArray(expData.flags) ? expData.flags : [];
+            let foundDeepAgent = false;
+            for (const f of flags) {
+              if (f.name === "enable-deepagent") {
+                f.boolValue = true;
+                foundDeepAgent = true;
+                break;
+              }
+            }
+            if (!foundDeepAgent) {
+              flags.push({ name: "enable-deepagent", boolValue: true });
+            }
+            expData.flags = flags;
+            return new Response(JSON.stringify(expData), {
+              status: response.status,
+              statusText: response.statusText,
+              headers: resHeaders,
+            });
+          }
+        } catch (_) {}
       }
 
       return new Response(response.body, {

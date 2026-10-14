@@ -14,11 +14,33 @@ from pydantic import BaseModel, ConfigDict, Field
 DEFAULT_MODEL = "gemini-3.8-flash-high"
 
 MODEL_ALIASES: dict[str, str] = {
+    # Gemini 4 Argon Aliases (Web Flagship)
+    "gemini-4-argon": "gemini-4-argon",
+    "gemini-4-argon-high": "gemini-4-argon-high",
+    "gemini-4-argon-medium": "gemini-4-argon-medium",
+    "gemini-4-argon-low": "gemini-4-argon-low",
+    "gemini-4-argon-task": "gemini-4-argon-task",
+    "gemini-4-argon-spark": "gemini-4-argon-task",
+    "gemini-4-task": "gemini-4-argon-task",
+    "gemini-4-spark": "gemini-4-argon-task",
+    "gemini-4": "gemini-4-argon",
+    "gemini-4.0": "gemini-4-argon",
+    "gemini-4-pro": "gemini-4-argon",
+    "argon": "gemini-4-argon",
+    "argon-task": "gemini-4-argon-task",
+    "argon-spark": "gemini-4-argon-task",
+    "spark": "gemini-4-argon-task",
+    "task": "gemini-4-argon-task",
+
     # Gemini 3.8 Aliases (Latest default)
     "gemini-3.8-flash": "gemini-3.8-flash-high",
     "gemini-3.8-flash-high": "gemini-3.8-flash-high",
     "gemini-3.8-flash-medium": "gemini-3.8-flash-medium",
     "gemini-3.8-flash-low": "gemini-3.8-flash-low",
+    "gemini-3.8-flash-task": "gemini-3.8-flash-task",
+    "gemini-3.8-flash-spark": "gemini-3.8-flash-task",
+    "gemini-3.8-task": "gemini-3.8-flash-task",
+    "gemini-3.8-spark": "gemini-3.8-flash-task",
     "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
     "gemini-3.8-flash-n": "gemini-3.8-flash-high",
     "gemini-3.8": "gemini-3.8-flash-high",
@@ -150,11 +172,18 @@ MODEL_ALIASES: dict[str, str] = {
 
 
 VALID_CLOUDCODE_MODELS = {
+    # Gemini 4 Argon (Web Flagship)
+    "gemini-4-argon",
+    "gemini-4-argon-high",
+    "gemini-4-argon-medium",
+    "gemini-4-argon-low",
+    "gemini-4-argon-task",
     # Gemini 3.8
     "gemini-3.8-flash-high",
     "gemini-3.8-flash-medium",
     "gemini-3.8-flash-low",
     "gemini-3.8-flash-tiered",
+    "gemini-3.8-flash-task",
     # Gemini 3.7
     "gemini-3.7-flash-high",
     "gemini-3.7-flash-medium",
@@ -198,12 +227,21 @@ VALID_CLOUDCODE_MODELS = {
 }
 
 EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
+    # Gemini 4 Argon (Web Flagship)
+    "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576},
+    "gemini-4-argon-high": {"displayName": "Gemini 4 Argon (High)", "maxTokens": 1048576},
+    "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon (Medium)", "maxTokens": 1048576},
+    "gemini-4-argon-low": {"displayName": "Gemini 4 Argon (Low)", "maxTokens": 1048576},
+    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Spark Agent)", "maxTokens": 1048576},
+    "gemini-4": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
+    "gemini-4.0": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
     # Gemini 3.8
     "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
     "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium)", "maxTokens": 1048576},
     "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
     "gemini-3.8-flash-n": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
+    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576},
     # Gemini 3.7
     "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High)", "maxTokens": 1048576},
     "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium)", "maxTokens": 1048576},
@@ -270,9 +308,10 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "claude-3-opus": {"displayName": "Claude 3 Opus", "maxTokens": 200000},
     "claude-3-5-haiku": {"displayName": "Claude 3.5 Haiku", "maxTokens": 200000},
     # Gemini Web browser models
-    "gemini-3.5-flash-lite-extended": {"displayName": "Gemini 3.5 Flash-Lite Extended (Web Thinking)", "maxTokens": 1048576},
-    "gemini-3.8-flash-extended": {"displayName": "Gemini 3.8 Flash Extended (Web Thinking)", "maxTokens": 1048576},
-    "gemini-3.1-pro-extended": {"displayName": "Gemini 3.1 Pro Extended (Web Thinking)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576},
+    "gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576},
     "gemini-3-pro": {"displayName": "Gemini 3 Pro (Web)", "maxTokens": 1048576},
 }
 
@@ -313,9 +352,15 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
     "claude-3-5-haiku": {"displayName": "Claude 3.5 Haiku", "maxTokens": 200000, "description": "Claude 3.5 Haiku fast lightweight alias", "category": "Anthropic"},
 
     # Google Gemini Models
+    "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "description": "Google Next-Gen Gemini 4 Argon flagship web model (Default Web)", "category": "Google Gemini"},
+    "gemini-4-argon-high": {"displayName": "Gemini 4 Argon (High)", "maxTokens": 1048576, "description": "Gemini 4 Argon with deep reasoning", "category": "Google Gemini"},
+    "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon (Medium)", "maxTokens": 1048576, "description": "Gemini 4 Argon with balanced reasoning", "category": "Google Gemini"},
+    "gemini-4-argon-low": {"displayName": "Gemini 4 Argon (Low)", "maxTokens": 1048576, "description": "Gemini 4 Argon with fast reasoning", "category": "Google Gemini"},
+    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Spark Agent)", "maxTokens": 1048576, "description": "Gemini 4 Argon autonomous agent task mode (Spark)", "category": "Google Gemini"},
     "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High Reasoning)", "maxTokens": 1048576, "description": "Google Flagship model with deep thinking & reasoning (Default)", "category": "Google Gemini"},
     "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium Reasoning)", "maxTokens": 1048576, "description": "Balances speed and reasoning depth", "category": "Google Gemini"},
     "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low Reasoning)", "maxTokens": 1048576, "description": "Fast responses with light reasoning", "category": "Google Gemini"},
+    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576, "description": "Gemini 3.8 Flash autonomous agent task mode (Spark)", "category": "Google Gemini"},
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576, "description": "Dynamic tiered reasoning allocation", "category": "Google Gemini"},
     "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.7 Flash with high reasoning depth", "category": "Google Gemini"},
     "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.7 Flash with medium reasoning", "category": "Google Gemini"},
@@ -372,6 +417,16 @@ def normalize_model_name(model_name: str | None) -> str:
 
     # Version specific checks (Gemini only)
     if not is_claude_query:
+        if "task" in cleaned or "spark" in cleaned:
+            if "3.8" in cleaned or ("flash" in cleaned and "lite" not in cleaned):
+                return "gemini-3.8-flash-task"
+            return "gemini-4-argon-task"
+        if "argon" in cleaned or "gemini-4" in cleaned or "gemini-4.0" in cleaned or cleaned == "gemini-4":
+            if "low" in cleaned:
+                return "gemini-4-argon-low"
+            if "med" in cleaned:
+                return "gemini-4-argon-medium"
+            return "gemini-4-argon"
         if "3.8" in cleaned or "3-8" in cleaned:
             if "low" in cleaned:
                 return "gemini-3.8-flash-low"
@@ -443,7 +498,7 @@ def is_3p_model(model: str) -> bool:
     if not model:
         return False
     m = model.strip().lower()
-    if "gemini" in m:
+    if "gemini" in m or "argon" in m or "spark" in m or "task" in m:
         return False
     if m == "anthropic":
         return True

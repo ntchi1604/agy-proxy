@@ -49,6 +49,13 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(normalize_model_name("deepseek-r1"), "gemini-3.8-flash-high")
         self.assertEqual(normalize_model_name("gemini-3.5-flash-lite"), "gemini-3.5-flash-lite")
         self.assertEqual(normalize_model_name("gemini-3.5-lite"), "gemini-3.5-flash-lite")
+        # Spark / Task Aliases
+        self.assertEqual(normalize_model_name("spark"), "gemini-4-argon-task")
+        self.assertEqual(normalize_model_name("task"), "gemini-4-argon-task")
+        self.assertEqual(normalize_model_name("gemini-4-task"), "gemini-4-argon-task")
+        self.assertEqual(normalize_model_name("gemini-4-spark"), "gemini-4-argon-task")
+        self.assertEqual(normalize_model_name("gemini-3.8-task"), "gemini-3.8-flash-task")
+        self.assertEqual(normalize_model_name("gemini-3.8-spark"), "gemini-3.8-flash-task")
         # Claude 5.5 Aliases
         self.assertEqual(normalize_model_name("claude-5-5"), "claude-sonnet-5-5-high")
         self.assertEqual(normalize_model_name("claude-5.5"), "claude-sonnet-5-5-high")

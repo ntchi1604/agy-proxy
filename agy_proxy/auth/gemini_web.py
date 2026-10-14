@@ -104,6 +104,20 @@ def extract_cookies_from_raw(raw: str | dict[str, Any] | list[Any]) -> dict[str,
     return cookies
 
 
+def clean_gemini_text(text: str) -> str:
+    """Strips internal web UI code interpreter execution wrappers and temporary card content URLs."""
+    if not text:
+        return text
+    # Strip ```python?code_reference&code_event_index=0 ... ```
+    text = re.sub(
+        r'```(?:python|javascript|text)\?code_(?:reference|stdout)&code_event_index=\d+\n.*?```\n?',
+        '', text, flags=re.DOTALL
+    )
+    # Strip temporary Google usercontent card URLs
+    text = re.sub(r'https?://googleusercontent\.com/card_content/\d+\n?', '', text)
+    return text
+
+
 class GeminiWebSession(AccountSession):
     """
     Manages gemini.google.com web sessions via browser cookies (experimental).
@@ -118,51 +132,160 @@ class GeminiWebSession(AccountSession):
         "__Secure-1PSID",
         "__Secure-1PSIDTS",
         "__Secure-1PSIDCC",
+        "__Secure-3PSID",
+        "__Secure-3PSIDTS",
+        "__Secure-3PSIDCC",
+        "__Secure-1PAPISID",
+        "__Secure-3PAPISID",
         "HSID",
         "SID",
         "SSID",
         "APISID",
         "SAPISID",
+        "SIDCC",
+        "COMPASS",
+        "NID",
+        "AEC",
+        "OTZ",
+        "SEARCH_SAMESITE",
     ]
     # Build label — extracted from first StreamGenerate response or hard-coded fallback
-    _DEFAULT_BL = "boq_assistant-bard-web-server_20260917.13_p0"
+    _DEFAULT_BL = "boq_gemini-web-uiserver_20261012.19_p1"
 
     MODEL_CONFIGS: dict[str, dict[str, Any]] = {
-        "gemini-3.5-flash-lite-extended": {
-            "model_id": 6,
+        # Gemini 4 Argon (Web flagship)
+        "gemini-4-argon": {
+            "model_id": 8,
             "mode": 2,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite Extended (Web Thinking)",
+            "budget": 2,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon (Web Flagship)",
         },
-        "gemini-3.5-flash-lite": {
-            "model_id": 6,
+        "gemini-4-argon-high": {
+            "model_id": 8,
+            "mode": 2,
+            "budget": 2,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon High (Web Thinking)",
+        },
+        "gemini-4-argon-medium": {
+            "model_id": 8,
+            "mode": 4,
+            "budget": 1,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Medium (Web Thinking)",
+        },
+        "gemini-4-argon-low": {
+            "model_id": 8,
             "mode": 1,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite (Web)",
+            "budget": 0,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Low (Web)",
         },
-        "gemini-3.8-flash-extended": {
+        # Gemini 3.8 Flash
+        "gemini-3.8-flash-high": {
             "model_id": 1,
             "mode": 2,
+            "budget": 2,
             "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Extended (Web Thinking)",
+            "displayName": "Gemini 3.8 Flash High (Web Thinking)",
+        },
+        "gemini-3.8-flash-medium": {
+            "model_id": 1,
+            "mode": 4,
+            "budget": 1,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Medium (Web Thinking)",
         },
         "gemini-3.8-flash": {
             "model_id": 1,
             "mode": 1,
+            "budget": 0,
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash (Web)",
         },
-        "gemini-3.1-pro-extended": {
+        "gemini-3.8-flash-low": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Low (Web)",
+        },
+        # Gemini 3.1 Pro
+        "gemini-3.1-pro-high": {
             "model_id": 3,
             "mode": 2,
+            "budget": 2,
             "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro Extended (Web Thinking)",
+            "displayName": "Gemini 3.1 Pro High (Web Thinking)",
+        },
+        "gemini-3.1-pro-medium": {
+            "model_id": 3,
+            "mode": 4,
+            "budget": 1,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro Medium (Web Thinking)",
         },
         "gemini-3.1-pro": {
             "model_id": 3,
             "mode": 1,
+            "budget": 0,
             "hash": "e6fa609c3fa255c0",
             "displayName": "Gemini 3.1 Pro (Web)",
+        },
+        "gemini-3.1-pro-low": {
+            "model_id": 3,
+            "mode": 1,
+            "budget": 0,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro Low (Web)",
+        },
+        # Gemini 3.5 Flash-Lite
+        "gemini-3.5-flash-lite-high": {
+            "model_id": 6,
+            "mode": 2,
+            "budget": 2,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)",
+        },
+        "gemini-3.5-flash-lite-medium": {
+            "model_id": 6,
+            "mode": 4,
+            "budget": 1,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
+        },
+        "gemini-3.5-flash-lite": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite (Web)",
+        },
+        "gemini-3.5-flash-lite-low": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
+        },
+        # Gemini Spark / Task Mode Models (Autonomous Agent feature_mode=40)
+        "gemini-4-argon-task": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Task (Spark Agent)",
+        },
+        "gemini-3.8-flash-task": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Task (Spark Agent)",
         },
     }
 
@@ -215,15 +338,28 @@ class GeminiWebSession(AccountSession):
         self.region_code: str | None = region_code
         self.expiry_timestamp: float = expiry_timestamp or (time.time() + 86400.0)
         self.available_models: dict[str, Any] = {
-            "gemini-3.5-flash-lite-extended": {"displayName": "Gemini 3.5 Flash-Lite Extended (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash-Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-extended": {"displayName": "Gemini 3.8 Flash Extended (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4.0": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.1-pro-extended": {"displayName": "Gemini 3.1 Pro Extended (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash-Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             # Backwards-compatible aliases
-            "gemini-3-pro": {"displayName": "Gemini 3 Pro (Web Extended)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Extended)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3-pro": {"displayName": "Gemini 3 Pro (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
@@ -273,26 +409,67 @@ class GeminiWebSession(AccountSession):
         return self._req_id
 
     def get_model_config(self, model: str | None) -> dict[str, Any]:
-        """Resolves model name or alias to model ID, mode (standard/extended), and hash."""
+        """Resolves model name or alias to model ID, mode (standard/high/medium/low), budget, and hash."""
         if not model:
-            return self.MODEL_CONFIGS["gemini-3.5-flash-lite-extended"]
+            return self.MODEL_CONFIGS["gemini-4-argon"]
         m = model.lower().strip()
         if m in self.MODEL_CONFIGS:
             return self.MODEL_CONFIGS[m]
-        # Resolve aliases
-        if "3.5" in m and ("extend" in m or "think" in m or "high" in m):
-            return self.MODEL_CONFIGS["gemini-3.5-flash-lite-extended"]
-        if "3.5" in m or "lite" in m:
-            return self.MODEL_CONFIGS["gemini-3.5-flash-lite"]
-        if "3.8" in m and ("extend" in m or "think" in m or "high" in m):
-            return self.MODEL_CONFIGS["gemini-3.8-flash-extended"]
-        if "3.8" in m or "flash" in m:
+
+        # Check for task / spark agent mode
+        is_task = any(k in m for k in ("task", "spark", "agent"))
+        if is_task:
+            if "3.8" in m or ("flash" in m and "lite" not in m):
+                return self.MODEL_CONFIGS["gemini-3.8-flash-task"]
+            # Default task/spark model in Gemini Web is Gemini 4 Argon
+            return self.MODEL_CONFIGS["gemini-4-argon-task"]
+
+        # Check for explicit thinking modifier (e.g. @think=high, -high, -medium, -low, -extended)
+        is_high = any(k in m for k in ("high", "extend", "think"))
+        is_med = any(k in m for k in ("medium", "med"))
+        is_low = any(k in m for k in ("low", "none", "off"))
+
+        # Gemini 4 Argon
+        if any(k in m for k in ("argon", "gemini-4", "gemini-4.0", "gemini-4-pro")):
+            if is_high:
+                return self.MODEL_CONFIGS["gemini-4-argon-high"]
+            if is_med:
+                return self.MODEL_CONFIGS["gemini-4-argon-medium"]
+            if is_low:
+                return self.MODEL_CONFIGS["gemini-4-argon-low"]
+            return self.MODEL_CONFIGS["gemini-4-argon"]
+
+        # Gemini 3.8 Flash
+        if "3.8" in m or ("flash" in m and "lite" not in m):
+            if is_high:
+                return self.MODEL_CONFIGS["gemini-3.8-flash-high"]
+            if is_med:
+                return self.MODEL_CONFIGS["gemini-3.8-flash-medium"]
+            if is_low:
+                return self.MODEL_CONFIGS["gemini-3.8-flash-low"]
             return self.MODEL_CONFIGS["gemini-3.8-flash"]
-        if "pro" in m and ("extend" in m or "think" in m or "3-pro" in m):
-            return self.MODEL_CONFIGS["gemini-3.1-pro-extended"]
+
+        # Gemini 3.1 Pro
         if "pro" in m or "3.1" in m:
+            if is_high or "3-pro" in m:
+                return self.MODEL_CONFIGS["gemini-3.1-pro-high"]
+            if is_med:
+                return self.MODEL_CONFIGS["gemini-3.1-pro-medium"]
+            if is_low:
+                return self.MODEL_CONFIGS["gemini-3.1-pro-low"]
             return self.MODEL_CONFIGS["gemini-3.1-pro"]
-        return self.MODEL_CONFIGS["gemini-3.5-flash-lite-extended"]
+
+        # Gemini 3.5 Flash-Lite
+        if "3.5" in m or "lite" in m:
+            if is_high:
+                return self.MODEL_CONFIGS["gemini-3.5-flash-lite-high"]
+            if is_med:
+                return self.MODEL_CONFIGS["gemini-3.5-flash-lite-medium"]
+            if is_low:
+                return self.MODEL_CONFIGS["gemini-3.5-flash-lite-low"]
+            return self.MODEL_CONFIGS["gemini-3.5-flash-lite"]
+
+        return self.MODEL_CONFIGS["gemini-4-argon"]
 
     # ------------------------------------------------------------------ #
     # Property compatibility shims
@@ -677,40 +854,38 @@ class GeminiWebSession(AccountSession):
         else:
             inner[0] = [user_message, 0, None, None, None, None, 0]
 
-        # Turn context
-        if active_conv_id and active_resp_id:
-            ctx = [
-                active_conv_id,
-                active_resp_id,
-                active_rc_id or "",
-                None, None, None, None, None, None,
-                active_continuation or "",
-            ]
-        else:
-            ctx = ["", "", "", None, None, None, None, None, None, ""]
-
         inner[1] = ["en"]
-        inner[2] = ctx
-        inner[3] = "FNL82,0,1,87,17622,82,17662,2,66,21986,60,22052"
+        inner[2] = None
+        inner[3] = None
         inner[4] = uuid.uuid4().hex
         inner[6] = [1]
         inner[7] = 1
         inner[10] = 1
         inner[11] = 0
-        inner[17] = [[active_turn_index]]
+        inner[17] = [[model_config.get("budget", 2 if model_config.get("mode") == 2 else 0)]]
         inner[18] = 0
         inner[27] = 1
-        inner[30] = [4]
+        inner[30] = [4, 16, 19]
         inner[41] = [2]
+        inner[49] = model_config.get("feature_mode", 0)
         inner[53] = 0
         inner[59] = client_uuid
         inner[61] = []
         inner[67] = 0
         inner[68] = 2
+
+        # Multi-turn continuation context
+        if active_conv_id and active_continuation:
+            inner[71] = [active_conv_id, None, None, None, None, None, None, active_continuation]
+        elif active_conv_id:
+            inner[71] = [active_conv_id, None, None, None, None, None, None, None]
+        else:
+            inner[71] = None
+
         inner[79] = model_config["model_id"]
         inner[80] = model_config["mode"]
-        inner[91] = 0
-        inner[96] = 0
+        inner[91] = 1
+        inner[96] = 1
         inner[98] = 1
 
         outer = [None, json.dumps(inner)]
@@ -833,8 +1008,9 @@ class GeminiWebSession(AccountSession):
                 "sec-fetch-site": "same-origin",
                 "x-goog-ext-525001261-jspb": json.dumps([
                     1, None, None, None, model_config["hash"], None, None, 0,
-                    [4, 5, 6, 8, 4, 5, 6, 8], None, None, 2, None, None,
-                    model_config["model_id"], model_config["mode"], session_uuid
+                    [4, 5, 6, 8, 16, 19, 20, 4, 5, 6, 8, 16, 19, 20], None, None, 2, None, None,
+                    model_config["model_id"], model_config["mode"], session_uuid,
+                    [self._bl_token]
                 ]),
                 "x-goog-ext-525005358-jspb": json.dumps([client_uuid, 1]),
                 "x-goog-ext-73010989-jspb": "[0]",
@@ -882,6 +1058,9 @@ class GeminiWebSession(AccountSession):
                     new_rc_id: str | None = None
                     detected_continuation: str | None = None
                     detected_model: str | None = None
+                    grounding_sources: list[dict[str, str]] = []
+                    seen_grounding_urls: set[str] = set()
+                    is_task: bool = bool(model_config.get("feature_mode") == 40)
 
                     text_buffer = ""
                     has_stripped_xssi = False
@@ -941,14 +1120,49 @@ class GeminiWebSession(AccountSession):
                                                     # 3. Model name
                                                     try:
                                                         if isinstance(inner, list):
-                                                            for m_item in inner:
-                                                                if isinstance(m_item, str) and any(kw in m_item for kw in ("Flash", "Pro", "Extended")):
-                                                                    detected_model = m_item
-                                                                    break
+                                                            if len(inner) > 42 and isinstance(inner[42], str) and inner[42]:
+                                                                detected_model = inner[42]
+                                                            else:
+                                                                for m_item in inner:
+                                                                    if isinstance(m_item, str) and any(kw in m_item for kw in ("Argon", "Flash", "Pro", "Extended")):
+                                                                        detected_model = m_item
+                                                                        break
                                                     except Exception:
                                                         pass
 
-                                                    # 4. Candidates / deltas
+                                                    # 4. Grounding sources (web search citations: inner[4][0][2][1])
+                                                    try:
+                                                        if (isinstance(inner, list) and len(inner) > 4
+                                                                and isinstance(inner[4], list) and inner[4]
+                                                                and isinstance(inner[4][0], list) and len(inner[4][0]) > 2
+                                                                and isinstance(inner[4][0][2], list) and len(inner[4][0][2]) > 1
+                                                                and isinstance(inner[4][0][2][1], list)):
+                                                            for g_chunk in inner[4][0][2][1]:
+                                                                if isinstance(g_chunk, list) and len(g_chunk) > 2 and isinstance(g_chunk[2], list):
+                                                                    for src in g_chunk[2]:
+                                                                        if isinstance(src, list) and len(src) >= 2 and isinstance(src[0], str):
+                                                                            raw_url = src[0]
+                                                                            clean_url = re.sub(r'#:~:text=.*$', '', raw_url)
+                                                                            if clean_url and clean_url not in seen_grounding_urls:
+                                                                                seen_grounding_urls.add(clean_url)
+                                                                                g_title = src[1] if isinstance(src[1], str) else ""
+                                                                                g_snippet = src[3] if len(src) > 3 and isinstance(src[3], str) else ""
+                                                                                grounding_sources.append({
+                                                                                    "url": clean_url,
+                                                                                    "title": g_title,
+                                                                                    "snippet": g_snippet,
+                                                                                })
+                                                    except Exception:
+                                                        pass
+
+                                                    # 5. Task / Spark mode indicator
+                                                    try:
+                                                        if isinstance(inner, list) and len(inner) > 29 and inner[29] == [40, 40, 40]:
+                                                            is_task = True
+                                                    except Exception:
+                                                        pass
+
+                                                    # 5. Candidates / deltas
                                                     try:
                                                         if (isinstance(inner, list) and len(inner) > 4
                                                                 and isinstance(inner[4], list) and inner[4]
@@ -957,15 +1171,17 @@ class GeminiWebSession(AccountSession):
                                                             if len(cand0) > 0 and isinstance(cand0[0], str) and cand0[0].startswith("rc_"):
                                                                 new_rc_id = cand0[0]
 
-                                                            # Text delta (response body)
+                                                            # Text delta (response body) with clean_gemini_text sanitization
                                                             if len(cand0) > 1 and isinstance(cand0[1], list) and cand0[1]:
                                                                 full_text = cand0[1][0]
-                                                                if isinstance(full_text, str) and full_text != prev_text:
-                                                                    delta = full_text[len(prev_text):]
-                                                                    if delta:
-                                                                        accumulated_text += delta
-                                                                        yield {"type": "text", "text": delta}
-                                                                    prev_text = full_text
+                                                                if isinstance(full_text, str):
+                                                                    cleaned_full = clean_gemini_text(full_text)
+                                                                    if cleaned_full != prev_text:
+                                                                        delta = cleaned_full[len(prev_text):]
+                                                                        if delta:
+                                                                            accumulated_text += delta
+                                                                            yield {"type": "text", "text": delta}
+                                                                        prev_text = cleaned_full
 
                                                             # Thinking delta
                                                             th_text = None
@@ -1008,11 +1224,14 @@ class GeminiWebSession(AccountSession):
                                                 cand0 = inner[4][0]
                                                 if len(cand0) > 1 and isinstance(cand0[1], list) and cand0[1]:
                                                     full_text = cand0[1][0]
-                                                    if isinstance(full_text, str) and full_text != prev_text:
-                                                        delta = full_text[len(prev_text):]
-                                                        if delta:
-                                                            accumulated_text += delta
-                                                            yield {"type": "text", "text": delta}
+                                                    if isinstance(full_text, str):
+                                                        cleaned_full = clean_gemini_text(full_text)
+                                                        if cleaned_full != prev_text:
+                                                            delta = cleaned_full[len(prev_text):]
+                                                            if delta:
+                                                                accumulated_text += delta
+                                                                yield {"type": "text", "text": delta}
+                                                            prev_text = cleaned_full
                         except Exception:
                             pass
 
@@ -1041,6 +1260,8 @@ class GeminiWebSession(AccountSession):
                         "rc_id": sess_ctx.get("rc_id") or self._rc_id,
                         "model": detected_model or model_config["displayName"],
                         "text": accumulated_text,
+                        "grounding_sources": grounding_sources,
+                        "is_task": is_task,
                     }
                     return
 
@@ -1054,6 +1275,63 @@ class GeminiWebSession(AccountSession):
                 logger.warning("[GeminiWeb] stream_generate error: %s", e)
                 yield {"type": "error", "message": str(e)[:200]}
                 return
+
+    async def get_remy_goal(self, conv_id: str) -> dict[str, Any] | None:
+        """
+        Fetches the Remy Goal / Task status from Google's batchexecute RPC mXV10b.
+        Returns dict with task_id, title, status, summary, or None if not a task.
+        """
+        if not conv_id or not self._cookies.get("__Secure-1PSID"):
+            return None
+        at_token = await self.get_at_token()
+        if not at_token:
+            return None
+
+        req_payload = json.dumps([[["mXV10b", json.dumps([conv_id]), None, "generic"]]])
+        url = (
+            f"{self.GEMINI_WEB_BASE}/_/BardChatUi/data/batchexecute"
+            f"?rpcids=mXV10b&bl={self._bl_token}"
+            + (f"&f.sid={self._f_sid}" if self._f_sid else "")
+            + f"&hl=en&_reqid={self._next_req_id()}&rt=c"
+        )
+        headers = {
+            "Cookie": self._build_cookie_header(),
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Origin": self.GEMINI_WEB_BASE,
+            "Referer": f"{self.GEMINI_WEB_BASE}/",
+        }
+        client = await self.get_http_client()
+        try:
+            resp = await client.post(url, headers=headers, data={"f.req": req_payload, "at": at_token}, timeout=10.0)
+            if resp.status_code != 200:
+                return None
+            text = resp.text
+            for line in text.split("\n"):
+                line = line.strip()
+                if line.startswith("["):
+                    try:
+                        outer = json.loads(line)
+                        if isinstance(outer, list):
+                            for item in outer:
+                                if isinstance(item, list) and len(item) >= 3 and item[0] == "wrb.fr" and item[1] == "mXV10b" and item[2]:
+                                    inner = json.loads(item[2])
+                                    if isinstance(inner, list) and inner and isinstance(inner[0], list):
+                                        g = inner[0]
+                                        status_map = {2: "in_progress", 3: "completed"}
+                                        return {
+                                            "task_id": g[0] if len(g) > 0 else None,
+                                            "title": g[1] if len(g) > 1 else "",
+                                            "status_code": g[2] if len(g) > 2 else 0,
+                                            "status": status_map.get(g[2] if len(g) > 2 else 0, "unknown"),
+                                            "summary": g[6] if len(g) > 6 else "",
+                                            "conv_id": conv_id,
+                                        }
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug("[GeminiWeb] Failed to get Remy Goal for %s: %s", conv_id, e)
+        return None
 
     async def validate_live(self) -> dict[str, Any]:
         """Validates by attempting to fetch the AT token from Gemini Web."""
@@ -1078,7 +1356,7 @@ class GeminiWebSession(AccountSession):
         if ok:
             return {
                 "ok": True,
-                "message": "Gemini Web session active! AT token verified. Ready for Gemini models (gemini-3.5-flash-lite extended, gemini-3.8-flash, gemini-3.1-pro).",
+                "message": "Gemini Web session active! AT token verified. Ready for Gemini models (Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Gemini 3.5 Flash-Lite).",
                 "has_cookies": bool(self._cookies.get("__Secure-1PSID")),
                 "cookies_count": len(self._cookies),
                 "has_at_token": bool(self._at_token),

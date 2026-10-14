@@ -47,6 +47,7 @@ from agy_proxy.auth.api_key import (
 )
 from agy_proxy.auth.gemini_web import (
     GeminiWebSession,
+    clean_gemini_text,
     extract_cookies_from_raw,
 )
 from agy_proxy.auth.pool import (
@@ -90,6 +91,7 @@ __all__ = [
     "AntigravityOAuthSession",
     "AIStudioApiKeySession",
     "GeminiWebSession",
+    "clean_gemini_text",
     "extract_cookies_from_raw",
     # Pool & Manager
     "AccountPool",

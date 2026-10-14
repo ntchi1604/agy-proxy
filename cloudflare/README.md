@@ -77,17 +77,23 @@ You can now directly use:
   - `gemini-3.7-flash-high`, `gemini-3.7-flash-medium`, `gemini-3.7-flash-low`
   - `gemini-3.1-pro-high`, `gemini-3.1-pro-low`
   - `gemini-3.1-flash-lite` (`gpt-4o-mini`)
+  - `claude-sonnet-5-5-high`, `claude-sonnet-5-5-medium`, `claude-sonnet-5-5-low`
+  - `claude-opus-5-5-high`, `claude-opus-5-5-medium`, `claude-opus-5-5-low`
   - `claude-sonnet-4-6` (`claude-3-7-sonnet`, `claude-3-5-sonnet`)
   - `claude-opus-4-6-thinking` (`claude-3-opus`)
-  - `gpt-oss-120b-medium`, `gpt-4o`, `o1`, `deepseek-r1`
+  - `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.4`, `gpt-oss-120b-medium`, `gpt-4o`, `o1`, `deepseek-r1`
 
 ---
 
-## 💡 Key Features in v2.2.0
+## 💡 Key Features in v2.23.0
 
-- **Upstream User-Agent Alignment**: Uses `antigravity/hub/2.23.0` matching official client telemetry.
+- **Upstream User-Agent Alignment**: Uses `antigravity/hub/2.23.0` (cl=998057262) matching official client telemetry.
+- **Claude 5.5 Support & Auto-Fallback**: Full support for Claude Sonnet 5.5 & Opus 5.5 with 1M token context, adaptive reasoning, and automatic account fallback to Claude 4.6 on 404/429.
+- **DeepAgent & Experiments Activation**: Automatically activates `enable-deepagent: true` on `/v1internal:listExperiments` pass-through for autonomous subagent workflows (`/deepagent`).
+- **Claude Code Billing Header Stripping**: Strips internal `x-anthropic-billing-header:` prompts to eliminate Google CloudCode 429 RESOURCE_EXHAUSTED rejections.
+- **Smart 429 Cooldown**: Dynamically parses reset duration from 429 responses (`resets in ...` / `retry after ...`) with intelligent 15s default cooldown.
 - **Multi-Account Failover Loop**: Automatically iterates through pooled accounts on `429 Too Many Requests`, `401 Unauthorized` (with automatic token refresh), or `5xx Server Error` (500, 502, 503, 504), preventing interrupted requests.
-- **Role Sanitization for Claude Models**: Message roles are strictly sanitized to lowercase `user` (for `user`, `context`) or `model` (for `model`, `assistant`), and system instructions are extracted to `systemInstruction`, preventing CloudCode Error 500 when using Claude Sonnet 4.6 or Claude Opus 4.6.
+- **Role Sanitization for Claude Models**: Message roles are strictly sanitized to lowercase `user` (for `user`, `context`) or `model` (for `model`, `assistant`), and system instructions are extracted to `systemInstruction`, preventing CloudCode Error 500 when using Claude Sonnet or Claude Opus.
 - **Roo Code & Cline Optimization**:
   - Full tool conversion (`tools`, `tool_use`, `tool_result`, `functionCall`, `functionResponse`).
   - Supports `custom.input_schema`, `custom.parameters`, `custom.name`, and `custom.description`.

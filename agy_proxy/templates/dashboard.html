@@ -3485,12 +3485,16 @@ ightarrow$ v1.0.3</p>
     }
 
     const GEMINI_WEB_MODELS = [
-      { id: 'gemini-3.5-flash-lite-extended', name: '3.5-flash-lite (extended) [Thinking]' },
-      { id: 'gemini-3.5-flash-lite', name: '3.5-flash-lite [Standard]' },
-      { id: 'gemini-3.8-flash-extended', name: '3.8-flash (extended) [Thinking]' },
+      { id: 'gemini-4-argon', name: '4-argon [Flagship]' },
+      { id: 'gemini-4-argon-task', name: '4-argon (task) [Spark Agent]' },
+      { id: 'gemini-4-argon-high', name: '4-argon (high) [Thinking]' },
+      { id: 'gemini-3.8-flash-high', name: '3.8-flash (high) [Thinking]' },
       { id: 'gemini-3.8-flash', name: '3.8-flash [Standard]' },
-      { id: 'gemini-3.1-pro-extended', name: '3.1-pro (extended) [Thinking]' },
+      { id: 'gemini-3.8-flash-task', name: '3.8-flash (task) [Spark Agent]' },
+      { id: 'gemini-3.1-pro-high', name: '3.1-pro (high) [Thinking]' },
       { id: 'gemini-3.1-pro', name: '3.1-pro [Standard]' },
+      { id: 'gemini-3.5-flash-lite-high', name: '3.5-flash-lite (high) [Thinking]' },
+      { id: 'gemini-3.5-flash-lite', name: '3.5-flash-lite [Standard]' },
     ];
 
     const API_KEY_MODELS = [
@@ -3541,7 +3545,7 @@ ightarrow$ v1.0.3</p>
 
       if (acc && acc.auth_method === 'gemini_web') {
         // STRICT: Gemini Web accounts ONLY show reverse-engineered browser models.
-        // First model is strictly gemini-3.5-flash-lite-extended!
+        // Default flagship model is gemini-4-argon
         GEMINI_WEB_MODELS.forEach(m => {
           const opt = document.createElement('option');
           opt.value = m.id;
@@ -3551,7 +3555,7 @@ ightarrow$ v1.0.3</p>
         if (GEMINI_WEB_MODELS.some(m => m.id === prevVal)) {
           select.value = prevVal;
         } else {
-          select.value = 'gemini-3.5-flash-lite-extended';
+          select.value = 'gemini-4-argon';
         }
       } else if (acc && acc.auth_method === 'api_key') {
         // STRICT: Google AI Studio API Keys ONLY support Gemini API models (no Claude, no web-only)
@@ -3578,7 +3582,7 @@ ightarrow$ v1.0.3</p>
         let list = ANTIGRAVITY_MODELS;
         if (acc.available_models) {
           const rawList = Array.isArray(acc.available_models) ? acc.available_models : Object.keys(acc.available_models);
-          const valid = rawList.filter(m => !m.endsWith('-extended') && !m.startsWith('tab_') && !m.startsWith('chat_'));
+          const valid = rawList.filter(m => !m.startsWith('tab_') && !m.startsWith('chat_'));
           if (valid.length > 0) {
             list = valid.map(m => {
               const def = ANTIGRAVITY_MODELS.find(d => d.id === m);
@@ -3617,7 +3621,7 @@ ightarrow$ v1.0.3</p>
             const opt = document.createElement('option');
             opt.value = key;
             opt.innerText = `${info.displayName || key} (${key})`;
-            if (key.endsWith('-extended') || (info.displayName && info.displayName.includes('(Web'))) {
+            if (info.displayName && info.displayName.includes('(Web')) {
               gWeb.appendChild(opt);
             } else if (!hasCloudAccs && hasApiAccs) {
               gApi.appendChild(opt);
@@ -3788,7 +3792,7 @@ ightarrow$ v1.0.3</p>
             </div>
             <div class="text-[10px] text-slate-400 leading-relaxed">
               Direct reverse-engineered stream via <code class="text-teal-300 font-mono">StreamGenerate</code>.
-              Models: <code class="text-teal-300 font-mono">gemini-3.5-flash-lite (extended)</code>, <code class="text-teal-300 font-mono">3.8-flash</code>, <code class="text-teal-300 font-mono">3.1-pro</code>.
+              Models: <code class="text-teal-300 font-mono">gemini-4-argon</code>, <code class="text-teal-300 font-mono">3.8-flash</code>, <code class="text-teal-300 font-mono">3.1-pro</code>.
               Cookies: <span class="font-mono text-slate-200">${acc.cookies_count || 0}</span>, AT Token: <span class="font-mono text-slate-200">${acc.has_at_token ? 'Verified' : 'Ready'}</span>.
             </div>
           `;
@@ -3853,9 +3857,9 @@ ightarrow$ v1.0.3</p>
       if (acc && acc.auth_method === 'gemini_web') {
         const modelSel = document.getElementById('modelSelect');
         if (modelSel) {
-          modelSel.value = 'gemini-3.5-flash-lite-extended';
+          modelSel.value = 'gemini-4-argon';
           const activeM = document.getElementById('activeModelBadge');
-          if (activeM) activeM.innerText = 'gemini-3.5-flash-lite-extended';
+          if (activeM) activeM.innerText = 'gemini-4-argon';
         }
       }
       setTimeout(() => {
@@ -4103,7 +4107,7 @@ ightarrow$ v1.0.3</p>
                 </div>
               </div>
               <p class="text-[11px] text-teal-300/90 bg-teal-500/10 border border-teal-500/20 p-2.5 rounded-xl">
-                ✨ Gemini Web session is healthy. Ready for <code class="font-mono font-bold">gemini-3.5-flash-lite (extended)</code>, <code class="font-mono font-bold">gemini-3.8-flash</code>, and <code class="font-mono font-bold">gemini-3.1-pro</code>!
+                ✨ Gemini Web session is healthy. Ready for <code class="font-mono font-bold">gemini-4-argon</code>, <code class="font-mono font-bold">gemini-3.8-flash</code>, and <code class="font-mono font-bold">gemini-3.1-pro</code>!
               </p>
             `;
           } else if (authMethod === 'api_key') {
