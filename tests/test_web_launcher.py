@@ -159,9 +159,14 @@ def test_cli_parser_web_subcommand():
     assert args_alias.status is True
 
     # Test alias 'web-mode'
-    args_mode = parser.parse_args(["web-mode", "--browser", "helium"])
+    args_mode = parser.parse_args(["web-mode", "--browser", "helium", "-v"])
     assert args_mode.subcommand == "web-mode"
     assert args_mode.browser == "helium"
+    assert args_mode.verbose is True
+
+    # Test default verbose is False
+    args_default = parser.parse_args(["web"])
+    assert args_default.verbose is False
 
 
 def test_server_api_web_status():

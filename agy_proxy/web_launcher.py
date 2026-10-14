@@ -375,6 +375,7 @@ def print_web_banner(
     proxy_active: bool,
     ls_path: Path,
     killed_electron: bool = False,
+    log_path: Optional[Path] = None,
 ):
     """Renders a beautiful Rich banner for Antigravity Web Mode."""
     table = Table(show_header=False, box=None, padding=(0, 1))
@@ -395,6 +396,9 @@ def print_web_banner(
 
     table.add_row("[bold cyan]🔑 CSRF Token:[/bold cyan]", f"[dim]{csrf_token}[/dim]")
     table.add_row("[bold cyan]📦 Server Binary:[/bold cyan]", f"[dim]{ls_path}[/dim]")
+
+    if log_path:
+        table.add_row("[bold cyan]📄 Server Logs:[/bold cyan]", f"[dim]{log_path}[/dim]")
 
     if killed_electron:
         table.add_row("[bold cyan]🧹 Electron Cleanup:[/bold cyan]", "[bold green]Closed old Electron window to free memory[/bold green]")
@@ -425,6 +429,8 @@ def launch_antigravity_web(
     ls_path: Optional[str | Path] = None,
     detach: bool = False,
     ide_version: str = DEFAULT_IDE_VERSION,
+    verbose: bool = False,
+    log_path: Optional[str | Path] = None,
 ) -> int:
     """
     Main entry point for starting Antigravity in browser Web Mode.
@@ -435,6 +441,13 @@ def launch_antigravity_web(
         console.print("[bold red]❌ Error: Could not locate Antigravity language_server binary.[/bold red]")
         console.print("Please install Antigravity or specify the path via [bold cyan]--ls-path /path/to/language_server[/bold cyan].")
         return 1
+
+    # Prepare log path
+    effective_log_path = Path(log_path) if log_path else Path.home() / ".config" / "Antigravity" / "logs" / "language_server.log"
+    try:
+        effective_log_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
 
     # Check running instances
     instances = get_running_instances()
@@ -487,6 +500,7 @@ def launch_antigravity_web(
         proxy_active=proxy_alive,
         ls_path=resolved_ls,
         killed_electron=killed_any,
+        log_path=effective_log_path if not verbose else None,
     )
 
     # Launch browser after delay
@@ -494,20 +508,33 @@ def launch_antigravity_web(
         open_browser_async(url, browser_name=browser, delay=2.5)
 
     # Launch server process
+    log_out = None
     try:
         if detach:
             console.print("[bold green]🚀 Running Antigravity Web in background daemon mode...[/bold green]")
+            if not verbose:
+                log_out = open(effective_log_path, "a", encoding="utf-8")
+                target_out = log_out
+                target_err = subprocess.STDOUT
+            else:
+                target_out = subprocess.DEVNULL
+                target_err = subprocess.DEVNULL
+
             proc = subprocess.Popen(
                 cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=target_out,
+                stderr=target_err,
                 start_new_session=True,
             )
             console.print(f"Server started with PID: [bold cyan]{proc.pid}[/bold cyan]")
             return 0
 
         # Foreground mode: forward signals gracefully
-        proc = subprocess.Popen(cmd)
+        if not verbose:
+            log_out = open(effective_log_path, "a", encoding="utf-8")
+            proc = subprocess.Popen(cmd, stdout=log_out, stderr=subprocess.STDOUT)
+        else:
+            proc = subprocess.Popen(cmd)
 
         def _signal_handler(signum, frame):
             try:
@@ -530,3 +557,10 @@ def launch_antigravity_web(
     except Exception as e:
         console.print(f"[bold red]❌ Failed to start Antigravity Web Server:[/bold red] {e}")
         return 1
+    finally:
+        if log_out and not log_out.closed:
+            try:
+                log_out.flush()
+                log_out.close()
+            except Exception:
+                pass

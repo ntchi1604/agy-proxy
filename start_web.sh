@@ -58,6 +58,9 @@ for ((i=0; i<${#args[@]}; i++)); do
                 BROWSER_CMD="${args[i+1]}"
             fi
             ;;
+        --verbose|-v)
+            VERBOSE=1
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -66,6 +69,7 @@ for ((i=0; i<${#args[@]}; i++)); do
             echo "  -k, --kill-electron    Automatically terminate running Electron instances"
             echo "      --no-open          Do not automatically open browser on startup"
             echo "  -b, --browser NAME     Specify custom browser executable (e.g. helium, google-chrome)"
+            echo "  -v, --verbose          Show raw language_server console output (default: logged to file)"
             echo "  -h, --help             Show this help message"
             exit 0
             ;;
@@ -152,9 +156,12 @@ FINAL_ARGS=(
     "--enable_sidecars"
 )
 
-if curl -sf --max-time 1 "${PROXY_URL}/health" >/dev/null 2>&1 || curl -sf --max-time 1 "${PROXY_URL}/api/info" >/dev/null 2>&1; then
-    FINAL_ARGS+=("--api_server_url" "$PROXY_URL" "--cloud_code_endpoint" "$PROXY_URL")
-    echo -e "🔄 \033[1;32magy-proxy active at ${PROXY_URL}\033[0m -> routing AI traffic through proxy"
-fi
+LOG_FILE="${HOME}/.config/Antigravity/logs/language_server.log"
+mkdir -p "$(dirname "$LOG_FILE")"
 
-exec "$BIN" "${FINAL_ARGS[@]}"
+if [ "${VERBOSE:-0}" -eq 1 ]; then
+    exec "$BIN" "${FINAL_ARGS[@]}"
+else
+    echo -e "📄 Server logs:     \033[0;36m${LOG_FILE}\033[0m"
+    exec "$BIN" "${FINAL_ARGS[@]}" >> "$LOG_FILE" 2>&1
+fi

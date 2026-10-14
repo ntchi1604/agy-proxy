@@ -723,6 +723,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--ls-path", type=str, default=None, help="Explicit path to language_server binary")
     web_parser.add_argument("--detach", "-d", action="store_true", help="Run in background daemon mode")
     web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
+    web_parser.add_argument("--verbose", "-v", action="store_true", help="Show raw language_server console output (default: hidden, logged to file)")
     web_parser.add_argument("--ide-version", type=str, default="2.23.0", help="Reported IDE version (default: 2.23.0)")
 
     # Server arguments
@@ -978,6 +979,7 @@ def main():
             ls_path=getattr(args, "ls_path", None),
             detach=getattr(args, "detach", False),
             ide_version=getattr(args, "ide_version", "2.23.0"),
+            verbose=getattr(args, "verbose", False),
         )
         sys.exit(code)
 
