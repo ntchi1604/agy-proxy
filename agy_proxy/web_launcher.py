@@ -423,7 +423,8 @@ def launch_antigravity_web(
     host: str = "127.0.0.1",
     proxy_url: Optional[str] = DEFAULT_PROXY_URL,
     proxy_port: int = DEFAULT_PROXY_PORT,
-    no_open: bool = False,
+    open_browser: bool = False,
+    no_open: Optional[bool] = None,
     browser: Optional[str] = None,
     kill_electron: bool = False,
     ls_path: Optional[str | Path] = None,
@@ -463,13 +464,18 @@ def launch_antigravity_web(
             console.print("[bold yellow]⚠️  Notice: Running Electron Antigravity instance detected.[/bold yellow]")
             console.print("Closing the Electron window will free ~1.6 GB of RAM. You can use [bold cyan]--kill-electron[/bold cyan] to do this automatically.")
 
+    # Determine whether to auto-open browser (default: False to prevent tab spam)
+    should_open = open_browser
+    if no_open is not None and not open_browser:
+        should_open = not no_open
+
     # Check if port is already in use
     url = f"https://{host}:{port}/"
     if is_port_in_use(port, host):
         console.print(f"[bold yellow]⚠️  Port {port} is already in use.[/bold yellow]")
         if instances.get("language_server_running"):
             console.print(f"[bold green]✓ Antigravity Web is already running at:[/bold green] [bold cyan]{url}[/bold cyan]")
-            if not no_open:
+            if should_open:
                 console.print("🌐 Opening web browser...")
                 open_browser_async(url, browser_name=browser, delay=0.5)
             return 0
@@ -503,8 +509,8 @@ def launch_antigravity_web(
         log_path=effective_log_path if not verbose else None,
     )
 
-    # Launch browser after delay
-    if not no_open:
+    # Launch browser after delay only if requested
+    if should_open:
         open_browser_async(url, browser_name=browser, delay=2.5)
 
     # Launch server process

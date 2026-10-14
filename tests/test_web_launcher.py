@@ -169,9 +169,14 @@ def test_cli_parser_web_subcommand():
     assert args_dbg.subcommand == "web"
     assert args_dbg.verbose is True
 
-    # Test default verbose is False
+    # Test --open sets open
+    args_open = parser.parse_args(["web", "--open"])
+    assert args_open.open is True
+
+    # Test default open is False and verbose is False
     args_default = parser.parse_args(["web"])
     assert args_default.verbose is False
+    assert args_default.open is False
 
 
 def test_server_api_web_status():

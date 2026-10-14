@@ -31,7 +31,7 @@ PORT="${PORT:-44741}"
 PROXY_PORT="${AGY_PROXY_PORT:-8000}"
 PROXY_URL="${AGY_PROXY_URL:-http://127.0.0.1:${PROXY_PORT}}"
 KILL_ELECTRON=0
-NO_OPEN=0
+AUTO_OPEN=0
 BROWSER_CMD=""
 
 # Parse bash arguments
@@ -50,8 +50,11 @@ for ((i=0; i<${#args[@]}; i++)); do
         --kill-electron|-k)
             KILL_ELECTRON=1
             ;;
+        --open|-o)
+            AUTO_OPEN=1
+            ;;
         --no-open)
-            NO_OPEN=1
+            AUTO_OPEN=0
             ;;
         --browser|-b)
             if (( i + 1 < ${#args[@]} )); then
@@ -131,8 +134,8 @@ echo -e "\033[0;33m   (Click Advanced -> Proceed / Continue to 127.0.0.1)\033[0m
 echo "⏹️  Press Ctrl+C to stop server"
 echo "============================================================"
 
-# Background browser open
-if [ "$NO_OPEN" -ne 1 ]; then
+# Background browser open only if requested
+if [ "$AUTO_OPEN" -eq 1 ]; then
     (
         sleep 2
         if [ -n "$BROWSER_CMD" ] && command -v "$BROWSER_CMD" >/dev/null 2>&1; then

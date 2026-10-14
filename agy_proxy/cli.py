@@ -716,8 +716,8 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--port", "-p", type=int, default=44741, help="HTTPS port for Antigravity Web UI (default: 44741)")
     web_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address to bind Web UI (default: 127.0.0.1)")
     web_parser.add_argument("--proxy-url", type=str, default="http://127.0.0.1:8000", help="Antigravity Proxy URL (default: http://127.0.0.1:8000)")
-    web_parser.add_argument("--proxy-port", type=int, default=8000, help="Proxy port (default: 8000)")
-    web_parser.add_argument("--no-open", action="store_true", help="Do not automatically open browser on startup")
+    web_parser.add_argument("--open", "-o", action="store_true", help="Automatically open web browser on startup (default: False)")
+    web_parser.add_argument("--no-open", action="store_true", default=False, help=argparse.SUPPRESS)
     web_parser.add_argument("--browser", "-b", type=str, default=None, help="Custom browser executable to open (e.g. helium, google-chrome, firefox)")
     web_parser.add_argument("--kill-electron", "-k", action="store_true", help="Automatically terminate running Electron instances without prompt to free RAM")
     web_parser.add_argument("--ls-path", type=str, default=None, help="Explicit path to language_server binary")
@@ -973,7 +973,7 @@ def main():
             host=getattr(args, "host", "127.0.0.1"),
             proxy_url=getattr(args, "proxy_url", "http://127.0.0.1:8000"),
             proxy_port=getattr(args, "proxy_port", 8000),
-            no_open=getattr(args, "no_open", False),
+            open_browser=getattr(args, "open", False) and not getattr(args, "no_open", False),
             browser=getattr(args, "browser", None),
             kill_electron=getattr(args, "kill_electron", False),
             ls_path=getattr(args, "ls_path", None),
