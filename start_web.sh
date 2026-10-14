@@ -58,7 +58,7 @@ for ((i=0; i<${#args[@]}; i++)); do
                 BROWSER_CMD="${args[i+1]}"
             fi
             ;;
-        --verbose|-v)
+        --debug|--verbose|-v)
             VERBOSE=1
             ;;
         --help|-h)
@@ -69,7 +69,7 @@ for ((i=0; i<${#args[@]}; i++)); do
             echo "  -k, --kill-electron    Automatically terminate running Electron instances"
             echo "      --no-open          Do not automatically open browser on startup"
             echo "  -b, --browser NAME     Specify custom browser executable (e.g. helium, google-chrome)"
-            echo "  -v, --verbose          Show raw language_server console output (default: logged to file)"
+            echo "  -v, --verbose, --debug Show raw language_server console output (default: logged to file)"
             echo "  -h, --help             Show this help message"
             exit 0
             ;;

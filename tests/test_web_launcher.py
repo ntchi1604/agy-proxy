@@ -164,6 +164,11 @@ def test_cli_parser_web_subcommand():
     assert args_mode.browser == "helium"
     assert args_mode.verbose is True
 
+    # Test --debug sets verbose
+    args_dbg = parser.parse_args(["web", "--debug"])
+    assert args_dbg.subcommand == "web"
+    assert args_dbg.verbose is True
+
     # Test default verbose is False
     args_default = parser.parse_args(["web"])
     assert args_default.verbose is False
