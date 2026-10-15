@@ -29,16 +29,40 @@ This proxy is designed to supercharge the official Google Antigravity ecosystem.
 
 - 🔄 **OpenAI, Responses API, Anthropic & Gemini Compatible Endpoints**:
   - Full support for OpenAI Chat Completions (`/v1/chat/completions`) and the latest **OpenAI Responses API (`/v1/responses`)** with native **WebSocket (`ws://`) and HTTP SSE streaming** for **OpenAI Codex CLI (v0.150+)**.
+  - **Native Google GenAI SDK Endpoints**: Full compatibility with Google's official SDKs via `/v1beta/models/{model}:streamGenerateContent`, `/v1beta/models/{model}:generateContent`, `/v1beta/models/{model}:countTokens`, and `GET /v1beta/models` using `x-goog-api-key` or `?key=`.
+  - **OpenAI Compatible Embeddings (`/v1/embeddings`)**: Generates 1536-dim or custom dimension embeddings via Google's `text-embedding-004` or fast local deterministic hash fallbacks for RAG workflows.
   - Full support for streaming (`stream: true` SSE) and non-streaming responses.
   - Thinking / Reasoning process extracted to `delta.reasoning_content` (OpenAI) and `thinking` blocks (Anthropic) for reasoning models (`gemini-3.8-flash-high`, `gemini-3.7-flash-high`, `claude-opus-4-6-thinking`).
   - Native Multi-turn Tool & Function Calling support (`tools`, `tool_choice`, `tool_use`, `tool_result`).
   - Multimodal input support (Images via base64 data URIs and URLs).
   - 🌐 **Built-in Live Web Search**: Native **Google Grounding Search (Vertex AI)** with automatic multi-engine fallbacks (**DuckDuckGo**, **Bing**, **Brave**) for coding agents and tools (`WebSearch`, `web_search`) without requiring external API keys.
+- ⚡ **Live Traffic Inspector & SSE Telemetry**:
+  - Real-time in-memory ring buffer and Server-Sent Events (SSE) telemetry inspector in the Web Dashboard.
+  - Transparently logs and attributes every HTTP inference transaction:
+    - **Google Antigravity IDE & Web Launcher**: `POST /v1internal:streamGenerateContent?alt=sse`
+    - **Claude Code CLI**: `POST /v1/messages`
+    - **OpenAI Codex & Playground**: `POST /v1/chat/completions`
+    - **OpenAI Responses API**: `POST /v1/responses`
+    - **Google GenAI Native SDK**: `POST /v1beta/models/...:streamGenerateContent` & `:generateContent`
+    - **Token Counting**: `POST /v1beta/models/...:countTokens` & `POST /v1/messages/count_tokens`
+    - **Embeddings**: `POST /v1/embeddings`
+  - Shows real-time status code, latency (ms), token usage (Prompt ↑ / Completion ↓ / Total), upstream provider (`Google CloudCode`, `Google AI Studio`, `gemini-web`), and 1-click inspection modal with cURL command generator.
+- 🛠️ **Background System Service (`agy-proxy service`)**:
+  - Run Antigravity Proxy 24/7 as an unprivileged background user service:
+    - **Linux**: Managed via `systemd --user` (`agy-proxy.service`).
+    - **macOS**: Managed via `launchd` LaunchAgent (`com.antigravity.agy-proxy.plist`).
+  - Full CLI management: `agy-proxy service install`, `status`, `start`, `stop`, `restart`, `uninstall`.
+- 📦 **Account Pool Export & Import (Backup & Migration)**:
+  - Export all pooled OAuth sessions, API keys, and configurations to encrypted/portable JSON files via `agy-proxy auth export` or the Web UI.
+  - Restore or migrate accounts across machines in 1 command with merge or replace modes (`agy-proxy auth import pool.json`).
+- 🤖 **DeepAgent Swarm Preset & 64k Reasoning Budget**:
+  - Built-in `/deepagent` model alias (`gemini-3.8-flash-deepagent`, `deepagent`) preconfigured with **64,000 reasoning tokens** and autonomous multi-agent swarm flags.
 - 👥 **Multi-Account Pooling & Automatic 429 / 5xx Failover**:
   - Pool multiple Google Antigravity accounts simultaneously to multiply rate limits and concurrent request capacity.
   - **Multi-Candidate Failover Loop**: When an account encounters a `429 Too Many Requests` rate limit, proxy marks it rate-limited for 60s and immediately retries on the next healthy account in the pool without dropping the client stream.
   - **Server Error Recovery (5xx)**: Automatically fails over to alternate pool accounts upon receiving upstream `500`, `502`, `503`, or `504` errors during content generation.
   - **Automatic 401 Re-Authentication**: Seamlessly triggers background token refresh (`refresh_access_token(force=True)`) and immediate retry on expired sessions.
+  - **Proactive Background Token Refresh**: Automatic daemon checking and refreshing expiring OAuth tokens to guarantee zero-downtime uninterrupted streaming.
   - **Zero-Delay Recovery**: Injects standard `Retry-After: 2` headers to prevent coding agents (Claude Code, Cursor, Aider, Roo Code) from locking up in multi-minute exponential backoff retry delays.
   - **Proxy Tunneling & Persistence**: Supports per-account `proxy_url` (saved across sessions and editable in Web UI/API) as well as global environment variables (`AGY_UPSTREAM_PROXY`, `ALL_PROXY`, `HTTP_PROXY`, `HTTPS_PROXY`) for corporate firewalls and Geo-Bypass.
 - 🚀 **Antigravity Web Mode (No-Electron / Low-Resource Optimization)**:
@@ -67,7 +91,8 @@ This proxy is designed to supercharge the official Google Antigravity ecosystem.
   - Support for Google AI Studio API Keys with automatic dynamic model discovery.
 - 📊 **Modern Web UI Dashboard & Playground**:
   - View all pooled Google accounts, avatars, active tiers, and live Gemini & Claude quota progress bars.
-  - Interactive live chat playground with markdown rendering and collapsible thinking blocks.
+  - Responsive two-tier underline navigation tabs (GitHub/Vercel style) with mobile touch optimizations.
+  - Interactive live chat playground with markdown rendering, model selector, and collapsible thinking blocks.
   - Collapsible account groups (OAuth, Web, API Keys) with per-section Enable/Disable controls and toolbar batch actions.
   - Per-account proxy URL configuration, pause/resume toggles, and one-click account deletion.
 - 🔄 **Antigravity CLI & Standalone Session Switcher**:
@@ -200,7 +225,30 @@ Download the single executable for your OS & architecture from **[GitHub Release
 - **Windows (x64)**: `agy-proxy.exe --port 8000`
 - **macOS (Apple Silicon M1/M2/M3/M4)**: `./agy-proxy --port 8000`
 
-*(To compile a single executable locally on your machine: `python build_binary.py`)*
+---
+
+### 8. Run as Background System Service (Linux & macOS) ⚙️
+
+Run Antigravity Proxy 24/7 in the background without keeping a terminal window open. The service automatically starts on system login and restarts on failure:
+
+```bash
+# 1. Install & enable the background service:
+agy-proxy service install --port 8000
+
+# 2. Check service status:
+agy-proxy service status
+
+# 3. Control service lifecycle:
+agy-proxy service start
+agy-proxy service stop
+agy-proxy service restart
+
+# 4. Uninstall service completely:
+agy-proxy service uninstall
+```
+
+- **Linux**: Configures an unprivileged user unit at `~/.config/systemd/user/agy-proxy.service` (`systemctl --user`).
+- **macOS**: Configures a user LaunchAgent at `~/Library/LaunchAgents/com.antigravity.agy-proxy.plist` (`launchctl`).
 
 ---
 
@@ -601,6 +649,24 @@ uv run python main.py auth add-key "AIzaSy..." --name "My Studio Key"
 uv run python main.py auth list
 ```
 
+### 📦 Account Pool Export & Import (Backup & Migration)
+Easily backup, restore, or migrate your entire pool of accounts, tokens, and settings across machines:
+
+```bash
+# Export all pooled accounts to a JSON backup file:
+agy-proxy auth export -o my_pool.json
+
+# Export to stdout (for piping or secret managers):
+agy-proxy auth export
+
+# Import accounts from file (merging with existing accounts):
+agy-proxy auth import my_pool.json
+
+# Import accounts replacing existing pool:
+agy-proxy auth import my_pool.json --replace
+```
+*(You can also click **"Export Pool"** or **"Import Pool"** in the Web Dashboard toolbar)*
+
 ### 🔁 Automatic Multi-Candidate Failover Architecture
 Antigravity Proxy implements an intelligent failover loop across candidate accounts during generation requests:
 1. **Candidate Pool Selection**: When a request arrives, the proxy selects all enabled, healthy accounts with remaining quota for the requested model group.
@@ -727,6 +793,8 @@ Antigravity Proxy natively equips coding agents and IDEs (Cursor, Windsurf, Roo 
 | Client Request (Alias) | Google Antigravity Backend Model | Reasoning / Thinking Budget | Description |
 |---|---|---|---|
 | `gemini-3.8-flash-high`, `flash`, `gpt-4o`, `deepseek-r1` | `gemini-3.8-flash-high` | **HIGH** | ⚡ **Default Flagship**: Gemini 3.8 Flash with full reasoning |
+| `deepagent`, `deep-agent`, `gemini-3.8-flash-deepagent` | `gemini-3.8-flash-deepagent` | **64k BUDGET** | 🤖 **DeepAgent Swarm**: Autonomous multi-agent workflows with 64k thinking budget |
+| `gemini-4-argon`, `argon` | `gemini-4-argon` | **HIGH** | 🔮 **Gemini 4 Argon**: Next-generation flagship web model |
 | `gemini-3.8-flash-medium` | `gemini-3.8-flash-medium` | **MEDIUM** | ⚖️ Gemini 3.8 Flash with balanced reasoning budget |
 | `gemini-3.8-flash-low` | `gemini-3.8-flash-low` | **LOW** | ⚡ Gemini 3.8 Flash with low reasoning budget |
 | `gemini-3.8-flash-tiered` | `gemini-3.8-flash-tiered` | Dynamic | 🔄 Gemini 3.8 Flash with tiered dynamic thinking |
@@ -747,10 +815,27 @@ Antigravity Proxy natively equips coding agents and IDEs (Cursor, Windsurf, Roo 
 | `gpt-5.6-luna`, `gpt-5.4-mini` | `gemini-3.1-flash-lite` | Disabled (0) | 🤖 Codex CLI Lightweight Fast Aliases |
 | `gpt-5.2` | `gemini-3.7-flash-high` | **HIGH** | 🤖 Codex CLI Gemini 3.7 Alias |
 | `o1`, `o1-mini`, `o3-mini` | `gemini-3.8-flash-high` | **HIGH** | 🎯 OpenAI Reasoning Aliases |
+| `text-embedding-004`, `text-embedding-3-small` | `text-embedding-004` | - | 📐 Vector Embeddings for Semantic RAG (1536-dim) |
 
 ---
 
 ## 💻 SDK Integration Examples
+
+### Python (Official Google GenAI SDK)
+```python
+from google import genai
+
+client = genai.Client(
+    api_key="dummy",
+    http_options={"api_version": "v1beta", "base_url": "http://127.0.0.1:8000"}
+)
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Hello from official Google GenAI SDK through Antigravity Proxy!"
+)
+print(response.text)
+```
 
 ### Python (Official OpenAI SDK)
 ```python

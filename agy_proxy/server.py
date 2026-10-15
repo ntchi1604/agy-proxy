@@ -617,6 +617,7 @@ def create_app(
             authorization=request.headers.get("Authorization"),
             x_api_key=request.headers.get("x-api-key"),
         )
+        t0 = time.time()
         body: dict[str, Any] = {}
         try:
             body = await request.json()
@@ -626,13 +627,15 @@ def create_app(
         # Fast heuristic fallback
         serialized = json.dumps(body)
         fallback_tokens = max(1, int(len(serialized) / 3.7))
+        exact_tokens = None
+        acc = None
+        req_model = normalize_model_name(body.get("model", DEFAULT_MODEL))
 
         # Attempt exact native counting via Google CloudCode API
         if pool and pool.accounts:
             try:
                 acc = next((a for a in pool.accounts.values() if getattr(a, "enabled", True)), None)
                 if acc:
-                    req_model = normalize_model_name(body.get("model", DEFAULT_MODEL))
                     anthropic_req = AnthropicRequest.model_validate(body)
                     cloud_payload = anthropic_to_cloudcode_payload(anthropic_req, project_id="aicode-consumers")
                     contents = cloud_payload.get("request", {}).get("contents", [])
@@ -657,12 +660,30 @@ def create_app(
                             )
                             if resp.status_code == 200:
                                 exact_tokens = resp.json().get("totalTokens")
-                                if exact_tokens is not None:
-                                    return {"input_tokens": int(exact_tokens)}
             except Exception as e:
                 logger.debug("Native countTokens error, falling back to estimation: %s", e)
 
-        return {"input_tokens": fallback_tokens}
+        final_tokens = int(exact_tokens) if (exact_tokens is not None) else fallback_tokens
+        dur_ms = (time.time() - t0) * 1000
+        try:
+            from agy_proxy.traffic import traffic_inspector
+            traffic_inspector.record(
+                method="POST",
+                path="/v1/messages/count_tokens",
+                client_model=req_model,
+                backend_model="Google CloudCode" if (acc and exact_tokens is not None) else "local-estimate",
+                account_id=getattr(acc, "account_id", "") if (acc and exact_tokens is not None) else "",
+                account_email=getattr(acc, "email", "none") if (acc and exact_tokens is not None) else "local",
+                status_code=200,
+                duration_ms=dur_ms,
+                stream=False,
+                prompt_tokens=final_tokens,
+                total_tokens=final_tokens,
+            )
+        except Exception:
+            pass
+
+        return {"input_tokens": final_tokens}
 
     @app.api_route("/api/fetch-url", methods=["GET", "POST"])
     async def fetch_url_endpoint(request: Request):
@@ -2242,6 +2263,7 @@ def create_app(
     @app.post("/v1beta/models/{model_name:path}:countTokens")
     @app.post("/v1beta/{model_name:path}:countTokens")
     async def gemini_count_tokens_v1beta(model_name: str, request: Request):
+        t0 = time.time()
         verify_api_key(
             authorization=request.headers.get("Authorization"),
             x_api_key=request.headers.get("x-api-key"),
@@ -2256,6 +2278,8 @@ def create_app(
 
         serialized = json.dumps(body)
         fallback_tokens = max(1, int(len(serialized) / 3.7))
+        exact_tokens = None
+        acc = None
 
         contents = body.get("contents")
         if not contents and isinstance(body.get("generateContentRequest"), dict):
@@ -2285,12 +2309,30 @@ def create_app(
                         )
                         if resp.status_code == 200:
                             exact_tokens = resp.json().get("totalTokens")
-                            if exact_tokens is not None:
-                                return JSONResponse({"totalTokens": int(exact_tokens)})
             except Exception as e:
                 logger.debug("Gemini Native countTokens CloudCode error, falling back: %s", e)
 
-        return JSONResponse({"totalTokens": fallback_tokens})
+        final_tokens = int(exact_tokens) if (exact_tokens is not None) else fallback_tokens
+        dur_ms = (time.time() - t0) * 1000
+        try:
+            from agy_proxy.traffic import traffic_inspector
+            traffic_inspector.record(
+                method="POST",
+                path=f"/v1beta/models/{clean_model}:countTokens",
+                client_model=clean_model,
+                backend_model="Google CloudCode" if (acc and exact_tokens is not None) else "local-estimate",
+                account_id=getattr(acc, "account_id", "") if (acc and exact_tokens is not None) else "",
+                account_email=getattr(acc, "email", "none") if (acc and exact_tokens is not None) else "local",
+                status_code=200,
+                duration_ms=dur_ms,
+                stream=False,
+                prompt_tokens=final_tokens,
+                total_tokens=final_tokens,
+            )
+        except Exception:
+            pass
+
+        return JSONResponse({"totalTokens": final_tokens})
 
     # -------------------------------------------------------------------------
     # Internal CloudCode Compatibility Endpoints
@@ -2306,6 +2348,7 @@ def create_app(
         """Universal passthrough / compatibility router for CloudCode v1internal actions:
         (e.g., loadCodeAssist, fetchAvailableModels, fetchUserInfo, fetchAdminControls,
         retrieveUserQuotaSummary, listExperiments, writeTrajectoryAcls, cascadeNuxes)."""
+        t0 = time.time()
         body = None
         if request.method in ("POST", "PUT", "PATCH"):
             try:
@@ -2318,6 +2361,74 @@ def create_app(
                     body = None
         # --- Route to proper account and track usage ---
         is_generation = action in ("streamGenerateContent", "generateContent") or action_path in ("streamGenerateContent", "generateContent")
+        is_count_tokens = action in ("countTokens",) or (bool(action_path) and "countTokens" in action_path)
+
+        def _record_cloudcode_traffic(
+            acc_obj,
+            st_code: int,
+            data_dict: dict | None = None,
+            raw_text: str | None = None,
+            err_msg: str | None = None,
+        ):
+            if not (is_generation or is_count_tokens):
+                return
+            try:
+                from agy_proxy.traffic import traffic_inspector
+                clean_path = f"{request.url.path}?{request.url.query}" if request.url.query else request.url.path
+                dur_ms = (time.time() - t0) * 1000
+                backend_provider = (
+                    "Google AI Studio"
+                    if (getattr(acc_obj, "auth_method", None) == "aistudio" or getattr(acc_obj, "is_aistudio", False))
+                    else "Google CloudCode"
+                )
+                prompt_tokens = 0
+                completion_tokens = 0
+                total_tokens = 0
+
+                if is_count_tokens:
+                    if isinstance(data_dict, dict):
+                        total_tokens = int(data_dict.get("totalTokens", 0))
+                        prompt_tokens = total_tokens
+                elif is_generation:
+                    if isinstance(data_dict, dict):
+                        resp_obj = data_dict.get("response", data_dict) if isinstance(data_dict.get("response"), dict) else data_dict
+                        usage = resp_obj.get("usageMetadata", {}) if isinstance(resp_obj, dict) else {}
+                        if isinstance(usage, dict):
+                            prompt_tokens = int(usage.get("promptTokenCount", 0))
+                            completion_tokens = int(usage.get("candidatesTokenCount", 0))
+                            total_tokens = int(usage.get("totalTokenCount", prompt_tokens + completion_tokens))
+                    if not prompt_tokens and raw_text and "usageMetadata" in raw_text:
+                        import re
+                        m_p = re.search(r'"promptTokenCount"\s*:\s*(\d+)', raw_text)
+                        if m_p:
+                            prompt_tokens = int(m_p.group(1))
+                        m_c = re.search(r'"candidatesTokenCount"\s*:\s*(\d+)', raw_text)
+                        if m_c:
+                            completion_tokens = int(m_c.group(1))
+                        m_t = re.search(r'"totalTokenCount"\s*:\s*(\d+)', raw_text)
+                        if m_t:
+                            total_tokens = int(m_t.group(1))
+                        else:
+                            total_tokens = prompt_tokens + completion_tokens
+
+                is_stream_call = "alt=sse" in str(request.url.query) or "stream" in (action or action_path or "").lower()
+                traffic_inspector.record(
+                    method=request.method,
+                    path=clean_path,
+                    client_model=req_model,
+                    backend_model=backend_provider,
+                    account_id=getattr(acc_obj, "account_id", ""),
+                    account_email=getattr(acc_obj, "email", "none"),
+                    status_code=st_code,
+                    duration_ms=dur_ms,
+                    stream=is_stream_call,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens or (prompt_tokens + completion_tokens),
+                    error=err_msg,
+                )
+            except Exception:
+                pass
 
         # 1. Sanitize roles: rewrite 'context' and 'USER' to lowercase 'user', 'MODEL'/'assistant' to 'model'
         # Crucial: Anthropic Claude models reject 'USER' with HTTP 500 Unknown Error.
@@ -2730,9 +2841,11 @@ def create_app(
                         _PASSTHROUGH_METADATA_CACHE[action_key] = copy.deepcopy(data)
                         _save_passthrough_cache()
 
+                    _record_cloudcode_traffic(acc, resp.status_code, data_dict=data, raw_text=resp.text if hasattr(resp, "text") else None)
                     processed_data = _process_passthrough_metadata(action_key, copy.deepcopy(data))
                     return JSONResponse(status_code=resp.status_code, content=processed_data)
                 except Exception:
+                    _record_cloudcode_traffic(acc, resp.status_code, raw_text=resp.text if hasattr(resp, "text") else None)
                     return Response(
                         content=resp.content,
                         status_code=resp.status_code,
@@ -2760,7 +2873,9 @@ def create_app(
                         await asyncio.sleep(1.0)
                         fb_resp = await c.post(target_url, headers=headers, json=candidate_body, params=query_params, timeout=timeout_sec)
                         if fb_resp.status_code == 200:
-                            return JSONResponse(status_code=200, content=fb_resp.json())
+                            fb_data = fb_resp.json()
+                            _record_cloudcode_traffic(acc, 200, data_dict=fb_data, raw_text=fb_resp.text if hasattr(fb_resp, "text") else None)
+                            return JSONResponse(status_code=200, content=fb_data)
                     except Exception:
                         pass
 
@@ -2774,7 +2889,12 @@ def create_app(
             cached_data = _process_passthrough_metadata(action_key, cached_data)
             return JSONResponse(status_code=200, content=cached_data)
 
-        if is_generation:
+        if is_generation or is_count_tokens:
+            _record_cloudcode_traffic(
+                None,
+                503,
+                err_msg=f"CloudCode upstream generation failed across all accounts ({last_error})",
+            )
             return JSONResponse(
                 status_code=503,
                 content={

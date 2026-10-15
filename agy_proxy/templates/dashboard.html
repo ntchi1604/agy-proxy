@@ -19,15 +19,17 @@
           colors: {
             brand: {
               50: '#eef2ff',
+              400: '#818cf8',
               500: '#6366f1',
               600: '#4f46e5',
               700: '#4338ca',
             },
             dark: {
-              bg: '#0f172a',
-              card: '#1e293b',
-              cardHover: '#334155',
-              border: '#334155',
+              bg: '#090d16',
+              surface: '#0f172a',
+              card: '#111827',
+              cardHover: '#1e293b',
+              border: '#1f293d',
             }
           }
         }
@@ -35,17 +37,46 @@
     }
   </script>
   <style>
-    body { background-color: #0f172a; color: #f1f5f9; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-    .thought-bubble { border-left: 3px solid #6366f1; background: rgba(99, 102, 241, 0.08); }
-    .prose pre { background: #0b1120; border-radius: 0.5rem; padding: 0.75rem; overflow-x: auto; }
+    :root {
+      color-scheme: dark;
+    }
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background-color: #090d16;
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.12), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(14, 165, 233, 0.05), transparent 60%);
+      color: #f1f5f9;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none !important; }
+    .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 9999px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
+    .thought-bubble { border-left: 3px solid #818cf8; background: rgba(99, 102, 241, 0.08); }
+    .prose pre { background: #0b1120; border-radius: 0.75rem; padding: 0.75rem; overflow-x: auto; border: 1px solid rgba(255, 255, 255, 0.06); }
     .prose code { color: #38bdf8; }
+    .safe-area-pb { padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)); }
     html, body { overflow-x: hidden; max-width: 100vw; }
+    .glass-card {
+      background: rgba(17, 24, 39, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    }
+    .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+    }
   </style>
 </head>
-<body class="min-h-screen flex flex-col custom-scrollbar overflow-x-hidden">
+<body class="min-h-screen flex flex-col custom-scrollbar overflow-x-hidden selection:bg-indigo-500/30 selection:text-white">
 
   <!-- Header -->
   <header class="border-b border-dark-border bg-slate-900/95 backdrop-blur-md sticky top-0 z-40">
@@ -113,7 +144,7 @@
     <!-- Bottom Row: Navigation Tabs (GitHub/Vercel Underline Style) -->
     <div class="border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-sm">
       <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between">
-        <nav class="flex items-center space-x-1 sm:space-x-3 overflow-x-auto custom-scrollbar text-xs font-medium -mb-px flex-1 min-w-0" id="mainNavTabs">
+        <nav class="flex items-center space-x-1 sm:space-x-3 overflow-x-auto no-scrollbar text-xs font-medium -mb-px flex-1 min-w-0" id="mainNavTabs">
           <button onclick="switchTab('accounts')" id="tabBtn-accounts" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-indigo-500 text-white font-semibold flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
             <i class="fa-solid fa-users text-[11px] text-indigo-400"></i>
             <span>Accounts</span>
@@ -160,7 +191,7 @@
   </header>
 
   <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-24 sm:py-8 space-y-6 sm:space-y-8">
 
     <!-- Global Update Banner (Shown when new release is detected) -->
     <div id="updateBanner" class="hidden p-4 rounded-2xl bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-900 border border-indigo-500/40 text-xs shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -259,7 +290,70 @@
           <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700" id="accountPoolCount">0 accounts</span>
         </div>
 
-        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full">
+        <!-- Mobile Controls (sm:hidden) -->
+        <div class="flex sm:hidden items-center justify-between gap-2 w-full">
+          <!-- View Switcher -->
+          <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+            <button id="mViewBtnGrid" onclick="setAccountView('grid')" class="px-2.5 py-1 rounded-md font-medium text-white bg-indigo-600 transition flex items-center space-x-1">
+              <i class="fa-solid fa-grip"></i>
+              <span>Grid</span>
+            </button>
+            <button id="mViewBtnTable" onclick="setAccountView('table')" class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition flex items-center space-x-1">
+              <i class="fa-solid fa-list"></i>
+              <span>Compact</span>
+            </button>
+          </div>
+
+          <!-- Quick Refresh Button -->
+          <button onclick="refreshAllAccounts()" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1.5 shadow-sm">
+            <i class="fa-solid fa-rotate text-indigo-400 text-[11px]"></i>
+            <span>Refresh</span>
+          </button>
+
+          <!-- Mobile Actions Dropdown Trigger -->
+          <div class="relative">
+            <button onclick="toggleMobilePoolActionsMenu()" id="mobilePoolActionsTrigger" class="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-semibold transition flex items-center space-x-1.5 shadow-sm">
+              <i class="fa-solid fa-ellipsis-vertical text-[11px]"></i>
+              <span>Actions ▾</span>
+            </button>
+            <!-- Dropdown Menu -->
+            <div id="mobilePoolActionsMenu" class="hidden absolute right-0 top-full mt-1.5 w-48 bg-slate-900/95 backdrop-blur-xl border border-slate-700 rounded-xl shadow-2xl p-1.5 z-30 space-y-0.5 text-xs">
+              <button onclick="toggleAllAccounts(true); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                <i class="fa-solid fa-play text-emerald-400 text-[10px] w-4 text-center"></i>
+                <span>Enable All</span>
+              </button>
+              <button onclick="toggleAllAccounts(false); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                <i class="fa-solid fa-pause text-amber-400 text-[10px] w-4 text-center"></i>
+                <span>Disable All</span>
+              </button>
+              <button onclick="resetAllStats(); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                <i class="fa-solid fa-rotate-left text-slate-400 text-[10px] w-4 text-center"></i>
+                <span>Reset Stats</span>
+              </button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <button onclick="exportAccounts(); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                <i class="fa-solid fa-download text-indigo-400 text-[10px] w-4 text-center"></i>
+                <span>Export Pool (.json)</span>
+              </button>
+              <button onclick="document.getElementById('importFileInput').click(); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center space-x-2">
+                <i class="fa-solid fa-upload text-emerald-400 text-[10px] w-4 text-center"></i>
+                <span>Import Pool</span>
+              </button>
+              <div class="border-t border-slate-800 my-1"></div>
+              <button onclick="collapseAllSections(); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center space-x-2">
+                <i class="fa-solid fa-angles-up text-slate-400 text-[10px] w-4 text-center"></i>
+                <span>Collapse All</span>
+              </button>
+              <button onclick="expandAllSections(); toggleMobilePoolActionsMenu()" class="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center space-x-2">
+                <i class="fa-solid fa-angles-down text-slate-400 text-[10px] w-4 text-center"></i>
+                <span>Expand All</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Desktop Controls (hidden sm:flex) -->
+        <div class="hidden sm:flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 max-w-full">
           <!-- View Switcher (Grid vs Table) -->
           <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs shrink-0">
             <button id="viewBtnGrid" onclick="setAccountView('grid')" class="px-2.5 py-1 rounded-md font-medium text-white bg-indigo-600 transition flex items-center space-x-1" title="Grid Card View">
@@ -337,13 +431,13 @@
         </div>
 
         <!-- Filter Tabs & Sort Dropdown -->
-        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full">
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 max-w-full">
           <div class="flex items-center space-x-1 bg-slate-900 rounded-lg p-0.5 border border-slate-800 shrink-0" id="accountTypeFilters">
-            <button onclick="setAccountFilter('all')" data-filter="all" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-indigo-600 text-white">All (<span id="countAll">0</span>)</button>
-            <button onclick="setAccountFilter('oauth')" data-filter="oauth" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white">OAuth (<span id="countOAuth">0</span>)</button>
-            <button onclick="setAccountFilter('apikey')" data-filter="apikey" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white">API Keys (<span id="countApiKey">0</span>)</button>
-            <button onclick="setAccountFilter('web')" data-filter="web" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white">Web (<span id="countWeb">0</span>)</button>
-            <button onclick="setAccountFilter('exhausted')" data-filter="exhausted" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-red-400">0% (<span id="countExhausted">0</span>)</button>
+            <button onclick="setAccountFilter('all')" data-filter="all" class="acc-filter-btn px-2.5 py-1 rounded text-[11px] font-medium bg-indigo-600 text-white shadow-sm transition">All (<span id="countAll">0</span>)</button>
+            <button onclick="setAccountFilter('oauth')" data-filter="oauth" class="acc-filter-btn px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white transition">OAuth (<span id="countOAuth">0</span>)</button>
+            <button onclick="setAccountFilter('apikey')" data-filter="apikey" class="acc-filter-btn px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white transition">API Keys (<span id="countApiKey">0</span>)</button>
+            <button onclick="setAccountFilter('web')" data-filter="web" class="acc-filter-btn px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white transition">Web (<span id="countWeb">0</span>)</button>
+            <button onclick="setAccountFilter('exhausted')" data-filter="exhausted" class="acc-filter-btn px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-red-400 transition">0% (<span id="countExhausted">0</span>)</button>
           </div>
 
           <select id="accountSortSelect" onchange="renderAccounts()" class="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-300 text-[11px] focus:outline-none focus:border-indigo-500 shrink-0">
@@ -378,11 +472,11 @@
   </div>
 
   <!-- TAB: LIVE TRAFFIC INSPECTOR -->
-  <div id="tabContent-traffic" class="hidden space-y-6">
+  <div id="tabContent-traffic" class="hidden space-y-5">
     <!-- Traffic Header & Controls -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-dark-card border border-dark-border p-4 sm:p-5 rounded-2xl shadow-sm">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg shrink-0">
           <i class="fa-solid fa-bolt"></i>
         </div>
         <div>
@@ -393,24 +487,67 @@
               <span>Connected (SSE)</span>
             </span>
           </div>
-          <p class="text-xs text-slate-400">Real-time HTTP inference streaming, token metrics, and latency diagnostics.</p>
+          <p class="text-xs text-slate-400 mt-0.5">Real-time HTTP inference streaming, token metrics, and latency diagnostics.</p>
         </div>
       </div>
 
       <div class="flex items-center space-x-2 w-full sm:w-auto">
         <div class="relative flex-1 sm:w-64">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
-          <input type="text" id="trafficSearchInput" oninput="filterTrafficTable()" placeholder="Filter path, model, account..." class="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+          <input type="text" id="trafficSearchInput" oninput="filterTrafficTable()" placeholder="Filter path, model, account..." class="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
         </div>
-        <button onclick="clearTrafficLog()" class="px-3 py-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 shrink-0" title="Clear transaction history">
+        <button onclick="clearTrafficLog()" class="px-3 py-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5 shrink-0" title="Clear transaction history">
           <i class="fa-solid fa-trash-can text-xs"></i>
-          <span>Clear</span>
+          <span class="hidden sm:inline">Clear</span>
         </button>
       </div>
     </div>
 
-    <!-- Live Traffic Table -->
-    <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-sm">
+    <!-- Traffic Telemetry Summary Strip -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" id="trafficKpiRow">
+      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-xs shrink-0">
+          <i class="fa-solid fa-list-check"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[10px] text-slate-400 font-mono uppercase truncate">Total Logged</div>
+          <div class="text-sm sm:text-base font-bold font-mono text-white truncate" id="trafficStatTotal">0</div>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs shrink-0">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[10px] text-slate-400 font-mono uppercase truncate">Success Rate</div>
+          <div class="text-sm sm:text-base font-bold font-mono text-emerald-400 truncate" id="trafficStatSuccess">100%</div>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-xs shrink-0">
+          <i class="fa-solid fa-stopwatch"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[10px] text-slate-400 font-mono uppercase truncate">Avg Latency</div>
+          <div class="text-sm sm:text-base font-bold font-mono text-amber-400 truncate" id="trafficStatLatency">0 ms</div>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-xs shrink-0">
+          <i class="fa-solid fa-coins"></i>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[10px] text-slate-400 font-mono uppercase truncate">Streamed Tokens</div>
+          <div class="text-sm sm:text-base font-bold font-mono text-purple-300 truncate" id="trafficStatTokens">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop Live Traffic Table (hidden on mobile) -->
+    <div class="hidden md:block bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-sm">
       <div class="overflow-x-auto custom-scrollbar">
         <table class="w-full text-left text-xs border-collapse">
           <thead>
@@ -439,16 +576,37 @@
         </table>
       </div>
     </div>
+
+    <!-- Mobile Card Stream (visible on mobile screens) -->
+    <div class="block md:hidden space-y-2.5" id="trafficCardsContainer">
+      <div class="p-8 rounded-2xl bg-dark-card border border-dark-border text-center text-slate-500">
+        <i class="fa-solid fa-network-wired text-3xl mb-2 text-slate-600 block"></i>
+        <div class="text-sm font-semibold text-slate-400">Waiting for requests...</div>
+        <div class="text-xs text-slate-500 mt-1">Live requests will appear here automatically.</div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB 3: PLAYGROUND -->
-  <div id="tabContent-playground" class="hidden space-y-6">
+  <div id="tabContent-playground" class="hidden space-y-4 sm:space-y-6">
+
+    <!-- Mobile Segmented View Switcher (lg:hidden) -->
+    <div class="flex lg:hidden items-center justify-center p-1 bg-slate-900 border border-slate-800 rounded-xl max-w-xs mx-auto text-xs font-semibold shadow-sm">
+      <button type="button" onclick="setPlaygroundMobileView('chat')" id="pgmViewChatBtn" class="flex-1 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm flex items-center justify-center space-x-1.5 transition">
+        <i class="fa-solid fa-comments text-xs"></i>
+        <span>Chat</span>
+      </button>
+      <button type="button" onclick="setPlaygroundMobileView('settings')" id="pgmViewSettingsBtn" class="flex-1 py-1.5 rounded-lg text-slate-400 hover:text-white flex items-center justify-center space-x-1.5 transition">
+        <i class="fa-solid fa-sliders text-xs"></i>
+        <span>Settings & Models</span>
+      </button>
+    </div>
 
     <!-- Playground & Models Layout (1/3 Controls, 2/3 Full Chat) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="playground">
 
       <!-- Left Column: Controls & Models (1 Col) -->
-      <div class="lg:col-span-1 space-y-5 flex flex-col">
+      <div id="playgroundControlsCol" class="hidden lg:flex lg:col-span-1 space-y-5 flex-col">
 
         <!-- Config Panel -->
         <div class="p-5 rounded-2xl bg-dark-card border border-dark-border space-y-4 shadow-sm">
@@ -543,14 +701,14 @@
       </div> <!-- End Left Column (lg:col-span-1) -->
 
       <!-- Right Column: Interactive Chat Interface (2 Cols) -->
-      <div class="lg:col-span-2 flex flex-col h-[520px] sm:h-[620px] lg:h-[740px] rounded-2xl bg-dark-card border border-dark-border overflow-hidden shadow-lg">
+      <div id="playgroundChatCol" class="flex lg:col-span-2 flex-col h-[540px] sm:h-[620px] lg:h-[740px] rounded-2xl bg-dark-card border border-dark-border overflow-hidden shadow-lg">
 
         <!-- Chat Header -->
         <div class="p-3 sm:p-4 border-b border-dark-border bg-slate-900/70 flex items-center justify-between gap-2">
           <div class="flex items-center space-x-2 min-w-0">
             <i class="fa-solid fa-comments text-indigo-400 shrink-0"></i>
             <span class="font-bold text-xs sm:text-sm text-white shrink-0">Live Playground</span>
-            <span class="text-[10px] sm:text-xs font-mono text-indigo-300 bg-indigo-500/10 px-1.5 sm:px-2 py-0.5 rounded border border-indigo-500/20 truncate" id="activeModelBadge">gemini-3.8-flash-high</span>
+            <span class="text-[10px] sm:text-xs font-mono text-indigo-300 bg-indigo-500/10 px-1.5 sm:px-2 py-0.5 rounded border border-indigo-500/20 truncate cursor-pointer hover:bg-indigo-500/20" id="activeModelBadge" onclick="setPlaygroundMobileView('settings')" title="Click to view/change model">gemini-3.8-flash-high</span>
             <span class="text-[10px] sm:text-xs font-mono text-emerald-300 bg-emerald-500/10 px-1.5 sm:px-2 py-0.5 rounded border border-emerald-500/20 truncate" id="activeAccountBadge">Route: Auto Pool</span>
           </div>
           <div class="flex items-center space-x-2 shrink-0">
@@ -1174,7 +1332,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Add Account Modal -->
   <div id="addAccountModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-4">
         <h3 class="text-lg font-bold text-white flex items-center">
           <i class="fa-solid fa-user-plus mr-2 text-indigo-400"></i> Add Account / Provider to Pool
@@ -1297,7 +1455,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Account Test Result Modal -->
   <div id="testResultModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-3">
         <h3 class="text-sm font-bold text-white flex items-center">
           <i class="fa-solid fa-vial-circle-check mr-2 text-teal-400"></i> Account Connectivity Test
@@ -1325,7 +1483,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Rename Account Modal -->
   <div id="renameModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-3">
         <h3 class="text-sm font-bold text-white flex items-center">
           <i class="fa-solid fa-pen-to-square mr-2 text-indigo-400"></i> Rename Account / Key
@@ -1357,7 +1515,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Switch Antigravity Session Modal (CLI / Standalone / Both) -->
   <div id="activateSessionModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-3">
         <h3 class="text-sm font-bold text-white flex items-center">
           <i class="fa-solid fa-user-check mr-2 text-emerald-400"></i> Switch Antigravity Session
@@ -1437,7 +1595,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Official Antigravity Models & Quota Modal -->
   <div id="modelsQuotaModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-3">
         <h3 class="text-sm font-bold text-white flex items-center">
           <i class="fa-solid fa-chart-pie mr-2 text-indigo-400"></i> Models & Quota
@@ -1476,7 +1634,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
 
   <!-- Update Modal -->
   <div id="updateModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
       <div class="flex items-center justify-between border-b border-dark-border pb-4">
         <div class="flex items-center space-x-2.5">
           <div class="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-amber-400 text-sm">
@@ -1534,6 +1692,63 @@ ightarrow$ v1.0.3</p>
       </div>
     </div>
   </div>
+
+  <!-- Live Traffic Details Modal -->
+  <div id="trafficDetailModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-dark-card border border-dark-border rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar">
+      <div class="flex items-center justify-between border-b border-dark-border pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center">
+          <i class="fa-solid fa-bolt mr-2 text-indigo-400"></i> Request Inspector
+        </h3>
+        <button onclick="closeTrafficDetailModal()" class="text-slate-400 hover:text-white text-base">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div id="trafficDetailModalBody" class="space-y-4">
+        <!-- Injected by JS -->
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-dark-border">
+        <button onclick="copySelectedTrafficCurl()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition shadow">
+          <i class="fa-regular fa-copy text-xs"></i>
+          <span>Copy as cURL</span>
+        </button>
+        <button onclick="closeTrafficDetailModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation Dock (Visible only on mobile screens < 768px) -->
+  <nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#090d16]/95 backdrop-blur-xl border-t border-slate-800/80 px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-bottom">
+    <button onclick="switchTab('accounts')" id="mTabBtn-accounts" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-bold text-indigo-400 transition">
+      <i class="fa-solid fa-users text-sm mb-0.5"></i>
+      <span>Accounts</span>
+    </button>
+    <button onclick="switchTab('analytics')" id="mTabBtn-analytics" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-white transition">
+      <i class="fa-solid fa-chart-pie text-sm mb-0.5"></i>
+      <span>Analytics</span>
+    </button>
+    <button onclick="switchTab('traffic')" id="mTabBtn-traffic" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-white transition relative">
+      <i class="fa-solid fa-bolt text-sm mb-0.5"></i>
+      <span>Traffic</span>
+      <span id="mTrafficBadge" class="hidden absolute top-0.5 right-1/4 w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+    </button>
+    <button onclick="switchTab('playground')" id="mTabBtn-playground" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-white transition">
+      <i class="fa-solid fa-terminal text-sm mb-0.5"></i>
+      <span>Playground</span>
+    </button>
+    <button onclick="switchTab('integrations')" id="mTabBtn-integrations" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-white transition">
+      <i class="fa-solid fa-plug text-sm mb-0.5"></i>
+      <span>Connect</span>
+    </button>
+    <button onclick="switchTab('settings')" id="mTabBtn-settings" class="flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-white transition">
+      <i class="fa-solid fa-sliders text-sm mb-0.5"></i>
+      <span>Settings</span>
+    </button>
+  </nav>
 
   <!-- Script -->
   <script>
@@ -2151,13 +2366,13 @@ ightarrow$ v1.0.3</p>
           }
         }
 
-        // 3. Mobile navbar buttons
+        // 3. Mobile navbar / bottom dock buttons
         const mBtn = document.getElementById(`mTabBtn-${t}`);
         if (mBtn) {
           if (t === tabId) {
-            mBtn.className = 'px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap bg-indigo-600 text-white font-semibold shadow-sm';
+            mBtn.className = 'flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-bold text-indigo-400 transition';
           } else {
-            mBtn.className = 'px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap text-slate-400 hover:text-white';
+            mBtn.className = 'flex-1 py-1 flex flex-col items-center justify-center text-[10px] font-medium text-slate-400 hover:text-slate-200 transition';
           }
         }
       });
@@ -2612,7 +2827,7 @@ ightarrow$ v1.0.3</p>
                 </span>
                 <span class="font-bold font-mono ${geminiPct <= 0 ? 'text-red-400' : (geminiPct > 20 ? 'text-slate-200' : 'text-amber-400')}">${geminiPct}%</span>
               </div>
-              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
                 <div class="h-full ${geminiPct <= 0 ? 'bg-red-500' : (geminiPct > 30 ? 'bg-indigo-500' : 'bg-amber-500')} rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, geminiPct))}%"></div>
               </div>
               <div class="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400 pt-0.5">
@@ -2637,7 +2852,7 @@ ightarrow$ v1.0.3</p>
                 </span>
                 <span class="font-bold font-mono ${claudePct <= 0 ? 'text-red-400' : (claudePct > 20 ? 'text-slate-200' : 'text-amber-400')}">${claudePct}%</span>
               </div>
-              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
                 <div class="h-full ${claudePct <= 0 ? 'bg-red-500' : (claudePct > 30 ? 'bg-purple-500' : 'bg-amber-500')} rounded-full transition-all" style="width: ${Math.max(0, Math.min(100, claudePct))}%"></div>
               </div>
               <div class="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400 pt-0.5">
@@ -3198,21 +3413,21 @@ ightarrow$ v1.0.3</p>
                   </button>
                 </div>
                 <div>
-                  <div class="flex justify-between text-[10px] items-center text-slate-400">
+                  <div class="flex justify-between text-[11px] items-center text-slate-400">
                     <span class="truncate">Weekly Limit</span>
                     <span class="font-bold font-mono ${geminiWkPct <= 0 ? 'text-red-400' : 'text-slate-200'}">${geminiWkPct}%</span>
                   </div>
-                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                    <div class="h-full ${geminiWkPct <= 0 ? 'bg-red-500' : (geminiWkPct > 30 ? 'bg-indigo-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, geminiWkPct))}%"></div>
+                  <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
+                    <div class="h-full rounded-full transition-all duration-300 ${geminiWkPct <= 0 ? 'bg-red-500' : (geminiWkPct > 30 ? 'bg-gradient-to-r from-indigo-500 to-blue-500' : 'bg-gradient-to-r from-amber-500 to-yellow-400')}" style="width: ${Math.max(0, Math.min(100, geminiWkPct))}%"></div>
                   </div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-[10px] items-center text-slate-400">
+                  <div class="flex justify-between text-[11px] items-center text-slate-400">
                     <span class="truncate">5-Hour Limit</span>
                     <span class="font-bold font-mono ${gemini5hPct <= 0 ? 'text-red-400' : 'text-slate-200'}">${gemini5hPct}%</span>
                   </div>
-                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                    <div class="h-full ${gemini5hPct <= 0 ? 'bg-red-500' : (gemini5hPct > 30 ? 'bg-cyan-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, gemini5hPct))}%"></div>
+                  <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
+                    <div class="h-full rounded-full transition-all duration-300 ${gemini5hPct <= 0 ? 'bg-red-500' : (gemini5hPct > 30 ? 'bg-gradient-to-r from-cyan-500 to-teal-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400')}" style="width: ${Math.max(0, Math.min(100, gemini5hPct))}%"></div>
                   </div>
                 </div>
               </div>
@@ -3241,21 +3456,21 @@ ightarrow$ v1.0.3</p>
                   </button>
                 </div>
                 <div>
-                  <div class="flex justify-between text-[10px] items-center text-slate-400">
+                  <div class="flex justify-between text-[11px] items-center text-slate-400">
                     <span class="truncate">Weekly Limit</span>
                     <span class="font-bold font-mono ${claudeWkPct <= 0 ? 'text-red-400' : 'text-slate-200'}">${claudeWkPct}%</span>
                   </div>
-                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                    <div class="h-full ${claudeWkPct <= 0 ? 'bg-red-500' : (claudeWkPct > 30 ? 'bg-purple-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, claudeWkPct))}%"></div>
+                  <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
+                    <div class="h-full rounded-full transition-all duration-300 ${claudeWkPct <= 0 ? 'bg-red-500' : (claudeWkPct > 30 ? 'bg-gradient-to-r from-purple-500 to-indigo-500' : 'bg-gradient-to-r from-amber-500 to-yellow-400')}" style="width: ${Math.max(0, Math.min(100, claudeWkPct))}%"></div>
                   </div>
                 </div>
                 <div>
-                  <div class="flex justify-between text-[10px] items-center text-slate-400">
+                  <div class="flex justify-between text-[11px] items-center text-slate-400">
                     <span class="truncate">5-Hour Limit</span>
                     <span class="font-bold font-mono ${claude5hPct <= 0 ? 'text-red-400' : 'text-slate-200'}">${claude5hPct}%</span>
                   </div>
-                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                    <div class="h-full ${claude5hPct <= 0 ? 'bg-red-500' : (claude5hPct > 30 ? 'bg-fuchsia-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, claude5hPct))}%"></div>
+                  <div class="w-full h-2.5 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
+                    <div class="h-full rounded-full transition-all duration-300 ${claude5hPct <= 0 ? 'bg-red-500' : (claude5hPct > 30 ? 'bg-gradient-to-r from-fuchsia-500 to-pink-500' : 'bg-gradient-to-r from-amber-500 to-yellow-400')}" style="width: ${Math.max(0, Math.min(100, claude5hPct))}%"></div>
                   </div>
                 </div>
               </div>
@@ -3296,7 +3511,7 @@ ightarrow$ v1.0.3</p>
                 : (isStandaloneActive
                     ? 'bg-dark-card border-cyan-500/40 ring-1 ring-cyan-500/20 shadow-sm'
                     : (isEnabled
-                        ? 'bg-dark-card border-dark-border shadow-sm'
+                        ? 'bg-dark-card border-dark-border shadow-sm hover:border-slate-700/80'
                         : 'bg-slate-900/40 border-slate-800/80 opacity-60')))
         }">
           <div class="flex items-start justify-between gap-2">
@@ -3316,7 +3531,7 @@ ightarrow$ v1.0.3</p>
                   ${maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active: resets in ${formatCooldown(maxAccountCooldown)}"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${formatCooldown(maxAccountCooldown)})</span></span>` : ((!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : '')}
                   ${!isEnabled ? '<span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700 shrink-0">Paused</span>' : ''}
                 </div>
-                <div class="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex items-center space-x-1.5 mt-0.5" title="${acc.email}">
+                <div class="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex items-center space-x-1.5 mt-0.5 cursor-pointer hover:text-white" onclick="copySnippetText('${acc.email}', 'Email copied!')" title="Click to copy email">
                   <i class="fa-regular fa-envelope text-slate-500 text-[10px] sm:text-[11px] shrink-0"></i>
                   <span class="truncate select-all">${acc.email}</span>
                 </div>
@@ -3333,18 +3548,18 @@ ightarrow$ v1.0.3</p>
           ${quotaSectionHtml}
 
           ${!isWeb && !isApiKey ? `
-            <div class="flex items-center gap-1.5 pt-0.5">
-              <button onclick="openQuotaModal('${acc.account_id}')" class="flex-1 py-1 px-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-600 hover:text-white text-purple-300 font-medium text-[10px] sm:text-[11px] transition border border-purple-500/30 flex items-center justify-center gap-1 shadow-sm" title="View official agy Models & Quota format">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+              <button onclick="openQuotaModal('${acc.account_id}')" class="py-1.5 px-2 rounded-lg bg-purple-500/15 hover:bg-purple-600 hover:text-white text-purple-300 font-medium text-[10px] sm:text-[11px] transition border border-purple-500/30 flex items-center justify-center gap-1 shadow-sm" title="View official agy Models & Quota format">
                 <i class="fa-solid fa-chart-pie text-[9px] sm:text-[10px]"></i><span>Quota</span>
               </button>
-              <button onclick="openPlaygroundForAccount('${acc.account_id}')" class="flex-1 py-1 px-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 font-medium text-[10px] sm:text-[11px] transition border border-indigo-500/30 flex items-center justify-center gap-1 shadow-sm" title="Test in Playground">
+              <button onclick="openPlaygroundForAccount('${acc.account_id}')" class="py-1.5 px-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 hover:text-white text-indigo-300 font-medium text-[10px] sm:text-[11px] transition border border-indigo-500/30 flex items-center justify-center gap-1 shadow-sm" title="Test in Playground">
                 <i class="fa-solid fa-terminal text-[9px] sm:text-[10px]"></i><span>Playground</span>
               </button>
-              <button onclick="testAccount('${acc.account_id}')" class="flex-1 py-1 px-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-[10px] sm:text-[11px] transition border border-slate-700 flex items-center justify-center gap-1 shadow-sm" title="Test connection">
+              <button onclick="testAccount('${acc.account_id}')" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-[10px] sm:text-[11px] transition border border-slate-700 flex items-center justify-center gap-1 shadow-sm" title="Test connection">
                 <i class="fa-solid fa-vial-circle-check text-teal-400 text-[9px] sm:text-[10px]"></i><span>Test</span>
               </button>
-              <button onclick="openActivateSessionModal('${acc.account_id}')" class="flex-1 py-1 px-1.5 rounded-lg ${isBothActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isCliActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isStandaloneActive ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-400 border-slate-700'))} font-medium text-[10px] sm:text-[11px] transition border flex items-center justify-center gap-1 shadow-sm" title="Switch or configure active Antigravity CLI / Standalone session">
-                <i class="fa-solid ${isBothActive ? 'fa-check text-emerald-400' : (isCliActive ? 'fa-terminal text-emerald-400' : (isStandaloneActive ? 'fa-globe text-cyan-400' : 'fa-user-check text-[9px] sm:text-[10px]'))}"></i><span>${isBothActive ? 'CLI + Standalone' : (isCliActive ? 'In CLI' : (isStandaloneActive ? 'Standalone' : 'AGY CLI'))}</span>
+              <button onclick="openActivateSessionModal('${acc.account_id}')" class="py-1.5 px-2 rounded-lg ${isBothActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isCliActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isStandaloneActive ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-400 border-slate-700'))} font-medium text-[10px] sm:text-[11px] transition border flex items-center justify-center gap-1 shadow-sm" title="Switch or configure active Antigravity CLI / Standalone session">
+                <i class="fa-solid ${isBothActive ? 'fa-check text-emerald-400' : (isCliActive ? 'fa-terminal text-emerald-400' : (isStandaloneActive ? 'fa-globe text-cyan-400' : 'fa-user-check text-[9px] sm:text-[10px]'))}"></i><span class="truncate">${isBothActive ? 'CLI + IDE' : (isCliActive ? 'In CLI' : (isStandaloneActive ? 'Standalone' : 'AGY CLI'))}</span>
               </button>
             </div>
           ` : ''}
@@ -3477,7 +3692,7 @@ ightarrow$ v1.0.3</p>
                     <span class="text-slate-400">Wk: <span class="font-bold font-mono ${geminiWkPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${geminiWkPct}%</span></span>
                     <span class="text-[9px] ${geminiIsExhausted ? 'text-red-400 font-semibold' : (geminiCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${geminiIsExhausted ? geminiResetBadge : (geminiCooldown > 0 ? 'Cooldown (' + formatCooldown(geminiCooldown) + ')' : geminiResetBadge)}</span>
                   </div>
-                  <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${geminiWkPct <= 0 ? 'bg-red-500' : (geminiWkPct > 30 ? 'bg-indigo-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, geminiWkPct))}%"></div>
                   </div>
                 </div>
@@ -3485,7 +3700,7 @@ ightarrow$ v1.0.3</p>
                   <div class="flex justify-between items-center text-[10px]">
                     <span class="text-slate-400">5h: <span class="font-bold font-mono ${gemini5hPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${gemini5hPct}%</span></span>
                   </div>
-                  <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${gemini5hPct <= 0 ? 'bg-red-500' : (gemini5hPct > 30 ? 'bg-cyan-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, gemini5hPct))}%"></div>
                   </div>
                 </div>
@@ -3501,7 +3716,7 @@ ightarrow$ v1.0.3</p>
                     <span class="text-slate-400">Wk: <span class="font-bold font-mono ${claudeWkPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${claudeWkPct}%</span></span>
                     <span class="text-[9px] ${claudeIsExhausted ? 'text-red-400 font-semibold' : (claudeCooldown > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500')}">${claudeIsExhausted ? claudeResetBadge : (claudeCooldown > 0 ? 'Cooldown (' + formatCooldown(claudeCooldown) + ')' : claudeResetBadge)}</span>
                   </div>
-                  <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${claudeWkPct <= 0 ? 'bg-red-500' : (claudeWkPct > 30 ? 'bg-purple-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, claudeWkPct))}%"></div>
                   </div>
                 </div>
@@ -3509,7 +3724,7 @@ ightarrow$ v1.0.3</p>
                   <div class="flex justify-between items-center text-[10px]">
                     <span class="text-slate-400">5h: <span class="font-bold font-mono ${claude5hPct <= 0 ? 'text-red-400' : 'text-slate-300'}">${claude5hPct}%</span></span>
                   </div>
-                  <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                  <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                     <div class="h-full ${claude5hPct <= 0 ? 'bg-red-500' : (claude5hPct > 30 ? 'bg-fuchsia-500' : 'bg-amber-500')}" style="width: ${Math.max(0, Math.min(100, claude5hPct))}%"></div>
                   </div>
                 </div>
@@ -3680,7 +3895,7 @@ ightarrow$ v1.0.3</p>
             </span>
             <span>${resetStr ? `<span class="text-amber-400/90 text-[10px] font-mono mr-2"><i class="fa-regular fa-clock mr-0.5"></i>in ${resetStr}</span>` : ''}Max: ${(info.maxTokens || 0).toLocaleString()} tok</span>
           </div>
-          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div class="w-full h-2 bg-slate-950/90 rounded-full overflow-hidden mt-1 border border-slate-800/80 shadow-inner">
             <div class="h-full ${quotaColor}" style="width: ${poolQuota}%"></div>
           </div>
           ${accountBreakdownHtml}
@@ -5245,14 +5460,23 @@ ${data.stderr || data.stdout || data.error}`;
     }
 
     function updateTrafficBadge() {
-      const badge = document.getElementById('trafficBadge');
-      if (!badge) return;
       const count = trafficRecords.length;
-      if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : count;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
+      const badge = document.getElementById('trafficBadge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+      const mBadge = document.getElementById('mTrafficBadge');
+      if (mBadge) {
+        if (count > 0) {
+          mBadge.classList.remove('hidden');
+        } else {
+          mBadge.classList.add('hidden');
+        }
       }
     }
 
@@ -5262,7 +5486,23 @@ ${data.stderr || data.stdout || data.error}`;
 
     function renderTrafficTable() {
       const tbody = document.getElementById('trafficTableBody');
-      if (!tbody) return;
+      const cardsContainer = document.getElementById('trafficCardsContainer');
+      if (!tbody && !cardsContainer) return;
+
+      const total = trafficRecords.length;
+      const successCount = trafficRecords.filter(r => r.status_code >= 200 && r.status_code < 400).length;
+      const successRate = total > 0 ? Math.round((successCount / total) * 100) + '%' : '100%';
+      const avgLatency = total > 0 ? Math.round(trafficRecords.reduce((acc, r) => acc + (r.duration_ms || 0), 0) / total) + ' ms' : '0 ms';
+      const totalTokens = trafficRecords.reduce((acc, r) => acc + (r.total_tokens || ((r.prompt_tokens || 0) + (r.completion_tokens || 0))), 0);
+
+      const elTotal = document.getElementById('trafficStatTotal');
+      if (elTotal) elTotal.innerText = total;
+      const elSuccess = document.getElementById('trafficStatSuccess');
+      if (elSuccess) elSuccess.innerText = successRate;
+      const elLatency = document.getElementById('trafficStatLatency');
+      if (elLatency) elLatency.innerText = avgLatency;
+      const elTokens = document.getElementById('trafficStatTokens');
+      if (elTokens) elTokens.innerText = totalTokens.toLocaleString();
 
       const filterQuery = (document.getElementById('trafficSearchInput')?.value || '').trim().toLowerCase();
       const filtered = trafficRecords.filter(r => {
@@ -5272,20 +5512,34 @@ ${data.stderr || data.stdout || data.error}`;
       });
 
       if (filtered.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="10" class="py-12 text-center text-slate-500">
-              <i class="fa-solid fa-network-wired text-3xl mb-3 text-slate-600 block"></i>
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="10" class="py-12 text-center text-slate-500">
+                <i class="fa-solid fa-network-wired text-3xl mb-3 text-slate-600 block"></i>
+                <div class="text-sm font-semibold text-slate-400">${filterQuery ? 'No matching requests' : 'Waiting for requests...'}</div>
+                <div class="text-xs text-slate-500 mt-1 font-sans">${filterQuery ? 'Try another search term.' : 'Send requests via Claude Code, Codex, Aider, or curl to see live traffic streaming here.'}</div>
+              </td>
+            </tr>
+          `;
+        }
+        if (cardsContainer) {
+          cardsContainer.innerHTML = `
+            <div class="p-8 rounded-2xl bg-dark-card border border-dark-border text-center text-slate-500">
+              <i class="fa-solid fa-network-wired text-3xl mb-2 text-slate-600 block"></i>
               <div class="text-sm font-semibold text-slate-400">${filterQuery ? 'No matching requests' : 'Waiting for requests...'}</div>
-              <div class="text-xs text-slate-500 mt-1 font-sans">${filterQuery ? 'Try another search term.' : 'Send requests via Claude Code, Codex, Aider, or curl to see live traffic streaming here.'}</div>
-            </td>
-          </tr>
-        `;
+              <div class="text-xs text-slate-500 mt-1">${filterQuery ? 'Try another search term.' : 'Live requests will appear here automatically.'}</div>
+            </div>
+          `;
+        }
         return;
       }
 
-      let html = '';
-      for (const rec of filtered) {
+      let tableHtml = '';
+      let cardsHtml = '';
+      for (let idx = 0; idx < filtered.length; idx++) {
+        const rec = filtered[idx];
+        const rawIdx = trafficRecords.indexOf(rec);
         let statusBadge = '';
         if (rec.status_code >= 200 && rec.status_code < 300) {
           statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${rec.status_code}</span>`;
@@ -5301,25 +5555,146 @@ ${data.stderr || data.stdout || data.error}`;
 
         let tokenDisplay = '-';
         if (rec.total_tokens || rec.prompt_tokens || rec.completion_tokens) {
-          tokenDisplay = `<span class="text-white font-semibold">${rec.total_tokens || (rec.prompt_tokens + rec.completion_tokens)}</span> <span class="text-[10px] text-slate-400">(${rec.prompt_tokens}↑ ${rec.completion_tokens}↓)</span>`;
+          tokenDisplay = `<span class="text-white font-semibold">${rec.total_tokens || ((rec.prompt_tokens || 0) + (rec.completion_tokens || 0))}</span> <span class="text-[10px] text-slate-400">(${rec.prompt_tokens || 0}↑ ${rec.completion_tokens || 0}↓)</span>`;
         }
 
-        html += `
-          <tr class="hover:bg-slate-900/50 transition">
+        tableHtml += `
+          <tr onclick="openTrafficDetail(${rawIdx})" class="hover:bg-slate-900/60 transition cursor-pointer">
             <td class="py-2.5 px-3.5 text-slate-400 whitespace-nowrap">${rec.timestamp}</td>
             <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge}</td>
             <td class="py-2.5 px-3 font-bold text-slate-300 whitespace-nowrap">${rec.method}</td>
             <td class="py-2.5 px-3 text-cyan-300 font-semibold whitespace-nowrap">${rec.path}</td>
-            <td class="py-2.5 px-3 text-indigo-300 whitespace-nowrap">${rec.client_model}</td>
-            <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">${rec.backend_model}</td>
-            <td class="py-2.5 px-3 text-slate-300 max-w-[150px] truncate" title="${rec.account_email}">${rec.account_email}</td>
+            <td class="py-2.5 px-3 text-indigo-300 whitespace-nowrap">${rec.client_model || '-'}</td>
+            <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">${rec.backend_model || '-'}</td>
+            <td class="py-2.5 px-3 text-slate-300 max-w-[150px] truncate" title="${rec.account_email}">${rec.account_email || '-'}</td>
             <td class="py-2.5 px-3 text-amber-300 whitespace-nowrap">${rec.duration_ms} ms</td>
             <td class="py-2.5 px-3 whitespace-nowrap">${tokenDisplay}</td>
             <td class="py-2.5 px-3.5 whitespace-nowrap">${streamBadge}</td>
           </tr>
         `;
+
+        cardsHtml += `
+          <div onclick="openTrafficDetail(${rawIdx})" class="p-3.5 rounded-2xl bg-dark-card border border-dark-border hover:border-indigo-500/50 transition cursor-pointer shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-xs text-white">${rec.method}</span>
+                ${statusBadge}
+                ${streamBadge}
+              </div>
+              <span class="text-[10px] text-slate-400 font-mono">${rec.timestamp}</span>
+            </div>
+
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-cyan-300 font-mono font-semibold truncate max-w-[200px]">${rec.path}</span>
+              <span class="text-amber-300 font-mono text-[11px] font-semibold">${rec.duration_ms} ms</span>
+            </div>
+
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+              <div class="flex items-center space-x-1.5 text-indigo-300 truncate max-w-[180px]">
+                <i class="fa-solid fa-microchip text-[10px] text-indigo-400 shrink-0"></i>
+                <span class="truncate">${rec.client_model || '-'}</span>
+              </div>
+              <div class="font-mono text-slate-300">
+                ${tokenDisplay}
+              </div>
+            </div>
+          </div>
+        `;
       }
-      tbody.innerHTML = html;
+
+      if (tbody) tbody.innerHTML = tableHtml;
+      if (cardsContainer) cardsContainer.innerHTML = cardsHtml;
+    }
+
+    let selectedTrafficRecord = null;
+    function openTrafficDetail(index) {
+      const rec = trafficRecords[index];
+      if (!rec) return;
+      selectedTrafficRecord = rec;
+      const modal = document.getElementById('trafficDetailModal');
+      const body = document.getElementById('trafficDetailModalBody');
+      if (!modal || !body) return;
+
+      const statusColor = rec.status_code >= 200 && rec.status_code < 300 
+        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' 
+        : (rec.status_code === 429 ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' : 'text-rose-400 bg-rose-500/10 border-rose-500/30');
+
+      body.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-sm text-white font-mono">${rec.method}</span>
+              <span class="px-2 py-0.5 rounded text-xs font-mono font-bold border ${statusColor}">${rec.status_code}</span>
+              ${rec.stream ? '<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">STREAM</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">UNARY</span>'}
+            </div>
+            <span class="text-xs text-slate-400 font-mono">${rec.timestamp}</span>
+          </div>
+
+          <div class="space-y-2.5 text-xs">
+            <div>
+              <div class="text-slate-400 text-[11px] mb-1">Path</div>
+              <div class="p-2.5 rounded-xl bg-slate-950 font-mono text-cyan-300 border border-slate-800 break-all select-all">${rec.path}</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <div class="text-slate-400 text-[11px] mb-1">Client Model</div>
+                <div class="p-2 rounded-lg bg-slate-950 font-mono text-indigo-300 border border-slate-800 truncate">${rec.client_model || '-'}</div>
+              </div>
+              <div>
+                <div class="text-slate-400 text-[11px] mb-1">Backend Model</div>
+                <div class="p-2 rounded-lg bg-slate-950 font-mono text-slate-300 border border-slate-800 truncate">${rec.backend_model || '-'}</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <div class="text-slate-400 text-[11px] mb-1">Account</div>
+                <div class="p-2 rounded-lg bg-slate-950 font-mono text-slate-300 border border-slate-800 truncate" title="${rec.account_email}">${rec.account_email || '-'}</div>
+              </div>
+              <div>
+                <div class="text-slate-400 text-[11px] mb-1">Duration</div>
+                <div class="p-2 rounded-lg bg-slate-950 font-mono text-amber-300 border border-slate-800 font-semibold">${rec.duration_ms} ms</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-slate-400 text-[11px] mb-1">Token Usage</div>
+              <div class="p-2.5 rounded-xl bg-slate-950 font-mono border border-slate-800 flex items-center justify-around text-center">
+                <div>
+                  <div class="text-[10px] text-slate-500">TOTAL</div>
+                  <div class="font-bold text-white text-sm">${rec.total_tokens || ((rec.prompt_tokens || 0) + (rec.completion_tokens || 0))}</div>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                  <div class="text-[10px] text-slate-500">PROMPT (↑)</div>
+                  <div class="font-bold text-indigo-300 text-sm">${rec.prompt_tokens || 0}</div>
+                </div>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <div>
+                  <div class="text-[10px] text-slate-500">COMPLETION (↓)</div>
+                  <div class="font-bold text-emerald-300 text-sm">${rec.completion_tokens || 0}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeTrafficDetailModal() {
+      const modal = document.getElementById('trafficDetailModal');
+      if (modal) modal.classList.add('hidden');
+      selectedTrafficRecord = null;
+    }
+
+    function copySelectedTrafficCurl() {
+      if (!selectedTrafficRecord) return;
+      const rec = selectedTrafficRecord;
+      const curlCmd = `curl -X ${rec.method} "http://127.0.0.1:8000${rec.path}" \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer your-api-key" \\\n  -d '{"model": "${rec.client_model || 'gemini-2.5-flash'}", "messages": [{"role": "user", "content": "Hello"}]}'`;
+      copySnippetText(curlCmd, 'cURL command copied!');
     }
 
     async function clearTrafficLog() {
@@ -5334,6 +5709,92 @@ ${data.stderr || data.stdout || data.error}`;
       } catch (e) {
         showToast('Failed to clear traffic: ' + e.message, 'error');
       }
+    }
+
+    // UI helpers: Mobile pool actions, playground mobile switch, copy helper
+    function toggleMobilePoolActionsMenu() {
+      const menu = document.getElementById('mobilePoolActionsMenu');
+      if (menu) {
+        menu.classList.toggle('hidden');
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('mobilePoolActionsMenu');
+      const trigger = document.getElementById('mobilePoolActionsTrigger');
+      if (menu && !menu.classList.contains('hidden')) {
+        if (!menu.contains(e.target) && !trigger?.contains(e.target)) {
+          menu.classList.add('hidden');
+        }
+      }
+    });
+
+    function setPlaygroundMobileView(view) {
+      const controlsCol = document.getElementById('playgroundControlsCol');
+      const chatCol = document.getElementById('playgroundChatCol');
+      const btnChat = document.getElementById('pgmViewChatBtn');
+      const btnSettings = document.getElementById('pgmViewSettingsBtn');
+
+      if (view === 'settings') {
+        if (controlsCol) {
+          controlsCol.classList.remove('hidden');
+          controlsCol.classList.add('flex');
+        }
+        if (chatCol) {
+          chatCol.classList.add('hidden');
+          chatCol.classList.remove('flex');
+        }
+        if (btnSettings) {
+          btnSettings.className = 'flex-1 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm flex items-center justify-center space-x-1.5 transition font-semibold';
+        }
+        if (btnChat) {
+          btnChat.className = 'flex-1 py-1.5 rounded-lg text-slate-400 hover:text-white flex items-center justify-center space-x-1.5 transition font-medium';
+        }
+      } else {
+        if (controlsCol) {
+          controlsCol.classList.add('hidden');
+          controlsCol.classList.remove('flex');
+        }
+        if (chatCol) {
+          chatCol.classList.remove('hidden');
+          chatCol.classList.add('flex');
+        }
+        if (btnChat) {
+          btnChat.className = 'flex-1 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm flex items-center justify-center space-x-1.5 transition font-semibold';
+        }
+        if (btnSettings) {
+          btnSettings.className = 'flex-1 py-1.5 rounded-lg text-slate-400 hover:text-white flex items-center justify-center space-x-1.5 transition font-medium';
+        }
+      }
+    }
+
+    function copySnippetText(text, msg = 'Copied to clipboard!') {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(msg, 'success');
+        }).catch(() => {
+          fallbackCopyText(text, msg);
+        });
+      } else {
+        fallbackCopyText(text, msg);
+      }
+    }
+
+    function fallbackCopyText(text, msg) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast(msg, 'success');
+      } catch (e) {
+        showToast('Failed to copy', 'error');
+      }
+      document.body.removeChild(ta);
     }
 
     // Init

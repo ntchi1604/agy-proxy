@@ -1177,6 +1177,7 @@ class CloudCodeClient:
         req: OpenAIChatRequest,
         session_key: str | None = None,
         specific_account_id: str | None = None,
+        client_path: str = "/v1/chat/completions",
     ) -> AsyncGenerator[str, None]:
         """Streams OpenAI formatted SSE chunks."""
         req_id = f"chatcmpl-{uuid.uuid4().hex[:16]}"
@@ -1218,7 +1219,7 @@ class CloudCodeClient:
                 model_name=model,
                 session_key=sess_key,
                 specific_account_id=specific_account_id,
-                client_path="/v1/chat/completions",
+                client_path=client_path,
                 is_streaming=True,
             ):
                 resp = data.get("response", data)
@@ -1308,6 +1309,7 @@ class CloudCodeClient:
         req: OpenAIChatRequest,
         session_key: str | None = None,
         specific_account_id: str | None = None,
+        client_path: str = "/v1/chat/completions",
     ) -> dict[str, Any]:
         """Returns non-streaming full OpenAI ChatCompletionResponse."""
         req_id = f"chatcmpl-{uuid.uuid4().hex[:16]}"
@@ -1349,7 +1351,7 @@ class CloudCodeClient:
             model_name=model,
             session_key=sess_key,
             specific_account_id=specific_account_id,
-            client_path="/v1/chat/completions",
+            client_path=client_path,
             is_streaming=False,
         ):
             resp = data.get("response", data)
@@ -1920,6 +1922,8 @@ class CloudCodeClient:
         model: str,
         raw_payload: dict[str, Any],
         specific_account_id: str | None = None,
+        client_path: str | None = None,
+        is_streaming: bool = True,
     ) -> AsyncGenerator[str, None]:
         """Streams native Gemini SSE events with multi-account support."""
         backend_model = normalize_model_name(model)
@@ -1937,14 +1941,15 @@ class CloudCodeClient:
                 "requestType": "chat",
             }
 
+        eff_client_path = client_path or f"/v1beta/models/{model}:streamGenerateContent"
         try:
             async for data in self._post_sse_stream_with_failover(
                 "v1internal:streamGenerateContent?alt=sse",
                 build_payload,
                 model_name=backend_model,
                 specific_account_id=specific_account_id,
-                client_path=f"/v1beta/models/{model}:streamGenerateContent",
-                is_streaming=True,
+                client_path=eff_client_path,
+                is_streaming=is_streaming,
             ):
                 yield f"data: {json.dumps(data)}\n\n"
         except Exception as e:
@@ -1968,7 +1973,13 @@ class CloudCodeClient:
         aggregated_candidates: list[dict[str, Any]] = []
         final_usage: dict[str, Any] = {}
 
-        async for data in self.stream_gemini_native(model, raw_payload, specific_account_id=specific_account_id):
+        async for data in self.stream_gemini_native(
+            model,
+            raw_payload,
+            specific_account_id=specific_account_id,
+            client_path=f"/v1beta/models/{model}:generateContent",
+            is_streaming=False,
+        ):
             if data.startswith("data:"):
                 line = data[5:].strip()
                 if line:

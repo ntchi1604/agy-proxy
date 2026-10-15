@@ -283,6 +283,7 @@ async def stream_responses_events(
             chat_req,
             session_key=session_key,
             specific_account_id=specific_account_id,
+            client_path="/v1/responses",
         ):
             if not sse_line or not sse_line.startswith("data: "):
                 continue
@@ -554,6 +555,7 @@ async def generate_responses_dict(
         chat_req,
         session_key=session_key,
         specific_account_id=specific_account_id,
+        client_path="/v1/responses",
     )
 
     choices = chat_res.get("choices", [])

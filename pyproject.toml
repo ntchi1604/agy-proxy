@@ -39,7 +39,9 @@ agy_proxy = ["static/*", "templates/*", "*.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
-    "ignore::DeprecationWarning:starlette.*",
+    "ignore::DeprecationWarning",
+    "ignore:.*testclient.*",
+    "ignore:.*httpx.*",
 ]
 
 [tool.ruff]

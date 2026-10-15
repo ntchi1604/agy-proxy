@@ -127,6 +127,85 @@ class TestTrafficAndWebEndpoints(unittest.IsolatedAsyncioTestCase):
             _, kwargs = mock_launch.call_args
             self.assertTrue(kwargs.get("restart"))
 
+    async def test_cloudcode_internal_stream_traffic_recording(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from agy_proxy.auth import AccountSession
+
+        mock_acc = AccountSession(
+            account_id="acc-antigravity",
+            email="developer@example.com",
+            access_token="valid_token_xyz",
+            refresh_token="valid_refresh_xyz",
+            auth_method="consumer",
+        )
+        mock_acc.enabled = True
+        mock_acc.get_valid_token = AsyncMock(return_value="valid_token_xyz")
+        mock_acc.get_auth_headers = AsyncMock(return_value={"Authorization": "Bearer valid_token_xyz"})
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.text = '{"response": {"candidates": [{"content": {"parts": [{"text": "Hello Antigravity"}]}}], "usageMetadata": {"promptTokenCount": 25, "candidatesTokenCount": 10, "totalTokenCount": 35}}}'
+        mock_resp.json = MagicMock(return_value=json.loads(mock_resp.text))
+
+        mock_http_client = AsyncMock()
+        mock_http_client.post = AsyncMock(return_value=mock_resp)
+        mock_acc.get_http_client = AsyncMock(return_value=mock_http_client)
+
+        self.pool.accounts["acc-antigravity"] = mock_acc
+
+        traffic_inspector.clear()
+        resp = await self.client.post(
+            "/v1internal:streamGenerateContent?alt=sse",
+            json={
+                "model": "gemini-3.8-flash-high",
+                "request": {
+                    "contents": [{"role": "user", "parts": [{"text": "Hello world"}]}]
+                }
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        history = traffic_inspector.get_history()
+        self.assertEqual(len(history), 1)
+        rec = history[0]
+        self.assertEqual(rec["path"], "/v1internal:streamGenerateContent?alt=sse")
+        self.assertEqual(rec["client_model"], "gemini-3.8-flash-high")
+        self.assertEqual(rec["backend_model"], "Google CloudCode")
+        self.assertEqual(rec["account_email"], "developer@example.com")
+        self.assertEqual(rec["status_code"], 200)
+        self.assertTrue(rec["stream"])
+        self.assertEqual(rec["prompt_tokens"], 25)
+        self.assertEqual(rec["completion_tokens"], 10)
+        self.assertEqual(rec["total_tokens"], 35)
+
+    async def test_native_count_tokens_traffic_recording(self):
+        traffic_inspector.clear()
+        # 1. Gemini Native countTokens
+        resp_gemini = await self.client.post(
+            "/v1beta/models/gemini-2.5-flash:countTokens",
+            json={"contents": [{"role": "user", "parts": [{"text": "Test token counting"}]}]},
+        )
+        self.assertEqual(resp_gemini.status_code, 200)
+        history = traffic_inspector.get_history()
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["path"], "/v1beta/models/gemini-2.5-flash:countTokens")
+        self.assertEqual(history[0]["client_model"], "gemini-2.5-flash")
+        self.assertFalse(history[0]["stream"])
+        self.assertGreater(history[0]["total_tokens"], 0)
+
+        # 2. Anthropic messages count_tokens
+        resp_claude = await self.client.post(
+            "/v1/messages/count_tokens",
+            json={"model": "claude-3-7-sonnet", "messages": [{"role": "user", "content": "Counting tokens"}]},
+        )
+        self.assertEqual(resp_claude.status_code, 200)
+        history2 = traffic_inspector.get_history()
+        self.assertEqual(len(history2), 2)
+        self.assertEqual(history2[0]["path"], "/v1/messages/count_tokens")
+        self.assertIn("claude", history2[0]["client_model"])
+        self.assertFalse(history2[0]["stream"])
+
 
 if __name__ == "__main__":
     unittest.main()
