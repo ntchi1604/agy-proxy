@@ -31,6 +31,7 @@ PORT="${PORT:-44741}"
 PROXY_PORT="${AGY_PROXY_PORT:-8000}"
 PROXY_URL="${AGY_PROXY_URL:-http://127.0.0.1:${PROXY_PORT}}"
 KILL_ELECTRON=0
+RESTART=0
 AUTO_OPEN=0
 DIRECT_MODE=0
 BROWSER_CMD=""
@@ -72,6 +73,9 @@ for ((i=0; i<${#args[@]}; i++)); do
         --kill-electron|-k)
             KILL_ELECTRON=1
             ;;
+        --restart|-r)
+            RESTART=1
+            ;;
         --open|-o)
             AUTO_OPEN=1
             ;;
@@ -98,6 +102,7 @@ for ((i=0; i<${#args[@]}; i++)); do
             echo "  -e, --editor PATH      Path to Antigravity editor root directory (e.g. /opt/Antigravity, /opt/Antigravity IDE)"
             echo "  -f, --ls-path PATH     Direct path to language_server binary or directory"
             echo "  -k, --kill-electron    Automatically terminate running Electron instances"
+            echo "  -r, --restart          Force restart web server (terminate any running instance on port)"
             echo "  -o, --open             Automatically open web browser on startup"
             echo "      --direct           Bypass agy-proxy and connect directly to Google backend"
             echo "  -b, --browser NAME     Specify custom browser executable (e.g. helium, google-chrome)"
@@ -271,6 +276,14 @@ if [ -z "$BIN" ]; then
     echo "Please set ANTIGRAVITY_LS_PATH, specify via '-e /path/to/editor', or run:"
     echo "  agy-proxy config set ls-path /path/to/language_server"
     exit 1
+fi
+
+# Restart handling
+if [ "$RESTART" -eq 1 ]; then
+    echo -e "\033[1;33m🔄 Restart requested: terminating existing language_server instances...\033[0m"
+    pkill -f "language_server.*--https_server_port.*$PORT" 2>/dev/null || true
+    pkill -f "language_server.*--standalone" 2>/dev/null || true
+    sleep 1
 fi
 
 # Electron instance handling

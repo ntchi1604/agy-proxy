@@ -136,8 +136,11 @@ class AIStudioApiKeySession(AccountSession):
         return self.available_models
 
     def is_model_supported(self, model_name: str) -> bool:
-        """Google AI Studio API Key accounts only support Gemini models, never Claude or 3P models."""
-        return not is_3p_model(model_name)
+        """Google AI Studio API Key accounts only support Gemini models, never Claude, 3P, or Gemini Web Argon models."""
+        from agy_proxy.models import is_3p_model, is_argon_model
+        if is_3p_model(model_name) or is_argon_model(model_name):
+            return False
+        return True
 
     def get_quota_details(self) -> dict[str, Any]:
         """Calculates structured quota fractions for Google AI Studio API Key."""

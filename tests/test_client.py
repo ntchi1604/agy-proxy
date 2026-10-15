@@ -541,6 +541,25 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sent_payloads[0]["model"], "claude-sonnet-4-6")
             self.assertEqual(sent_payloads[1]["model"], "claude-sonnet-5-5-high")
 
+    async def test_post_sse_stream_argon_raises_without_gemini_web(self):
+        """Tests that when an Argon model is requested on Antigravity OAuth accounts (no gemini_web session),
+        a RuntimeError is raised with a clear message instead of silently routing to gemini-3.8-flash-high."""
+        with patch.object(self.acc, "initialize_project", AsyncMock(return_value="test-proj")), \
+             patch.object(self.acc, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer test"})):
+
+            gen = self.client._post_sse_stream_with_failover(
+                endpoint="v1internal:streamGenerateContent?alt=sse",
+                payload_builder_fn=lambda proj: {
+                    "model": "gemini-4-argon-high",
+                    "request": {"model": "gemini-4-argon-high"},
+                },
+                model_name="anthropic.gemini-4-argon-high",
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                async for _ in gen:
+                    pass
+            self.assertIn("Gemini Web session", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

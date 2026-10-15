@@ -1755,7 +1755,7 @@ def create_app(
             raise HTTPException(status_code=e.response.status_code, detail=str(e))
         except (ValueError, RuntimeError) as e:
             err_msg = str(e)
-            if "does not support model" in err_msg or "not found in pool" in err_msg or "disabled" in err_msg:
+            if any(kw in err_msg for kw in ("does not support model", "not found in pool", "disabled", "No active accounts in pool support model", "No active Google OAuth accounts available")):
                 return JSONResponse(
                     status_code=400,
                     content={"error": {"message": err_msg, "type": "invalid_request_error", "code": 400}},
@@ -1973,7 +1973,7 @@ def create_app(
             )
         except (ValueError, RuntimeError) as e:
             err_msg = str(e)
-            if "does not support model" in err_msg or "not found in pool" in err_msg or "disabled" in err_msg:
+            if any(kw in err_msg for kw in ("does not support model", "not found in pool", "disabled", "No active accounts in pool support model", "No active Google OAuth accounts available")):
                 return JSONResponse(
                     status_code=400,
                     content={

@@ -462,6 +462,17 @@ function isModelSupported(acc, model) {
     }
     return true;
   }
+  const isArgon = norm.includes("argon");
+  if (isArgon) {
+    if (acc.auth_method === "gemini_web") return true;
+    if (availList.length > 0 && availList.includes(norm)) {
+      if (typeof acc.available_models === "object" && acc.available_models[norm] && acc.available_models[norm].disabled) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
   return true;
 }
 
@@ -1187,6 +1198,15 @@ export default {
         } else if (backendModel.includes("claude")) {
           const upModel = backendModel.includes("opus") ? "claude-opus-5-5-high" : "claude-sonnet-5-5-high";
           candidates = accounts.filter((a) => isModelSupported(a, upModel) && !isAccountRateLimited(a, upModel));
+        } else if (backendModel.includes("argon")) {
+          const fbModel = (backendModel.includes("task") || backendModel.includes("spark"))
+            ? "gemini-3.8-flash-task"
+            : backendModel.includes("low")
+            ? "gemini-3.8-flash-low"
+            : backendModel.includes("med")
+            ? "gemini-3.8-flash-medium"
+            : "gemini-3.8-flash-high";
+          candidates = accounts.filter((a) => isModelSupported(a, fbModel) && !isAccountRateLimited(a, fbModel));
         }
       }
       if (candidates.length === 0) {
@@ -1320,6 +1340,39 @@ export default {
 
               if ((gRes.status === 404 || gRes.status === 429) && isLastCandidate && (backendModel.includes("5-5") || backendModel.includes("5.5"))) {
                 const fbModel = backendModel.includes("opus") ? "claude-opus-4-6-thinking" : "claude-sonnet-4-6";
+                console.warn(`[Cloudflare] ⚠️ Model ${backendModel} returned ${gRes.status}. Falling back to ${fbModel}`);
+                const altAccounts = accounts.filter((a) => (a.account_id !== acc.account_id) && isModelSupported(a, fbModel) && !isAccountRateLimited(a, fbModel));
+                const targetAcc = altAccounts.length > 0 ? altAccounts[0] : acc;
+                const fbAuth = altAccounts.length > 0 ? await getAccessToken(targetAcc) : auth;
+                const fbPayload = buildCloudCodePayload(reqJson, fbModel, fbAuth);
+                const fbRes = await fetch(targetUrl, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${fbAuth.token}`,
+                    "User-Agent": DEFAULT_USER_AGENT,
+                  },
+                  body: JSON.stringify(fbPayload),
+                });
+                if (fbRes.ok) {
+                  return handleStreamOrJsonResponse(
+                    fbRes,
+                    isStream,
+                    isMessagesRoute,
+                    rawModel,
+                    fbModel
+                  );
+                }
+              }
+
+              if ((gRes.status === 404 || gRes.status === 400 || gRes.status === 429) && isLastCandidate && backendModel.includes("argon")) {
+                const fbModel = (backendModel.includes("task") || backendModel.includes("spark"))
+                  ? "gemini-3.8-flash-task"
+                  : backendModel.includes("low")
+                  ? "gemini-3.8-flash-low"
+                  : backendModel.includes("med")
+                  ? "gemini-3.8-flash-medium"
+                  : "gemini-3.8-flash-high";
                 console.warn(`[Cloudflare] ⚠️ Model ${backendModel} returned ${gRes.status}. Falling back to ${fbModel}`);
                 const altAccounts = accounts.filter((a) => (a.account_id !== acc.account_id) && isModelSupported(a, fbModel) && !isAccountRateLimited(a, fbModel));
                 const targetAcc = altAccounts.length > 0 ? altAccounts[0] : acc;

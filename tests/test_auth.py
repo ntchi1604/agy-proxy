@@ -367,6 +367,8 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertNotIsInstance(acc, AIStudioApiKeySession)
         self.assertTrue(acc.is_model_supported("gemini-2.5-pro"))
         self.assertTrue(acc.is_model_supported("anthropic.claude-3-7-sonnet"))
+        self.assertFalse(acc.is_model_supported("gemini-4-argon"))
+        self.assertFalse(acc.is_model_supported("gemini-4-argon-high"))
 
     def test_factory_instantiation_api_key(self):
         acc = AccountSession(account_id="k_1", refresh_token="AIzaSy12345", auth_method="api_key")
@@ -379,6 +381,8 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(acc.is_model_supported("gemini-2.5-pro"))
         self.assertFalse(acc.is_model_supported("anthropic.claude-3-7-sonnet"))
         self.assertFalse(acc.is_model_supported("claude-3-5-haiku"))
+        self.assertFalse(acc.is_model_supported("gemini-4-argon"))
+        self.assertFalse(acc.is_model_supported("gemini-4-argon-high"))
 
     async def test_pool_add_api_key_account(self):
         pool = AccountPool(accounts_file=self.accounts_file)
@@ -625,6 +629,66 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         # With flag, 5.5 is supported
         oa.supports_claude_5_5 = True
         self.assertTrue(oa.is_model_supported("claude-sonnet-5-5-high"))
+
+    def test_argon_model_fallback_and_isolation(self):
+        """Tests that Argon models route to GeminiWebSession when available, and raise RuntimeError when only OAuth accounts exist."""
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+
+        pool = AccountPool(accounts_file=self.accounts_file)
+        oauth_acc = AntigravityOAuthSession(
+            account_id="oa_1",
+            refresh_token="tok1",
+            email="oauth@example.com",
+            available_models={
+                "gemini-3.8-flash-high": {},
+                "gemini-3.8-flash-medium": {},
+                "gemini-3.8-flash-low": {},
+                "gemini-3.8-flash-task": {},
+                "gemini-4-argon-disabled": {"disabled": True},
+            },
+        )
+        pool.accounts["oa_1"] = oauth_acc
+
+        # 1. Antigravity OAuth session should reject argon models
+        self.assertFalse(oauth_acc.is_model_supported("gemini-4-argon"))
+        self.assertFalse(oauth_acc.is_model_supported("gemini-4-argon-high"))
+        self.assertFalse(oauth_acc.is_model_supported("gemini-4-argon-disabled"))
+        self.assertTrue(oauth_acc.is_model_supported("gemini-3.8-flash-high"))
+
+        # 2. When only OAuth accounts exist: raises RuntimeError (no silent model swap)
+        with self.assertRaises(RuntimeError) as ctx:
+            pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=True)
+        self.assertIn("Gemini Web session", str(ctx.exception))
+
+        with self.assertRaises(RuntimeError):
+            pool.get_candidate_accounts("anthropic.gemini-4-argon-high", allow_auto_routing=True)
+
+        with self.assertRaises(RuntimeError):
+            pool.get_candidate_accounts("gemini-4-argon", allow_auto_routing=True)
+
+        with self.assertRaises(RuntimeError):
+            pool.get_candidate_accounts("gemini-4-argon-task", allow_auto_routing=True)
+
+        # 3. With allow_auto_routing=False: also raises RuntimeError
+        with self.assertRaises(RuntimeError) as ctx:
+            pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=False)
+        self.assertIn("gemini-4-argon-high", str(ctx.exception))
+
+        # 4. When a GeminiWebSession is added, it is preferred for Argon requests
+        web_acc = GeminiWebSession(
+            account_id="gw_1",
+            cookies={"__Secure-1PSID": "cookie"},
+            email="gemini-web@browser.local",
+            enabled=True,
+        )
+        pool.accounts["gw_1"] = web_acc
+        self.assertTrue(web_acc.is_model_supported("gemini-4-argon"))
+        self.assertTrue(web_acc.is_model_supported("gemini-4-argon-high"))
+
+        cands_web = pool.get_candidate_accounts("gemini-4-argon-high")
+        self.assertEqual(len(cands_web), 1)
+        self.assertEqual(cands_web[0].account_id, "gw_1")
+
 
     def test_split_files_storage_and_reload(self):
         # 1. Create pool and add both OAuth and API key accounts

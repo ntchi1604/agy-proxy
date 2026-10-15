@@ -1306,6 +1306,41 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.json()["content"][0]["text"], "Hello Claude Code!")
 
+    async def test_anthropic_messages_unsupported_model_returns_400(self):
+        """Verifies that when no active accounts support the requested model, a clean 400 is returned rather than 500."""
+        with patch("agy_proxy.client.CloudCodeClient.generate_anthropic_messages", new_callable=AsyncMock) as mock_gen:
+            mock_gen.side_effect = RuntimeError("No active accounts in pool support model unknown-model-xyz.")
+
+            resp = await self.client.post(
+                "/v1/messages",
+                json={
+                    "model": "unknown-model-xyz",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                },
+            )
+            self.assertEqual(resp.status_code, 400)
+            data = resp.json()
+            self.assertEqual(data.get("type"), "error")
+            self.assertEqual(data.get("error", {}).get("type"), "invalid_request_error")
+            self.assertIn("No active accounts in pool support model", data.get("error", {}).get("message", ""))
+
+    async def test_openai_chat_unsupported_model_returns_400(self):
+        """Verifies that OpenAI chat completions returns 400 on unsupported pool models."""
+        with patch("agy_proxy.client.CloudCodeClient.generate_openai_chat", new_callable=AsyncMock) as mock_gen:
+            mock_gen.side_effect = RuntimeError("No active accounts in pool support model unknown-model-xyz.")
+
+            resp = await self.client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "unknown-model-xyz",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                },
+            )
+            self.assertEqual(resp.status_code, 400)
+            data = resp.json()
+            self.assertEqual(data.get("error", {}).get("type"), "invalid_request_error")
+            self.assertIn("No active accounts in pool support model", data.get("error", {}).get("message", ""))
+
     async def test_editor_endpoints_gemini_native(self):
         acc = AccountSession(
             account_id="acc_gem_native",

@@ -1183,7 +1183,7 @@ class AccountPool:
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
                         )
-                from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
+                from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model, is_argon_model, get_argon_fallback_model
                 if is_claude_4_6_model(norm_model):
                     upgrade_m = get_claude_5_5_upgrade_model(norm_model)
                     c55_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(upgrade_m)]
@@ -1199,6 +1199,12 @@ class AccountPool:
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
                         )
+                if is_argon_model(norm_model):
+                    # No Gemini Web session active — raise a clear error instead of silently switching models.
+                    raise RuntimeError(
+                        f"Model {norm_model} requires an active Gemini Web session. "
+                        "Add one via 'agy-proxy accounts add --har <file.har>' or enable an existing gemini_web account."
+                    )
 
             is_3p = is_3p_model(norm_model)
             if is_3p:
@@ -1232,7 +1238,7 @@ class AccountPool:
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
                         )
-                from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
+                from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model, is_argon_model, get_argon_fallback_model
                 if is_claude_4_6_model(norm_model):
                     upgrade_m = get_claude_5_5_upgrade_model(norm_model)
                     c55_pool = [
@@ -1252,6 +1258,12 @@ class AccountPool:
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
                         )
+                if is_argon_model(norm_model):
+                    # All Gemini Web sessions are rate-limited — raise a clear error instead of silently switching models.
+                    raise RuntimeError(
+                        f"All Gemini Web accounts supporting {norm_model} have reached quota or rate limits. "
+                        "Wait for the rate limit to reset or add another gemini_web account."
+                    )
             # Fall back to accounts that are at least not rate limited, or all active accounts to allow retry
             not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(norm_model)]
             available = not_rate_limited if not_rate_limited else list(active_pool)
@@ -1329,7 +1341,7 @@ class AccountPool:
                 models = acc.available_models or {}
 
             for m_id, info in models.items():
-                if m_id.startswith(("tab_", "chat_")):
+                if m_id.startswith(("tab_", "chat_")) or m_id.endswith("-disabled") or info.get("disabled") is True:
                     continue
 
                 if m_id not in combined_models:

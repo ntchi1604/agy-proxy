@@ -773,6 +773,21 @@ class CloudCodeClient:
                         backend_m = payload.get("model", model_name)
                         req_body = payload
 
+                        # If routing to Antigravity OAuth but the model is an Argon model (which CloudCode does not support),
+                        # skip this account — Argon requires a Gemini Web session. Do NOT silently swap the model.
+                        from agy_proxy.models import is_argon_model
+                        if is_argon_model(backend_m):
+                            logger.debug(
+                                "[%s] Skipping Antigravity OAuth account for Argon model %s — requires Gemini Web session.",
+                                acc.name or acc.email,
+                                backend_m,
+                            )
+                            last_error = RuntimeError(
+                                f"Model {backend_m} requires a Gemini Web session. "
+                                "Add a gemini_web account via 'agy-proxy accounts add --har <file.har>'."
+                            )
+                            break
+
                     acc_label = acc.name or acc.email
                     api_source = "AI Studio API Key" if acc.auth_method == "api_key" else "Antigravity OAuth"
                     is_background = payload.get("requestType") == "checkpoint"
@@ -1060,6 +1075,8 @@ class CloudCodeClient:
                     logger.info("[Model Upgrade] ✅ Upgraded request to %s succeeded seamlessly!", upgrade_m)
                     return
 
+
+        if last_error:
             raise last_error
         raise RuntimeError("All accounts in pool failed to fulfill the request.")
 

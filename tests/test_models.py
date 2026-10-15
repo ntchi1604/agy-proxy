@@ -20,6 +20,8 @@ from agy_proxy.models import (
     is_claude_4_6_model,
     get_claude_fallback_model,
     get_claude_5_5_upgrade_model,
+    is_argon_model,
+    get_argon_fallback_model,
 )
 
 
@@ -156,6 +158,36 @@ class TestModelNormalization(unittest.TestCase):
         self.assertFalse(is_claude_4_6_model("claude-sonnet-5-5-high"))
         self.assertFalse(is_claude_4_6_model("claude-opus-5-5-high"))
         self.assertFalse(is_claude_4_6_model("gemini-3.8-flash-high"))
+
+    def test_argon_model_detection_and_fallback(self):
+        # Detection
+        self.assertTrue(is_argon_model("gemini-4-argon"))
+        self.assertTrue(is_argon_model("gemini-4-argon-high"))
+        self.assertTrue(is_argon_model("gemini-4-argon-medium"))
+        self.assertTrue(is_argon_model("gemini-4-argon-low"))
+        self.assertTrue(is_argon_model("gemini-4-argon-task"))
+        self.assertTrue(is_argon_model("anthropic.gemini-4-argon-high"))
+        self.assertTrue(is_argon_model("anthropic/gemini-4-argon"))
+        self.assertTrue(is_argon_model("gemini-4"))
+        self.assertTrue(is_argon_model("gemini-4.0"))
+        self.assertTrue(is_argon_model("argon"))
+        self.assertTrue(is_argon_model("spark"))
+        self.assertTrue(is_argon_model("task"))
+        self.assertFalse(is_argon_model("gemini-3.8-flash-high"))
+        self.assertFalse(is_argon_model("claude-sonnet-4-6"))
+        self.assertFalse(is_argon_model(None))
+        self.assertFalse(is_argon_model(""))
+
+        # Fallback mappings preserving reasoning level
+        self.assertEqual(get_argon_fallback_model("gemini-4-argon-high"), "gemini-3.8-flash-high")
+        self.assertEqual(get_argon_fallback_model("anthropic.gemini-4-argon-high"), "gemini-3.8-flash-high")
+        self.assertEqual(get_argon_fallback_model("gemini-4-argon-medium"), "gemini-3.8-flash-medium")
+        self.assertEqual(get_argon_fallback_model("gemini-4-argon-low"), "gemini-3.8-flash-low")
+        self.assertEqual(get_argon_fallback_model("gemini-4-argon-task"), "gemini-3.8-flash-task")
+        self.assertEqual(get_argon_fallback_model("spark"), "gemini-3.8-flash-task")
+        self.assertEqual(get_argon_fallback_model("gemini-4-argon"), "gemini-3.8-flash-high")
+        self.assertEqual(get_argon_fallback_model("argon"), "gemini-3.8-flash-high")
+        self.assertEqual(get_argon_fallback_model("gemini-4"), "gemini-3.8-flash-high")
         self.assertFalse(is_claude_4_6_model(None))
 
         # Claude 5.5 upgrade mapping

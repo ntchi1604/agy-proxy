@@ -29,7 +29,8 @@ def test_find_language_server_explicit_file(tmp_path):
     mock_bin.write_text("#!/bin/sh\nexit 0\n")
     mock_bin.chmod(0o755)
 
-    found = find_language_server(custom_path=mock_bin)
+    # persist=False prevents overwriting the real ~/.config/agy-proxy/config.json
+    found = find_language_server(custom_path=mock_bin, persist=False)
     assert found == mock_bin.resolve()
 
 
@@ -38,7 +39,8 @@ def test_find_language_server_explicit_dir(tmp_path):
     mock_bin.write_text("#!/bin/sh\nexit 0\n")
     mock_bin.chmod(0o755)
 
-    found = find_language_server(custom_path=tmp_path)
+    # persist=False prevents overwriting the real ~/.config/agy-proxy/config.json
+    found = find_language_server(custom_path=tmp_path, persist=False)
     assert found == mock_bin.resolve()
 
 

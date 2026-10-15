@@ -403,6 +403,54 @@ def kill_electron_instances(force: bool = False) -> List[int]:
     return killed_pids
 
 
+def kill_standalone_instances(port: Optional[int] = None) -> List[int]:
+    """
+    Terminates running standalone language_server instances to allow clean restart.
+    Sends SIGTERM, then SIGKILL if still alive after timeout.
+    """
+    instances = get_running_instances()
+    pids_to_kill: List[int] = []
+    my_pid = os.getpid()
+
+    for ls in instances.get("language_server_details", []):
+        if ls.get("standalone"):
+            pid = ls.get("pid")
+            if pid and pid != my_pid and pid not in pids_to_kill:
+                pids_to_kill.append(pid)
+
+    # Also check if any process is listening on the specific web port
+    if port:
+        try:
+            for conn in psutil.net_connections(kind="tcp"):
+                if conn.laddr and conn.laddr.port == port and conn.pid:
+                    if conn.pid != my_pid and conn.pid not in pids_to_kill:
+                        pids_to_kill.append(conn.pid)
+        except Exception:
+            pass
+
+    killed_pids: List[int] = []
+    for pid in pids_to_kill:
+        try:
+            p = psutil.Process(pid)
+            p.terminate()
+            killed_pids.append(pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+
+    if killed_pids:
+        time.sleep(0.8)
+        for pid in killed_pids:
+            try:
+                p = psutil.Process(pid)
+                if p.is_running():
+                    p.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        time.sleep(0.3)
+
+    return killed_pids
+
+
 def get_csrf_token() -> str:
     """Generates or retrieves a CSRF token for the language_server."""
     token = os.environ.get("CSRF_TOKEN")
@@ -553,13 +601,13 @@ def print_web_banner(
     table.add_row("[bold cyan]💾 Memory Optimization:[/bold cyan]", "[bold green]~1.6 GB RAM Saved[/bold green] [dim](Electron GUI skipped)[/dim]")
 
     if direct:
-        proxy_display = "[bold yellow]Direct Google Mode[/bold yellow] [dim](Proxy Bypassed)[/dim]"
+        proxy_display = "[bold green]Standalone Direct Mode[/bold green] [dim](Official Google Backend · Proxy Bypassed)[/dim]"
     elif proxy_active and proxy_url:
-        proxy_display = f"[bold green]Active (Connected)[/bold green] [dim]({proxy_url})[/dim]"
+        proxy_display = f"[bold green]Proxy Mode (Connected)[/bold green] [dim]({proxy_url} · Multi-Account Pool Active)[/dim]"
     elif proxy_url:
-        proxy_display = f"[bold yellow]Direct Google Mode[/bold yellow] [dim](Proxy {proxy_url} offline)[/dim]"
+        proxy_display = "[bold green]Standalone Direct Mode[/bold green] [dim](Official Google Backend · Proxy-Free)[/dim]"
     else:
-        proxy_display = "[bold yellow]Direct Google Mode[/bold yellow] [dim](Official Backend)[/dim]"
+        proxy_display = "[bold green]Standalone Direct Mode[/bold green] [dim](Official Google Backend)[/dim]"
     table.add_row("[bold cyan]🔄 Antigravity Mode:[/bold cyan]", proxy_display)
 
     table.add_row("[bold cyan]🔑 CSRF Token:[/bold cyan]", f"[dim]{csrf_token}[/dim]")
@@ -602,6 +650,7 @@ def launch_antigravity_web(
     verbose: bool = False,
     log_path: Optional[str | Path] = None,
     direct: bool = False,
+    restart: bool = False,
 ) -> int:
     """
     Main entry point for starting Antigravity in browser Web Mode.
@@ -643,6 +692,43 @@ def launch_antigravity_web(
     if no_open is not None and not open_browser:
         should_open = not no_open
 
+    # Check proxy status first
+    if direct:
+        effective_proxy_url = None
+        proxy_alive = False
+    else:
+        effective_proxy_url = proxy_url
+        if effective_proxy_url and not effective_proxy_url.startswith("http"):
+            effective_proxy_url = f"http://{effective_proxy_url}"
+        proxy_alive = check_proxy_alive(effective_proxy_url) if effective_proxy_url else False
+
+    # Check if a running standalone instance is in a mismatched mode (e.g. was pointing to dead proxy)
+    running_standalone_details = [
+        ls for ls in instances.get("language_server_details", []) if ls.get("standalone")
+    ]
+    should_restart_for_mode_switch = False
+    if running_standalone_details and is_port_in_use(port, host):
+        cmd_str = running_standalone_details[0].get("cmd", "")
+        existing_points_to_proxy = "8000" in cmd_str or (effective_proxy_url and effective_proxy_url in cmd_str)
+        desired_points_to_proxy = proxy_alive and not direct
+
+        if existing_points_to_proxy and not desired_points_to_proxy:
+            console.print("[bold yellow]🔄 Stale instance detected (pointing to offline proxy). Auto-restarting in Direct Google Mode...[/bold yellow]")
+            should_restart_for_mode_switch = True
+        elif not existing_points_to_proxy and desired_points_to_proxy:
+            console.print("[bold yellow]🔄 Detected running instance in Direct mode while proxy is online. Auto-restarting in Proxy Mode...[/bold yellow]")
+            should_restart_for_mode_switch = True
+
+    if restart or should_restart_for_mode_switch:
+        killed = kill_standalone_instances(port=port)
+        if killed:
+            console.print(f"[bold green]✓ Stopped {len(killed)} previous Antigravity Web process(es).[/bold green]")
+        for _ in range(25):
+            if not is_port_in_use(port, host):
+                break
+            time.sleep(0.1)
+        instances = get_running_instances()
+
     # Check if port is already in use
     url = f"https://{host}:{port}/"
     if is_port_in_use(port, host):
@@ -654,18 +740,8 @@ def launch_antigravity_web(
                 open_browser_async(url, browser_name=browser, delay=0.5)
             return 0
         else:
-            console.print(f"[bold red]❌ Port {port} is occupied by another process. Please choose a different port with --port <number>.[/bold red]")
+            console.print(f"[bold red]❌ Port {port} is occupied by another process. Please choose a different port with --port <number> or use --restart.[/bold red]")
             return 1
-
-    # Check proxy status
-    if direct:
-        effective_proxy_url = None
-        proxy_alive = False
-    else:
-        effective_proxy_url = proxy_url
-        if effective_proxy_url and not effective_proxy_url.startswith("http"):
-            effective_proxy_url = f"http://{effective_proxy_url}"
-        proxy_alive = check_proxy_alive(effective_proxy_url) if effective_proxy_url else False
 
     token = get_csrf_token()
     cmd = build_web_args(

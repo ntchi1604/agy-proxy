@@ -2457,7 +2457,7 @@ ightarrow$ v1.0.3</p>
           if (s < 86400) return (s / 3600).toFixed(1) + 'h';
           return (s / 86400).toFixed(1) + 'd';
         };
-        const isRateLimited = maxCooldown > 0 || Boolean(acc.rate_limited);
+        const isRateLimited = (geminiCooldown > 0 && claudeCooldown > 0) || (Boolean(acc.rate_limited) && geminiPct <= 0 && claudePct <= 0);
         const isExhausted = (geminiPct <= 0 && claudePct <= 0);
 
         let statusBadge = '';
@@ -2467,6 +2467,8 @@ ightarrow$ v1.0.3</p>
           statusBadge = `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left text-[9px]"></i>Cooldown (${formatCooldown(maxCooldown)})</span>`;
         } else if (geminiPct > 20 && claudePct > 20) {
           statusBadge = '<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Ready</span>';
+        } else if (geminiPct > 0 || claudePct > 0) {
+          statusBadge = '<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Active (Partial)</span>';
         } else {
           statusBadge = '<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Constrained</span>';
         }
@@ -3196,7 +3198,7 @@ ightarrow$ v1.0.3</p>
                     ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center space-x-1 shrink-0 shadow-sm"><i class="fa-solid fa-star text-amber-400 text-[9px]"></i><span>Primary</span></span>' 
                     : `<button onclick="setPrimaryAccount('${acc.account_id}')" class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-indigo-600 hover:text-white text-slate-400 border border-slate-700 transition flex items-center space-x-1 shrink-0" title="Set as primary active account"><i class="fa-regular fa-star text-[9px]"></i><span>Set Primary</span></button>`}
                   ${agyActiveCardBadge}
-                  ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${formatCooldown(maxAccountCooldown)})</span></span>` : '')}
+                  ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : ''}
                   ${!isEnabled ? '<span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700 shrink-0">Paused</span>' : ''}
                 </div>
                 <div class="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex items-center space-x-1.5 mt-0.5" title="${acc.email}">
@@ -3336,8 +3338,7 @@ ightarrow$ v1.0.3</p>
                 ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20"><i class="fa-solid fa-globe mr-1"></i> Web</span>'
                 : (isApiKey
                   ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-key mr-1"></i> API Key</span>'
-                  : '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"><i class="fa-brands fa-google mr-1"></i> OAuth</span>')}
-              ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : (maxAccountCooldown > 0 ? `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono"><i class="fa-solid fa-clock-rotate-left mr-1 text-[8px]"></i>Cooldown (${formatCooldown(maxAccountCooldown)})</span>` : '')}
+              ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : ''}
               ${!isEnabled ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Paused</span>' : ''}
             </div>
           </td>

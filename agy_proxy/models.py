@@ -578,6 +578,51 @@ def get_claude_5_5_upgrade_model(model_name: str | None) -> str:
     return "claude-sonnet-5-5-high"
 
 
+ARGON_MODELS: set[str] = {
+    "gemini-4-argon",
+    "gemini-4-argon-high",
+    "gemini-4-argon-medium",
+    "gemini-4-argon-low",
+    "gemini-4-argon-task",
+    "gemini-4-argon-spark",
+    "gemini-4-task",
+    "gemini-4-spark",
+    "gemini-4",
+    "gemini-4.0",
+    "gemini-4-pro",
+    "argon",
+    "argon-task",
+    "argon-spark",
+    "spark",
+    "task",
+}
+
+
+def is_argon_model(model_name: str | None) -> bool:
+    """Checks whether the requested model is a Gemini 4 Argon / Spark variant."""
+    if not model_name:
+        return False
+    norm = normalize_model_name(model_name)
+    return "argon" in norm
+
+
+def get_argon_fallback_model(model_name: str | None) -> str:
+    """
+    Returns the corresponding Google Flagship Gemini 3.8 fallback model for an Argon variant.
+    Preserves reasoning level (High -> Flash High, Medium -> Flash Medium, Low -> Flash Low, Task -> Flash Task).
+    """
+    if not model_name:
+        return "gemini-3.8-flash-high"
+    norm = normalize_model_name(model_name)
+    if "task" in norm or "spark" in norm:
+        return "gemini-3.8-flash-task"
+    if "low" in norm:
+        return "gemini-3.8-flash-low"
+    if "med" in norm:
+        return "gemini-3.8-flash-medium"
+    return "gemini-3.8-flash-high"
+
+
 # ---------------------------------------------------------
 # OpenAI Compatible Schemas
 # ---------------------------------------------------------

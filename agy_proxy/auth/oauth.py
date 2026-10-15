@@ -304,7 +304,12 @@ class AntigravityOAuthSession(AccountSession):
         support Claude 4.6 ("Claude Sonnet 4.6 is no longer available. Please switch to Claude Sonnet 5.5.").
         Conversely, accounts that have not been migrated support Claude 4.6 and do not support Claude 5.5.
         """
-        from agy_proxy.models import normalize_model_name, is_claude_5_5_model, is_claude_4_6_model
+        from agy_proxy.models import (
+            normalize_model_name,
+            is_claude_5_5_model,
+            is_claude_4_6_model,
+            is_argon_model,
+        )
         norm = normalize_model_name(model_name)
 
         # 1. Any model explicitly marked unsupported on this account
@@ -336,9 +341,15 @@ class AntigravityOAuthSession(AccountSession):
                 return norm in avail or any(is_claude_4_6_model(m) for m in avail.keys())
             return True
 
-        # 5. Native Gemini or other models: check catalog if populated
+        # 5. Gemini 4 Argon models: only supported if explicitly available and enabled in CloudCode
+        if is_argon_model(norm):
+            if avail and norm in avail:
+                return not bool(avail[norm].get("disabled", False))
+            return False
+
+        # 6. Native Gemini or other models: check catalog if populated
         if avail and norm in avail:
-            return True
+            return not bool(avail[norm].get("disabled", False))
 
         return True
 
