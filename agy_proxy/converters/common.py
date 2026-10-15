@@ -13,7 +13,7 @@ import uuid
 
 import httpx
 
-from agy_proxy.models import DEFAULT_MODEL, normalize_model_name, is_claude_5_5_model
+from agy_proxy.models import DEFAULT_MODEL, normalize_model_name, is_claude_5_5_model, is_deepagent_model
 
 logger = logging.getLogger("agy_proxy.converters.common")
 
@@ -506,6 +506,12 @@ def _apply_thinking_config(
         effort_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH", "xhigh": "HIGH", "max": "HIGH"}
         if effort_val in effort_map:
             thinking_config["thinkingLevel"] = effort_map[effort_val]
+
+    if is_deepagent_model(backend_model):
+        thinking_config["includeThoughts"] = True
+        thinking_config["thinkingBudget"] = 64000
+        thinking_config["thinkingLevel"] = "HIGH"
+        return
 
     # For Claude 5.5 adaptive reasoning models (supportsAdaptiveThinking=True with Vertex)
     is_c55 = is_claude_5_5_model(backend_model)

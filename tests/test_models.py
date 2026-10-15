@@ -196,6 +196,34 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(get_claude_5_5_upgrade_model("claude-opus-4-6-thinking"), "claude-opus-5-5-high")
         self.assertEqual(get_claude_5_5_upgrade_model("claude-3-opus"), "claude-opus-5-5-high")
 
+    def test_deepagent_model_preset(self):
+        from agy_proxy.models import is_deepagent_model
+        from agy_proxy.converters.anthropic import anthropic_to_cloudcode_payload
+        from agy_proxy.models import AnthropicRequest
+
+        self.assertTrue(is_deepagent_model("deepagent"))
+        self.assertTrue(is_deepagent_model("gemini-deepagent"))
+        self.assertTrue(is_deepagent_model("gemini-3.8-flash-deepagent"))
+        self.assertTrue(is_deepagent_model("deep-agent"))
+        self.assertFalse(is_deepagent_model("gemini-3.8-flash-high"))
+        self.assertFalse(is_deepagent_model(None))
+
+        # Normalization
+        self.assertEqual(normalize_model_name("deepagent"), "gemini-3.8-flash-deepagent")
+        self.assertEqual(normalize_model_name("gemini-deepagent"), "gemini-3.8-flash-deepagent")
+
+        # Payload generation: max reasoning budget (64k), HIGH level, mapped to gemini-3.8-flash-high
+        req = AnthropicRequest(
+            model="deepagent",
+            messages=[{"role": "user", "content": "Run deepagent task"}],
+        )
+        payload = anthropic_to_cloudcode_payload(req, project_id="test-proj")
+        self.assertEqual(payload["model"], "gemini-3.8-flash-high")
+        tc = payload["request"]["generationConfig"]["thinkingConfig"]
+        self.assertEqual(tc["thinkingBudget"], 64000)
+        self.assertEqual(tc["thinkingLevel"], "HIGH")
+        self.assertTrue(tc["includeThoughts"])
+
 
 
 

@@ -326,3 +326,20 @@ def test_v2_23_0_updates():
     assert 106834476 in enhanced["experimentIds"]
     assert 106838234 in enhanced["experimentIds"]
 
+
+def test_deepagent_and_swarm_flags():
+    """Verify deepagent, swarm-narrator, agent-plugins-spec, and subagent timeout optimization."""
+    payload = get_default_experiments_payload()
+    flags_dict = {f["name"]: f.get("boolValue") for f in payload["flags"] if "name" in f}
+    assert flags_dict.get("enable-deepagent") is True
+    assert flags_dict.get("enable-swarm-narrator") is True
+    assert flags_dict.get("enable-agent-plugins-spec") is True
+
+    # Test enhanced non-bool subagent timeout optimization (180s)
+    enhanced = enhance_list_experiments({"experimentIds": [], "flags": []})
+    enh_flags = {f["name"]: f for f in enhanced["flags"]}
+    assert enh_flags["default_subagent_interaction_timeout_seconds"]["intValue"] == "180"
+    assert "always_inherit_model" in enh_flags["invoke-subagent-config"]["stringValue"]
+    assert enh_flags["enable-swarm-narrator"]["boolValue"] is True
+    assert enh_flags["enable-agent-plugins-spec"]["boolValue"] is True
+

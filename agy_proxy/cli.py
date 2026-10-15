@@ -229,6 +229,30 @@ async def handle_auth_list():
     console.print(table)
 
 
+def handle_accounts_export(output: str | None = None) -> None:
+    """Exports all accounts in the pool to JSON file or stdout."""
+    pool = AccountPool()
+    pool.load_accounts()
+    data = pool.export_pool(output_file=output)
+    count = len(data.get("accounts", []))
+    if output:
+        console.print(f"[bold green]✓ Exported {count} account(s) to [white]{output}[/white][/bold green]")
+    else:
+        print(json.dumps(data, indent=2))
+
+
+def handle_accounts_import(file_path: str, merge: bool = True) -> None:
+    """Imports accounts from a JSON file into the pool."""
+    pool = AccountPool()
+    pool.load_accounts()
+    try:
+        count = pool.import_pool(file_path, merge=merge)
+        mode_str = "merged" if merge else "replaced"
+        console.print(f"[bold green]✓ Successfully {mode_str} {count} account(s) into pool from [white]{file_path}[/white][/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]✗ Failed to import accounts from {file_path}:[/bold red] {e}")
+
+
 async def handle_switch_command(
     target: str | None = None,
     to_next: bool = False,
@@ -640,6 +664,69 @@ def handle_config_command(args: argparse.Namespace) -> None:
             console.print("[bold green]✓ All custom configuration settings have been reset.[/bold green]")
 
 
+def handle_service_command(args: argparse.Namespace) -> None:
+    """Handles 'agy-proxy service' commands for background daemon management."""
+    action = getattr(args, "service_action", None)
+    from agy_proxy import service
+
+    if action == "install":
+        port = getattr(args, "port", 8000)
+        host = getattr(args, "host", "127.0.0.1")
+        ok, msg = service.install_service(port=port, host=host)
+        if ok:
+            console.print(f"[bold green]✓ {msg}[/bold green]")
+        else:
+            console.print(f"[bold red]✗ {msg}[/bold red]")
+            sys.exit(1)
+    elif action == "uninstall":
+        ok, msg = service.uninstall_service()
+        if ok:
+            console.print(f"[bold green]✓ {msg}[/bold green]")
+        else:
+            console.print(f"[bold red]✗ {msg}[/bold red]")
+            sys.exit(1)
+    elif action == "status":
+        st = service.get_service_status()
+        color = "bold green" if st["running"] else ("bold yellow" if st["installed"] else "bold red")
+        status_text = "RUNNING" if st["running"] else ("INSTALLED (STOPPED)" if st["installed"] else "NOT INSTALLED")
+        details = st.get("details", "")
+        content = (
+            f"[bold cyan]Platform:[/bold cyan] {st['platform']}\n"
+            f"[bold cyan]Service File:[/bold cyan] {st['service_file']}\n"
+            f"[bold cyan]Status:[/bold cyan] [{color}]{status_text}[/{color}]"
+        )
+        if details:
+            content += f"\n\n[dim]{details}[/dim]"
+        console.print(Panel(
+            content,
+            title="[bold white]Antigravity Proxy Service Status[/bold white]",
+            border_style="blue",
+        ))
+    elif action == "start":
+        ok, msg = service.start_service()
+        if ok:
+            console.print(f"[bold green]✓ Service started:[/bold green] {msg}")
+        else:
+            console.print(f"[bold red]✗ Failed to start service:[/bold red] {msg}")
+            sys.exit(1)
+    elif action == "stop":
+        ok, msg = service.stop_service()
+        if ok:
+            console.print(f"[bold green]✓ Service stopped:[/bold green] {msg}")
+        else:
+            console.print(f"[bold red]✗ Failed to stop service:[/bold red] {msg}")
+            sys.exit(1)
+    elif action == "restart":
+        ok, msg = service.restart_service()
+        if ok:
+            console.print(f"[bold green]✓ Service restarted:[/bold green] {msg}")
+        else:
+            console.print(f"[bold red]✗ Failed to restart service:[/bold red] {msg}")
+            sys.exit(1)
+    else:
+        console.print("[yellow]Usage: agy-proxy service [install|uninstall|status|start|stop|restart][/yellow]")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the argument parser for agy-proxy CLI."""
     parser = argparse.ArgumentParser(
@@ -685,11 +772,21 @@ def build_parser() -> argparse.ArgumentParser:
         u_p = subparsers.add_parser(u_name, help="View model quota usage")
         u_p.add_argument("target", nargs="?", default=None, help="Target account email, name, ID, or #")
 
-    # auth subcommand
-    auth_parser = subparsers.add_parser("auth", help="Manage Antigravity Google accounts in pool")
+    # auth subcommand (also accessible via 'accounts')
+    auth_parser = subparsers.add_parser("auth", aliases=["accounts"], help="Manage Antigravity Google accounts in pool")
     auth_subparsers = auth_parser.add_subparsers(dest="auth_action", help="Auth action")
     auth_subparsers.add_parser("login", help="Log in a Google account via browser OAuth PKCE")
     auth_subparsers.add_parser("list", help="List all accounts and quotas in pool")
+
+    # accounts / auth export
+    auth_export = auth_subparsers.add_parser("export", help="Export account pool to JSON file")
+    auth_export.add_argument("-o", "--output", dest="output", type=str, default=None, help="Output JSON file path (e.g. pool.json; default: stdout)")
+
+    # accounts / auth import
+    auth_import = auth_subparsers.add_parser("import", help="Import account pool from JSON file")
+    auth_import.add_argument("file", help="Input JSON file containing exported accounts")
+    auth_import.add_argument("--merge", action="store_true", default=True, help="Merge into existing accounts (default: True)")
+    auth_import.add_argument("--replace", "--no-merge", dest="merge", action="store_false", help="Replace existing accounts instead of merging")
 
     # auth switch subcommand (agy-proxy auth switch)
     auth_switch = auth_subparsers.add_parser("switch", help="Switch active Antigravity CLI/IDE session")
@@ -811,6 +908,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     cfg_unset = config_sub.add_parser("unset", aliases=["reset", "delete"], help="Unset a configuration key")
     cfg_unset.add_argument("key", nargs="?", default=None, help="Configuration key to remove (or omit to reset all)")
+
+    # service subcommand (agy-proxy service [install|uninstall|status|start|stop|restart])
+    service_parser = subparsers.add_parser("service", help="Manage background system service (systemd user unit on Linux, launchd on macOS)")
+    service_sub = service_parser.add_subparsers(dest="service_action", help="Service action")
+
+    srv_install = service_sub.add_parser("install", help="Install and enable user background service")
+    srv_install.add_argument("--port", type=int, default=8000, help="Port for background proxy service (default: 8000)")
+    srv_install.add_argument("--host", type=str, default="127.0.0.1", help="Host address to bind to (default: 127.0.0.1)")
+
+    service_sub.add_parser("uninstall", help="Uninstall and remove background service")
+    service_sub.add_parser("status", help="Check status of background service")
+    service_sub.add_parser("start", help="Start background service")
+    service_sub.add_parser("stop", help="Stop background service")
+    service_sub.add_parser("restart", help="Restart background service")
 
     # Server arguments
     parser.add_argument(
@@ -972,9 +1083,18 @@ def main():
             target=getattr(args, "target", None),
         ))
         return
-    elif args.subcommand == "auth":
+    elif args.subcommand in ("auth", "accounts"):
         if args.auth_action == "login":
             asyncio.run(handle_auth_login())
+            return
+        elif args.auth_action == "export":
+            handle_accounts_export(output=getattr(args, "output", None))
+            return
+        elif args.auth_action == "import":
+            handle_accounts_import(
+                file_path=getattr(args, "file"),
+                merge=getattr(args, "merge", True),
+            )
             return
         elif args.auth_action in ("api", "apikey"):
             key_val = getattr(args, "key", None) or getattr(args, "positional_key", None)
@@ -1039,6 +1159,9 @@ def main():
         return
     elif args.subcommand == "config":
         handle_config_command(args)
+        return
+    elif args.subcommand == "service":
+        handle_service_command(args)
         return
     elif args.subcommand in ("web", "antigravity-web", "web-mode"):
         from agy_proxy.web_launcher import launch_antigravity_web, get_web_status

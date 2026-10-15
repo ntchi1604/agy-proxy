@@ -168,6 +168,12 @@ MODEL_ALIASES: dict[str, str] = {
     # DeepSeek / Open Source Aliases
     "deepseek-r1": "gemini-3.8-flash-high",
     "deepseek-v3": "gemini-3.8-flash-high",
+
+    # DeepAgent Swarm Presets
+    "deepagent": "gemini-3.8-flash-deepagent",
+    "deep-agent": "gemini-3.8-flash-deepagent",
+    "gemini-deepagent": "gemini-3.8-flash-deepagent",
+    "gemini-3.8-flash-deepagent": "gemini-3.8-flash-deepagent",
 }
 
 
@@ -184,6 +190,7 @@ VALID_CLOUDCODE_MODELS = {
     "gemini-3.8-flash-low",
     "gemini-3.8-flash-tiered",
     "gemini-3.8-flash-task",
+    "gemini-3.8-flash-deepagent",
     # Gemini 3.7
     "gemini-3.7-flash-high",
     "gemini-3.7-flash-medium",
@@ -242,6 +249,8 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
     "gemini-3.8-flash-n": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
     "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576},
+    "gemini-3.8-flash-deepagent": {"displayName": "Gemini 3.8 Flash DeepAgent (Autonomous Swarm, 64k Reasoning)", "maxTokens": 1048576},
+    "deepagent": {"displayName": "DeepAgent Swarm Preset (64k Reasoning)", "maxTokens": 1048576},
     # Gemini 3.7
     "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High)", "maxTokens": 1048576},
     "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium)", "maxTokens": 1048576},
@@ -623,6 +632,14 @@ def get_argon_fallback_model(model_name: str | None) -> str:
     return "gemini-3.8-flash-high"
 
 
+def is_deepagent_model(model_name: str | None) -> bool:
+    """Checks whether the requested model is a DeepAgent swarm preset."""
+    if not model_name:
+        return False
+    norm = normalize_model_name(model_name)
+    return "deepagent" in norm or "deep-agent" in norm
+
+
 # ---------------------------------------------------------
 # OpenAI Compatible Schemas
 # ---------------------------------------------------------
@@ -668,6 +685,15 @@ class ModelCard(BaseModel):
 class ModelListResponse(BaseModel):
     object: str = "list"
     data: list[ModelCard]
+
+
+class OpenAIEmbeddingRequest(BaseModel):
+    input: str | list[str] | list[int] | list[list[int]]
+    model: str = "text-embedding-3-small"
+    encoding_format: str | None = "float"
+    dimensions: int | None = None
+    user: str | None = None
+    model_config = ConfigDict(extra="allow")
 
 
 # ---------------------------------------------------------

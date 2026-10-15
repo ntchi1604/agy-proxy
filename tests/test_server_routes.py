@@ -1466,6 +1466,55 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
             r = await client.get("/v1beta/models?key=wrong-key")
             self.assertEqual(r.status_code, 401)
 
+    async def test_gemini_count_tokens_endpoint(self):
+        resp = await self.client.post(
+            "/v1beta/models/gemini-2.5-flash:countTokens",
+            json={
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hello world from Google GenAI SDK"}]}
+                ]
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("totalTokens", data)
+        self.assertIsInstance(data["totalTokens"], int)
+        self.assertGreater(data["totalTokens"], 0)
+
+    async def test_openai_embeddings_endpoint(self):
+        resp = await self.client.post(
+            "/v1/embeddings",
+            json={
+                "input": "Antigravity Proxy Embeddings RAG Test",
+                "model": "text-embedding-3-small",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get("object"), "list")
+        self.assertEqual(len(data.get("data", [])), 1)
+        emb_obj = data["data"][0]
+        self.assertEqual(emb_obj.get("object"), "embedding")
+        self.assertEqual(len(emb_obj.get("embedding", [])), 1536)
+        self.assertEqual(emb_obj.get("index"), 0)
+        self.assertIn("usage", data)
+        self.assertGreater(data["usage"]["prompt_tokens"], 0)
+
+        # Batch string list input with custom dimensions
+        resp_batch = await self.client.post(
+            "/v1/embeddings",
+            json={
+                "input": ["First sentence", "Second sentence"],
+                "model": "text-embedding-004",
+                "dimensions": 768,
+            },
+        )
+        self.assertEqual(resp_batch.status_code, 200)
+        data_batch = resp_batch.json()
+        self.assertEqual(len(data_batch.get("data", [])), 2)
+        self.assertEqual(len(data_batch["data"][0]["embedding"]), 768)
+        self.assertEqual(len(data_batch["data"][1]["embedding"]), 768)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,101 +49,113 @@
 
   <!-- Header -->
   <header class="border-b border-dark-border bg-slate-900/95 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 min-h-[3.75rem] sm:min-h-[4.5rem] py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-3">
-      <div class="flex items-center space-x-2 sm:space-x-3 shrink min-w-0">
-        <a href="/" class="flex items-center space-x-2 sm:space-x-3 group min-w-0">
-          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-800 border border-slate-700/80 p-1 flex items-center justify-center shadow-lg group-hover:border-indigo-500/50 transition shrink-0">
-            <img src="/assets/image/antigravity-logo.png" alt="Google Antigravity" class="w-full h-full object-contain">
+    <!-- Top Row: Brand & Quick Action Buttons -->
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
+      <!-- Left: Logo & Brand Information -->
+      <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+        <a href="/" class="flex items-center space-x-2 sm:space-x-3 group shrink-0">
+          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/80 p-1 flex items-center justify-center shadow-md group-hover:border-indigo-500/50 group-hover:shadow-indigo-500/10 transition-all duration-200 shrink-0">
+            <img src="/assets/image/antigravity-logo.png" alt="Google Antigravity" class="w-full h-full object-contain filter drop-shadow-sm">
           </div>
-          <div class="flex flex-col justify-center min-w-0">
+          <div class="flex flex-col justify-center shrink-0">
             <div class="flex items-center space-x-1.5 sm:space-x-2 leading-none">
-              <span class="text-sm sm:text-base font-black tracking-tight text-white truncate">Google <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Antigravity</span> Proxy</span>
+              <span class="text-sm sm:text-base font-black tracking-tight text-white whitespace-nowrap">
+                <span class="hidden sm:inline">Google </span><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Antigravity</span> Proxy
+              </span>
               <span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono font-bold border border-indigo-500/30 shrink-0" id="headerAppVersion">v{{APP_VERSION}}</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 hidden 2xl:flex items-center space-x-1 shrink-0" title="Context Caching & Session Affinity Enabled">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 hidden md:flex items-center space-x-1 shrink-0" title="Context Caching & Session Affinity Enabled">
                 <i class="fa-solid fa-bolt text-[9px]"></i>
                 <span id="cacheBadgeText">Cache Active</span>
               </span>
             </div>
-            <p class="text-[11px] text-slate-400 font-mono tracking-tight leading-normal mt-1 hidden sm:block truncate">OpenAI · Anthropic · Gemini Multi-Account Gateway</p>
+            <p class="text-[11px] text-slate-400 font-mono tracking-tight leading-normal mt-1 hidden lg:block whitespace-nowrap">OpenAI · Anthropic · Gemini Multi-Account Gateway</p>
           </div>
         </a>
       </div>
 
-      <!-- Center Navigation Tabs -->
-      <nav class="hidden lg:flex items-center space-x-0.5 xl:space-x-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 text-xs font-medium shrink-0" id="mainNavTabs">
-        <button onclick="switchTab('accounts')" id="tabBtn-accounts" class="nav-tab-btn px-2 xl:px-3 py-1.5 rounded-lg flex items-center space-x-1 xl:space-x-1.5 transition bg-indigo-600 text-white font-semibold shadow-sm">
-          <i class="fa-solid fa-users text-[11px]"></i>
-          <span>Accounts</span>
-        </button>
-        <button onclick="switchTab('analytics')" id="tabBtn-analytics" class="nav-tab-btn px-2 xl:px-3 py-1.5 rounded-lg flex items-center space-x-1 xl:space-x-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-chart-pie text-[11px]"></i>
-          <span>Analytics</span>
-        </button>
-        <button onclick="switchTab('playground')" id="tabBtn-playground" class="nav-tab-btn px-2 xl:px-3 py-1.5 rounded-lg flex items-center space-x-1 xl:space-x-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-terminal text-[11px]"></i>
-          <span>Playground</span>
-        </button>
-        <button onclick="switchTab('integrations')" id="tabBtn-integrations" class="nav-tab-btn px-2 xl:px-3 py-1.5 rounded-lg flex items-center space-x-1 xl:space-x-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-plug text-[11px]"></i>
-          <span>Integrations</span>
-        </button>
-        <button onclick="switchTab('settings')" id="tabBtn-settings" class="nav-tab-btn px-2 xl:px-3 py-1.5 rounded-lg flex items-center space-x-1 xl:space-x-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800">
-          <i class="fa-solid fa-sliders text-[11px]"></i>
-          <span>Settings</span>
-        </button>
-      </nav>
-
-      <!-- Quick Nav / Action Buttons -->
-      <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+      <!-- Right: Quick Nav / Action Buttons -->
+      <div class="flex items-center space-x-1 sm:space-x-1.5 lg:space-x-2 shrink-0">
         <!-- Update Available Badge (dynamic) -->
         <div id="updateBadgeContainer" class="hidden">
-          <button onclick="openUpdateModal()" class="flex items-center space-x-1.5 text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition animate-pulse">
+          <button onclick="openUpdateModal()" class="flex items-center space-x-1 text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 transition animate-pulse" title="Update Available">
             <i class="fa-solid fa-brain text-amber-400 text-[11px]"></i>
-            <span id="updateBadgeText" class="hidden xl:inline">Update</span>
+            <span id="updateBadgeText" class="hidden sm:inline">Update</span>
           </button>
         </div>
 
         <!-- Antigravity Web Mode Button -->
-        <a id="antigravityWebNavBtn" href="https://127.0.0.1:44741/" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 transition shadow-sm shrink-0" title="Open Antigravity Web UI (Standalone No-Electron Mode)">
+        <a id="antigravityWebNavBtn" href="https://127.0.0.1:44741/" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-1.5 text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 transition shadow-sm shrink-0" title="Open Antigravity Web UI (Standalone No-Electron Mode)">
           <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" id="agyWebNavDot"></span>
           <i class="fa-solid fa-globe text-[11px]"></i>
-          <span class="hidden xl:inline">Antigravity Web</span>
+          <span class="hidden md:inline">Antigravity Web</span>
         </a>
 
+        <!-- Add Account Button -->
         <button onclick="openAddAccountModal()" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm shrink-0" title="Add Account or AI Studio Key">
           <i class="fa-solid fa-user-plus text-[11px]"></i>
-          <span class="hidden 2xl:inline">Add Account</span>
-          <span class="hidden sm:inline 2xl:hidden">Add</span>
+          <span class="hidden sm:inline">Add Account</span>
         </button>
-        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="flex items-center space-x-1.5 text-xs font-semibold px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 transition shrink-0" title="Auto-refresh accounts every 15s (Disabled by default)">
+
+        <!-- Auto Refresh Toggle Button -->
+        <button onclick="toggleAutoRefresh()" id="autoRefreshBtn" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 transition shrink-0" title="Auto-refresh accounts every 15s (Disabled by default)">
           <span class="w-2 h-2 rounded-full bg-slate-500 shrink-0" id="autoRefreshDot"></span>
           <span id="autoRefreshLabel" class="hidden sm:inline text-xs font-mono">Auto: OFF</span>
-          <span id="autoRefreshLabelMobile" class="sm:hidden text-[10px] font-mono">OFF</span>
         </button>
+
+        <!-- Manual Refresh Button -->
         <button onclick="refreshAllAccounts()" id="refreshBtn" class="flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition shrink-0" title="Refresh accounts and models">
           <i class="fa-solid fa-rotate text-[11px]" id="refreshIcon"></i>
-          <span class="hidden xl:inline">Refresh</span>
+          <span class="hidden md:inline">Refresh</span>
         </button>
       </div>
     </div>
 
-    <!-- Mobile Sub-Navigation Bar -->
-    <div class="lg:hidden border-t border-slate-800/80 bg-slate-950/90 px-3 sm:px-4 py-1.5 sm:py-2 flex items-center space-x-1.5 overflow-x-auto custom-scrollbar text-xs">
-      <button onclick="switchTab('accounts')" id="mTabBtn-accounts" class="px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap bg-indigo-600 text-white font-semibold shadow-sm">
-        <i class="fa-solid fa-users text-[10px]"></i><span>Accounts</span>
-      </button>
-      <button onclick="switchTab('analytics')" id="mTabBtn-analytics" class="px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap text-slate-400 hover:text-white">
-        <i class="fa-solid fa-chart-pie text-[10px]"></i><span>Analytics</span>
-      </button>
-      <button onclick="switchTab('playground')" id="mTabBtn-playground" class="px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap text-slate-400 hover:text-white">
-        <i class="fa-solid fa-terminal text-[10px]"></i><span>Playground</span>
-      </button>
-      <button onclick="switchTab('integrations')" id="mTabBtn-integrations" class="px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap text-slate-400 hover:text-white">
-        <i class="fa-solid fa-plug text-[10px]"></i><span>Integrations</span>
-      </button>
-      <button onclick="switchTab('settings')" id="mTabBtn-settings" class="px-2.5 py-1 rounded-lg flex items-center space-x-1 whitespace-nowrap text-slate-400 hover:text-white">
-        <i class="fa-solid fa-sliders text-[10px]"></i><span>Settings</span>
-      </button>
+    <!-- Bottom Row: Navigation Tabs (GitHub/Vercel Underline Style) -->
+    <div class="border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-sm">
+      <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between">
+        <nav class="flex items-center space-x-1 sm:space-x-3 overflow-x-auto custom-scrollbar text-xs font-medium -mb-px flex-1 min-w-0" id="mainNavTabs">
+          <button onclick="switchTab('accounts')" id="tabBtn-accounts" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-indigo-500 text-white font-semibold flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
+            <i class="fa-solid fa-users text-[11px] text-indigo-400"></i>
+            <span>Accounts</span>
+          </button>
+          <button onclick="switchTab('analytics')" id="tabBtn-analytics" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
+            <i class="fa-solid fa-chart-pie text-[11px]"></i>
+            <span>Analytics</span>
+          </button>
+          <button onclick="switchTab('traffic')" id="tabBtn-traffic" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-1.5 transition whitespace-nowrap text-xs" title="Live HTTP traffic inspector & streaming tokens">
+            <i class="fa-solid fa-bolt text-[11px] text-amber-400"></i>
+            <span>Live Traffic</span>
+            <span id="trafficBadge" class="hidden text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">0</span>
+          </button>
+          <button onclick="switchTab('playground')" id="tabBtn-playground" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
+            <i class="fa-solid fa-terminal text-[11px]"></i>
+            <span>Playground</span>
+          </button>
+          <button onclick="switchTab('integrations')" id="tabBtn-integrations" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
+            <i class="fa-solid fa-plug text-[11px]"></i>
+            <span>Integrations</span>
+          </button>
+          <button onclick="switchTab('settings')" id="tabBtn-settings" class="nav-tab-btn py-2.5 px-2.5 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-1.5 transition whitespace-nowrap text-xs">
+            <i class="fa-solid fa-sliders text-[11px]"></i>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <!-- Right Side: Status & Stats Pills (Shown on lg+ displays to avoid colliding with tabs on tablets) -->
+        <div class="hidden lg:flex items-center space-x-2 shrink-0 py-1.5 pl-3">
+          <!-- Active Pool Counter -->
+          <div class="flex items-center space-x-1.5 text-[11px] font-mono text-slate-400 bg-slate-900/90 px-2.5 py-1 rounded-full border border-slate-800 shadow-sm" title="Total active accounts in pool">
+            <i class="fa-solid fa-users text-indigo-400 text-[10px]"></i>
+            <span id="navActivePoolCounter" class="text-slate-200 font-semibold">0</span>
+            <span>accounts</span>
+          </div>
+          <!-- Gateway Status Pill -->
+          <div class="flex items-center space-x-1.5 text-[11px] font-mono text-slate-400 bg-slate-900/90 px-2.5 py-1 rounded-full border border-slate-800 shadow-sm" title="Proxy Gateway is healthy and listening">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-slate-200 font-semibold">Gateway :8000</span>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -247,9 +259,9 @@
           <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700" id="accountPoolCount">0 accounts</span>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full">
           <!-- View Switcher (Grid vs Table) -->
-          <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+          <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs shrink-0">
             <button id="viewBtnGrid" onclick="setAccountView('grid')" class="px-2.5 py-1 rounded-md font-medium text-white bg-indigo-600 transition flex items-center space-x-1" title="Grid Card View">
               <i class="fa-solid fa-grip"></i>
               <span class="hidden sm:inline">Grid</span>
@@ -260,51 +272,50 @@
             </button>
           </div>
 
-          
           <!-- Batch Operations -->
-          <button id="batchDeleteBtn" onclick="batchDeleteAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 font-medium transition flex items-center space-x-1" title="Delete Selected">
+          <button id="batchDeleteBtn" onclick="batchDeleteAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 font-medium transition flex items-center space-x-1 shrink-0" title="Delete Selected">
             <i class="fa-solid fa-trash text-[10px]"></i>
             <span>Delete Selected</span>
           </button>
-          <button id="batchRefreshBtn" onclick="batchRefreshAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800 text-indigo-300 border border-indigo-800 font-medium transition flex items-center space-x-1" title="Refresh Selected">
+          <button id="batchRefreshBtn" onclick="batchRefreshAccounts()" class="hidden text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-900/50 hover:bg-indigo-800 text-indigo-300 border border-indigo-800 font-medium transition flex items-center space-x-1 shrink-0" title="Refresh Selected">
             <i class="fa-solid fa-rotate text-[10px]"></i>
             <span>Refresh Selected</span>
           </button>
 
           <!-- Export/Import -->
-          <div class="h-4 border-l border-slate-700"></div>
-          <button onclick="exportAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Export Accounts">
+          <div class="h-4 border-l border-slate-700 shrink-0"></div>
+          <button onclick="exportAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Export Accounts">
             <i class="fa-solid fa-download text-indigo-400 text-[10px]"></i>
             <span>Export</span>
           </button>
-          <button onclick="document.getElementById('importFileInput').click()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Import Accounts">
+          <button onclick="document.getElementById('importFileInput').click()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Import Accounts">
             <i class="fa-solid fa-upload text-emerald-400 text-[10px]"></i>
             <span>Import</span>
           </button>
           <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importAccounts(event)">
 
-          <button onclick="toggleAllAccounts(true)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Enable all accounts">
+          <button onclick="toggleAllAccounts(true)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Enable all accounts">
             <i class="fa-solid fa-play text-emerald-400 text-[10px]"></i>
             <span>Enable All</span>
           </button>
-          <button onclick="toggleAllAccounts(false)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Pause / Disable all accounts">
+          <button onclick="toggleAllAccounts(false)" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Pause / Disable all accounts">
             <i class="fa-solid fa-pause text-amber-400 text-[10px]"></i>
             <span>Disable All</span>
           </button>
-          <button onclick="refreshAllAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1" title="Force refresh and sync quotas for all accounts">
+          <button onclick="refreshAllAccounts()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Force refresh and sync quotas for all accounts">
             <i class="fa-solid fa-rotate text-indigo-400 text-[10px]"></i>
             <span>Force Refresh</span>
           </button>
-          <button onclick="resetAllStats()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1" title="Reset all runtime request counters to 0 / standby">
+          <button onclick="resetAllStats()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Reset all runtime request counters to 0 / standby">
             <i class="fa-solid fa-rotate-left text-slate-400 text-[10px]"></i>
             <span>Reset Stats</span>
           </button>
-          <div class="h-4 border-l border-slate-700"></div>
-          <button onclick="collapseAllSections()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1" title="Collapse all account sections">
+          <div class="h-4 border-l border-slate-700 shrink-0"></div>
+          <button onclick="collapseAllSections()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Collapse all account sections">
             <i class="fa-solid fa-angles-up text-slate-400 text-[10px]"></i>
             <span>Collapse All</span>
           </button>
-          <button onclick="expandAllSections()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1" title="Expand all account sections">
+          <button onclick="expandAllSections()" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium transition flex items-center space-x-1 shrink-0" title="Expand all account sections">
             <i class="fa-solid fa-angles-down text-slate-400 text-[10px]"></i>
             <span>Expand All</span>
           </button>
@@ -326,8 +337,8 @@
         </div>
 
         <!-- Filter Tabs & Sort Dropdown -->
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="flex items-center space-x-1 bg-slate-900 rounded-lg p-0.5 border border-slate-800" id="accountTypeFilters">
+        <div class="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 max-w-full">
+          <div class="flex items-center space-x-1 bg-slate-900 rounded-lg p-0.5 border border-slate-800 shrink-0" id="accountTypeFilters">
             <button onclick="setAccountFilter('all')" data-filter="all" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium bg-indigo-600 text-white">All (<span id="countAll">0</span>)</button>
             <button onclick="setAccountFilter('oauth')" data-filter="oauth" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white">OAuth (<span id="countOAuth">0</span>)</button>
             <button onclick="setAccountFilter('apikey')" data-filter="apikey" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-white">API Keys (<span id="countApiKey">0</span>)</button>
@@ -335,7 +346,7 @@
             <button onclick="setAccountFilter('exhausted')" data-filter="exhausted" class="acc-filter-btn px-2 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-red-400">0% (<span id="countExhausted">0</span>)</button>
           </div>
 
-          <select id="accountSortSelect" onchange="renderAccounts()" class="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-300 text-[11px] focus:outline-none focus:border-indigo-500">
+          <select id="accountSortSelect" onchange="renderAccounts()" class="bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-slate-300 text-[11px] focus:outline-none focus:border-indigo-500 shrink-0">
             <option value="default">Sort: Default (Primary first)</option>
             <option value="quota-desc">Sort: Highest Quota</option>
             <option value="quota-asc">Sort: Lowest Quota</option>
@@ -362,6 +373,70 @@
       <div class="p-8 rounded-2xl bg-dark-card border border-dark-border text-center text-slate-500 text-sm">
         <i class="fa-solid fa-circle-notch fa-spin text-indigo-400 text-2xl mb-3 block"></i>
         Loading pool telemetry and quota analytics...
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LIVE TRAFFIC INSPECTOR -->
+  <div id="tabContent-traffic" class="hidden space-y-6">
+    <!-- Traffic Header & Controls -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-dark-card border border-dark-border p-4 sm:p-5 rounded-2xl shadow-sm">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h2 class="text-base sm:text-lg font-bold text-white tracking-tight">Live Traffic Inspector</h2>
+            <span id="trafficConnectionStatus" class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Connected (SSE)</span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Real-time HTTP inference streaming, token metrics, and latency diagnostics.</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 w-full sm:w-auto">
+        <div class="relative flex-1 sm:w-64">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+          <input type="text" id="trafficSearchInput" oninput="filterTrafficTable()" placeholder="Filter path, model, account..." class="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+        </div>
+        <button onclick="clearTrafficLog()" class="px-3 py-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-700/50 rounded-lg text-xs font-semibold transition flex items-center space-x-1.5 shrink-0" title="Clear transaction history">
+          <i class="fa-solid fa-trash-can text-xs"></i>
+          <span>Clear</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Traffic Table -->
+    <div class="bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-sm">
+      <div class="overflow-x-auto custom-scrollbar">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-mono text-[11px]">
+              <th class="py-3 px-3.5 whitespace-nowrap">Time</th>
+              <th class="py-3 px-3 whitespace-nowrap">Status</th>
+              <th class="py-3 px-3 whitespace-nowrap">Method</th>
+              <th class="py-3 px-3 whitespace-nowrap">Path</th>
+              <th class="py-3 px-3 whitespace-nowrap">Client Model</th>
+              <th class="py-3 px-3 whitespace-nowrap">Backend Model</th>
+              <th class="py-3 px-3 whitespace-nowrap">Account</th>
+              <th class="py-3 px-3 whitespace-nowrap">Duration</th>
+              <th class="py-3 px-3 whitespace-nowrap">Tokens</th>
+              <th class="py-3 px-3.5 whitespace-nowrap">Stream</th>
+            </tr>
+          </thead>
+          <tbody id="trafficTableBody" class="divide-y divide-slate-800/60 font-mono">
+            <tr id="trafficEmptyStateRow">
+              <td colspan="10" class="py-12 text-center text-slate-500">
+                <i class="fa-solid fa-network-wired text-3xl mb-3 text-slate-600 block"></i>
+                <div class="text-sm font-semibold text-slate-400">Waiting for requests...</div>
+                <div class="text-xs text-slate-500 mt-1 font-sans">Send requests via Claude Code, Codex, Aider, or curl to see live traffic streaming here.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -647,14 +722,24 @@
               <span class="text-slate-400">Live Status:</span>
               <span id="webModeLiveStatus" class="font-mono text-cyan-300 font-semibold">Checking...</span>
             </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="triggerWebLaunch(false)" id="startWebBtn" class="py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-center text-xs transition flex items-center justify-center space-x-1.5 shadow-sm" title="Launch Antigravity Web in detached browser mode">
+                <i class="fa-solid fa-play text-[10px]"></i>
+                <span>Start Web</span>
+              </button>
+              <button onclick="triggerWebLaunch(true)" id="restartWebBtn" class="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-amber-200 border border-slate-700 font-semibold text-center text-xs transition flex items-center justify-center space-x-1.5 shadow-sm" title="Force restart Antigravity Web Mode">
+                <i class="fa-solid fa-rotate text-[10px]"></i>
+                <span>Restart</span>
+              </button>
+            </div>
             <div class="flex items-center space-x-2">
               <a href="https://127.0.0.1:44741/" target="_blank" rel="noopener noreferrer" class="flex-1 py-1.5 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-center text-xs transition flex items-center justify-center space-x-1.5 shadow-sm">
                 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                 <span>Open Web UI</span>
               </a>
-              <button onclick="copySnippet('agyweb', this)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-xs transition border border-slate-700 flex items-center space-x-1">
+              <button onclick="copySnippet('agyweb', this)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-xs transition border border-slate-700 flex items-center space-x-1" title="Copy CLI launch command">
                 <i class="fa-regular fa-copy"></i>
-                <span>Copy</span>
+                <span>CLI</span>
               </button>
             </div>
           </div>
@@ -1782,6 +1867,28 @@ ightarrow$ v1.0.3</p>
       } catch (e) {}
     }
 
+    // Launch or restart Antigravity in browser-based Web Mode
+    async function triggerWebLaunch(restart = false) {
+      try {
+        const endpoint = restart ? '/api/web/restart' : '/api/web/launch';
+        showToast(restart ? 'Restarting Antigravity Web Mode...' : 'Starting Antigravity Web Mode...', 'info');
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restart: restart, kill_electron: false })
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+          showToast(restart ? 'Antigravity Web restarted successfully!' : 'Antigravity Web launched!', 'success');
+          setTimeout(checkAntigravityWebStatus, 1500);
+        } else {
+          showToast(data.detail || data.error || 'Failed to start Web Mode', 'error');
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+      }
+    }
+
     // Promote Account to Primary
     async function setPrimaryAccount(accountId) {
       try {
@@ -2019,7 +2126,7 @@ ightarrow$ v1.0.3</p>
     let currentActiveTab = 'accounts';
 
     function switchTab(tabId) {
-      const tabs = ['accounts', 'analytics', 'playground', 'integrations', 'settings'];
+      const tabs = ['accounts', 'analytics', 'traffic', 'playground', 'integrations', 'settings'];
       if (!tabs.includes(tabId)) tabId = 'accounts';
       currentActiveTab = tabId;
 
@@ -2038,9 +2145,9 @@ ightarrow$ v1.0.3</p>
         const btn = document.getElementById(`tabBtn-${t}`);
         if (btn) {
           if (t === tabId) {
-            btn.className = 'nav-tab-btn px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition bg-indigo-600 text-white font-semibold shadow-sm';
+            btn.className = 'nav-tab-btn py-2.5 px-2 sm:px-3 border-b-2 border-indigo-500 text-white font-semibold flex items-center space-x-2 transition whitespace-nowrap text-xs';
           } else {
-            btn.className = 'nav-tab-btn px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition text-slate-400 hover:text-white hover:bg-slate-800';
+            btn.className = 'nav-tab-btn py-2.5 px-2 sm:px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 font-medium flex items-center space-x-2 transition whitespace-nowrap text-xs';
           }
         }
 
@@ -2058,6 +2165,8 @@ ightarrow$ v1.0.3</p>
       // 4. Tab specific actions
       if (tabId === 'analytics') {
         renderAnalytics();
+      } else if (tabId === 'traffic') {
+        initTrafficInspector();
       }
 
       // 5. Update browser history / hash seamlessly without reload
@@ -2070,7 +2179,7 @@ ightarrow$ v1.0.3</p>
       const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
       const hash = window.location.hash.replace(/^#/, '');
 
-      const validTabs = ['accounts', 'analytics', 'playground', 'integrations', 'settings'];
+      const validTabs = ['accounts', 'analytics', 'traffic', 'playground', 'integrations', 'settings'];
       if (validTabs.includes(path)) {
         switchTab(path);
       } else if (validTabs.includes(hash)) {
@@ -2082,7 +2191,7 @@ ightarrow$ v1.0.3</p>
 
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.replace(/^#/, '');
-      if (['accounts', 'analytics', 'playground', 'integrations', 'settings'].includes(hash)) {
+      if (['accounts', 'analytics', 'traffic', 'playground', 'integrations', 'settings'].includes(hash)) {
         switchTab(hash);
       }
     });
@@ -2452,10 +2561,15 @@ ightarrow$ v1.0.3</p>
         );
         const formatCooldown = (s) => {
           if (!s || s <= 0) return '0s';
-          if (s <= 60) return s + 's';
-          if (s < 3600) return Math.round(s / 60) + 'm';
-          if (s < 86400) return (s / 3600).toFixed(1) + 'h';
-          return (s / 86400).toFixed(1) + 'd';
+          if (s < 60) return `${Math.round(s)}s`;
+          if (s < 3600) {
+            const m = Math.floor(s / 60);
+            const sec = Math.round(s % 60);
+            return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
+          }
+          const h = Math.floor(s / 3600);
+          const m = Math.round((s % 3600) / 60);
+          return m > 0 ? `${h}h ${m}m` : `${h}h`;
         };
         const isRateLimited = (geminiCooldown > 0 && claudeCooldown > 0) || (Boolean(acc.rate_limited) && geminiPct <= 0 && claudePct <= 0);
         const isExhausted = (geminiPct <= 0 && claudePct <= 0);
@@ -2612,6 +2726,7 @@ ightarrow$ v1.0.3</p>
       }
 
       if (document.getElementById('countAll')) document.getElementById('countAll').innerText = totalAll;
+      if (document.getElementById('navActivePoolCounter')) document.getElementById('navActivePoolCounter').innerText = totalAll;
       if (document.getElementById('countOAuth')) document.getElementById('countOAuth').innerText = totalOAuth;
       if (document.getElementById('countApiKey')) document.getElementById('countApiKey').innerText = totalApiKey;
       if (document.getElementById('countWeb')) document.getElementById('countWeb').innerText = totalWeb;
@@ -3198,7 +3313,7 @@ ightarrow$ v1.0.3</p>
                     ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center space-x-1 shrink-0 shadow-sm"><i class="fa-solid fa-star text-amber-400 text-[9px]"></i><span>Primary</span></span>' 
                     : `<button onclick="setPrimaryAccount('${acc.account_id}')" class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-indigo-600 hover:text-white text-slate-400 border border-slate-700 transition flex items-center space-x-1 shrink-0" title="Set as primary active account"><i class="fa-regular fa-star text-[9px]"></i><span>Set Primary</span></button>`}
                   ${agyActiveCardBadge}
-                  ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : ''}
+                  ${maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active: resets in ${formatCooldown(maxAccountCooldown)}"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${formatCooldown(maxAccountCooldown)})</span></span>` : ((!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : '')}
                   ${!isEnabled ? '<span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700 shrink-0">Paused</span>' : ''}
                 </div>
                 <div class="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex items-center space-x-1.5 mt-0.5" title="${acc.email}">
@@ -3338,7 +3453,8 @@ ightarrow$ v1.0.3</p>
                 ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20"><i class="fa-solid fa-globe mr-1"></i> Web</span>'
                 : (isApiKey
                   ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-key mr-1"></i> API Key</span>'
-              ${(!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : ''}
+                  : '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"><i class="fa-brands fa-google mr-1"></i> OAuth</span>')}
+              ${maxAccountCooldown > 0 ? `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono"><i class="fa-solid fa-clock-rotate-left mr-1 text-[8px]"></i>Cooldown (${formatCooldown(maxAccountCooldown)})</span>` : ((!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : '')}
               ${!isEnabled ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Paused</span>' : ''}
             </div>
           </td>
@@ -5068,6 +5184,158 @@ ${data.stderr || data.stdout || data.error}`;
       }
     }
 
+    // Live Traffic Inspector State & SSE Stream Manager
+    let trafficRecords = [];
+    let trafficEventSource = null;
+    let trafficInitialized = false;
+
+    async function initTrafficInspector() {
+      if (trafficInitialized) return;
+      trafficInitialized = true;
+      await fetchTrafficHistory();
+      connectTrafficSSE();
+    }
+
+    async function fetchTrafficHistory() {
+      try {
+        const res = await fetch('/api/traffic?limit=100');
+        if (!res.ok) return;
+        const data = await res.json();
+        trafficRecords = data.records || [];
+        renderTrafficTable();
+        updateTrafficBadge();
+      } catch (e) {
+        console.warn('Failed to load traffic history:', e);
+      }
+    }
+
+    function connectTrafficSSE() {
+      if (trafficEventSource) {
+        trafficEventSource.close();
+      }
+      const stPill = document.getElementById('trafficConnectionStatus');
+      try {
+        trafficEventSource = new EventSource('/api/traffic/stream');
+        trafficEventSource.onopen = () => {
+          if (stPill) {
+            stPill.className = 'inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30';
+            stPill.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>Connected (SSE)</span>';
+          }
+        };
+        trafficEventSource.onmessage = (event) => {
+          try {
+            const record = JSON.parse(event.data);
+            trafficRecords.unshift(record);
+            if (trafficRecords.length > 200) trafficRecords.pop();
+            renderTrafficTable();
+            updateTrafficBadge();
+          } catch (err) {
+            console.debug('SSE parse err:', err);
+          }
+        };
+        trafficEventSource.onerror = () => {
+          if (stPill) {
+            stPill.className = 'inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30';
+            stPill.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span><span>Reconnecting...</span>';
+          }
+        };
+      } catch (err) {
+        console.warn('EventSource failed:', err);
+      }
+    }
+
+    function updateTrafficBadge() {
+      const badge = document.getElementById('trafficBadge');
+      if (!badge) return;
+      const count = trafficRecords.length;
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function filterTrafficTable() {
+      renderTrafficTable();
+    }
+
+    function renderTrafficTable() {
+      const tbody = document.getElementById('trafficTableBody');
+      if (!tbody) return;
+
+      const filterQuery = (document.getElementById('trafficSearchInput')?.value || '').trim().toLowerCase();
+      const filtered = trafficRecords.filter(r => {
+        if (!filterQuery) return true;
+        const haystack = `${r.path} ${r.client_model} ${r.backend_model} ${r.account_email} ${r.status_code} ${r.method}`.toLowerCase();
+        return haystack.includes(filterQuery);
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="py-12 text-center text-slate-500">
+              <i class="fa-solid fa-network-wired text-3xl mb-3 text-slate-600 block"></i>
+              <div class="text-sm font-semibold text-slate-400">${filterQuery ? 'No matching requests' : 'Waiting for requests...'}</div>
+              <div class="text-xs text-slate-500 mt-1 font-sans">${filterQuery ? 'Try another search term.' : 'Send requests via Claude Code, Codex, Aider, or curl to see live traffic streaming here.'}</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      let html = '';
+      for (const rec of filtered) {
+        let statusBadge = '';
+        if (rec.status_code >= 200 && rec.status_code < 300) {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">${rec.status_code}</span>`;
+        } else if (rec.status_code === 429) {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">${rec.status_code}</span>`;
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">${rec.status_code}</span>`;
+        }
+
+        const streamBadge = rec.stream
+          ? `<span class="px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">STREAM</span>`
+          : `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700">UNARY</span>`;
+
+        let tokenDisplay = '-';
+        if (rec.total_tokens || rec.prompt_tokens || rec.completion_tokens) {
+          tokenDisplay = `<span class="text-white font-semibold">${rec.total_tokens || (rec.prompt_tokens + rec.completion_tokens)}</span> <span class="text-[10px] text-slate-400">(${rec.prompt_tokens}↑ ${rec.completion_tokens}↓)</span>`;
+        }
+
+        html += `
+          <tr class="hover:bg-slate-900/50 transition">
+            <td class="py-2.5 px-3.5 text-slate-400 whitespace-nowrap">${rec.timestamp}</td>
+            <td class="py-2.5 px-3 whitespace-nowrap">${statusBadge}</td>
+            <td class="py-2.5 px-3 font-bold text-slate-300 whitespace-nowrap">${rec.method}</td>
+            <td class="py-2.5 px-3 text-cyan-300 font-semibold whitespace-nowrap">${rec.path}</td>
+            <td class="py-2.5 px-3 text-indigo-300 whitespace-nowrap">${rec.client_model}</td>
+            <td class="py-2.5 px-3 text-slate-400 whitespace-nowrap">${rec.backend_model}</td>
+            <td class="py-2.5 px-3 text-slate-300 max-w-[150px] truncate" title="${rec.account_email}">${rec.account_email}</td>
+            <td class="py-2.5 px-3 text-amber-300 whitespace-nowrap">${rec.duration_ms} ms</td>
+            <td class="py-2.5 px-3 whitespace-nowrap">${tokenDisplay}</td>
+            <td class="py-2.5 px-3.5 whitespace-nowrap">${streamBadge}</td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML = html;
+    }
+
+    async function clearTrafficLog() {
+      try {
+        const res = await fetch('/api/traffic/clear', { method: 'POST' });
+        if (res.ok) {
+          trafficRecords = [];
+          renderTrafficTable();
+          updateTrafficBadge();
+          showToast('Traffic history cleared', 'success');
+        }
+      } catch (e) {
+        showToast('Failed to clear traffic: ' + e.message, 'error');
+      }
+    }
+
     // Init
     initTabFromHash();
     loadAccounts();
@@ -5079,6 +5347,7 @@ ${data.stderr || data.stdout || data.error}`;
     setInterval(updateCacheStats, 10000);
     checkAntigravityWebStatus();
     setInterval(checkAntigravityWebStatus, 15000);
+    initTrafficInspector();
   </script>
 
   <!-- Floating Toast Notifications Container -->

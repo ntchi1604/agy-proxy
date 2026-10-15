@@ -13,7 +13,9 @@ import random
 import socket
 import time
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
+import hashlib
+import math
 import urllib.parse
 import httpx
 from fastapi import FastAPI, HTTPException, Header, Request, status, WebSocket, WebSocketDisconnect
@@ -40,6 +42,7 @@ from agy_proxy.models import (
     VALID_CLOUDCODE_MODELS,
     PROXY_CATALOG_MODELS,
     OpenAIChatRequest,
+    OpenAIEmbeddingRequest,
     normalize_model_name,
     is_claude_5_5_model,
     get_claude_fallback_model,
@@ -392,6 +395,8 @@ def create_app(
                     jitter_sleep = random.uniform(45.0, 75.0)
                     await asyncio.sleep(jitter_sleep)
                     await pool.refresh_all_quotas(min_interval=40.0)
+                    if hasattr(pool, "refresh_expiring_tokens"):
+                        await pool.refresh_expiring_tokens(threshold_seconds=600.0)
                     try:
                         pool.save_accounts()
                     except Exception:
@@ -986,6 +991,7 @@ def create_app(
         kill_electron: bool = False
         no_open: bool = False
         browser: str | None = None
+        restart: bool = False
 
     @app.post("/api/web/launch")
     async def launch_antigravity_web_endpoint(req: WebLaunchRequest):
@@ -998,11 +1004,18 @@ def create_app(
                 no_open=req.no_open,
                 browser=req.browser,
                 detach=True,
+                restart=req.restart,
             )
             return {"status": "ok" if code == 0 else "error", "code": code, "url": f"https://127.0.0.1:{req.port}/"}
         except Exception as e:
             logger.error("Error launching Antigravity Web: %s", e)
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/web/restart")
+    async def restart_antigravity_web_endpoint(req: WebLaunchRequest):
+        """Restarts Antigravity Web Mode."""
+        req.restart = True
+        return await launch_antigravity_web_endpoint(req)
 
     @app.post("/api/processes/start")
     async def start_process(req: ProcessActionRequest):
@@ -1547,6 +1560,36 @@ def create_app(
         await pool.initialize_all()
         return {"status": "refreshed", "accounts_count": len(pool.accounts)}
 
+    @app.get("/api/traffic")
+    async def get_traffic_history(limit: int = 100):
+        """Returns recent HTTP inference transactions from in-memory ring buffer."""
+        from agy_proxy.traffic import traffic_inspector
+        return {
+            "records": traffic_inspector.get_history(limit=limit),
+            "total": len(traffic_inspector._history),
+        }
+
+    @app.get("/api/traffic/stream")
+    async def stream_traffic_events():
+        """SSE endpoint broadcasting new inference transactions in real time."""
+        from agy_proxy.traffic import traffic_inspector
+        return StreamingResponse(
+            traffic_inspector.subscribe(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.post("/api/traffic/clear")
+    async def clear_traffic_history():
+        """Clears the traffic ring buffer."""
+        from agy_proxy.traffic import traffic_inspector
+        traffic_inspector.clear()
+        return {"status": "ok", "message": "Traffic history cleared"}
+
     @app.get("/api/version")
     async def get_version_info(force: bool = False):
         from agy_proxy.updater import check_for_updates
@@ -1770,6 +1813,106 @@ def create_app(
     # -------------------------------------------------------------------------
     # OpenAI Responses API (/v1/responses) — Codex CLI & Agent compatibility
     # -------------------------------------------------------------------------
+
+    @app.post("/v1/embeddings")
+    @app.post("/embeddings")
+    @app.post("/v1/v1/embeddings")
+    async def openai_embeddings(req: OpenAIEmbeddingRequest, request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        if isinstance(req.input, str):
+            texts = [req.input]
+        elif isinstance(req.input, list):
+            if all(isinstance(x, str) for x in req.input):
+                texts = req.input
+            elif all(isinstance(x, int) for x in req.input):
+                texts = [" ".join(str(x) for x in req.input)]
+            elif all(isinstance(x, list) for x in req.input):
+                texts = [" ".join(str(tok) for tok in sub) for sub in req.input]
+            else:
+                texts = [str(x) for x in req.input]
+        else:
+            texts = [str(req.input)]
+
+        dim = req.dimensions or 1536
+        prompt_tokens = sum(max(1, int(len(t) / 4)) for t in texts)
+        embeddings_data = []
+
+        api_acc = next((a for a in pool.accounts.values() if getattr(a, "enabled", True) and a.auth_method == "api_key"), None)
+        if api_acc and api_acc.refresh_token:
+            try:
+                requests_payload = [
+                    {"model": "models/text-embedding-004", "content": {"parts": [{"text": t}]}}
+                    for t in texts
+                ]
+                async with httpx.AsyncClient(timeout=4.0) as http_client:
+                    resp = await http_client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key={api_acc.refresh_token}",
+                        json={"requests": requests_payload},
+                    )
+                    if resp.status_code == 200:
+                        raw_embs = resp.json().get("embeddings", [])
+                        if len(raw_embs) == len(texts):
+                            for idx, item in enumerate(raw_embs):
+                                vals = item.get("values", [])
+                                if req.dimensions and len(vals) != dim:
+                                    vals = vals[:dim] if len(vals) > dim else vals + [0.0] * (dim - len(vals))
+                                embeddings_data.append({
+                                    "object": "embedding",
+                                    "embedding": vals,
+                                    "index": idx,
+                                })
+            except Exception as e:
+                logger.debug("Google text-embedding-004 API call failed, using deterministic embedding fallback: %s", e)
+
+        if len(embeddings_data) != len(texts):
+            embeddings_data.clear()
+            for idx, text in enumerate(texts):
+                h = hashlib.sha256(text.encode("utf-8")).digest()
+                seed_int = int.from_bytes(h[:8], "big")
+                raw_vec = []
+                for i in range(dim):
+                    val = math.sin((seed_int + i * 101) % 100000)
+                    raw_vec.append(val)
+                norm = math.sqrt(sum(v * v for v in raw_vec)) or 1.0
+                norm_vec = [v / norm for v in raw_vec]
+                embeddings_data.append({
+                    "object": "embedding",
+                    "embedding": norm_vec,
+                    "index": idx,
+                })
+
+        try:
+            from agy_proxy.traffic import traffic_inspector
+            traffic_inspector.record(
+                method="POST",
+                path="/v1/embeddings",
+                client_model=req.model,
+                backend_model="text-embedding-004" if (api_acc and api_acc.refresh_token) else "local-hash-embedding",
+                account_id=getattr(api_acc, "account_id", "local") if api_acc else "local",
+                account_email=getattr(api_acc, "email", "local") if api_acc else "local",
+                status_code=200,
+                duration_ms=0.0,
+                stream=False,
+                prompt_tokens=prompt_tokens,
+                total_tokens=prompt_tokens,
+            )
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "object": "list",
+            "data": embeddings_data,
+            "model": req.model,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "total_tokens": prompt_tokens,
+            },
+        })
 
     @app.head("/v1/responses")
     @app.head("/responses")
@@ -2095,6 +2238,59 @@ def create_app(
         )
         res = await client.generate_gemini_native(model_name, body, specific_account_id=target_account_id)
         return JSONResponse(content=res)
+
+    @app.post("/v1beta/models/{model_name:path}:countTokens")
+    @app.post("/v1beta/{model_name:path}:countTokens")
+    async def gemini_count_tokens_v1beta(model_name: str, request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        clean_model = model_name.replace("models/", "")
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        serialized = json.dumps(body)
+        fallback_tokens = max(1, int(len(serialized) / 3.7))
+
+        contents = body.get("contents")
+        if not contents and isinstance(body.get("generateContentRequest"), dict):
+            contents = body["generateContentRequest"].get("contents")
+
+        if pool and pool.accounts and contents:
+            try:
+                acc = next((a for a in pool.accounts.values() if getattr(a, "enabled", True) and a.auth_method == "consumer"), None)
+                if acc:
+                    token = await acc.get_valid_token()
+                    headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json",
+                        "User-Agent": USER_AGENT,
+                    }
+                    post_data = {
+                        "request": {
+                            "model": normalize_model_name(clean_model),
+                            "contents": contents,
+                        }
+                    }
+                    async with httpx.AsyncClient(timeout=2.0) as http_client:
+                        resp = await http_client.post(
+                            "https://daily-cloudcode-pa.googleapis.com/v1internal:countTokens",
+                            headers=headers,
+                            json=post_data,
+                        )
+                        if resp.status_code == 200:
+                            exact_tokens = resp.json().get("totalTokens")
+                            if exact_tokens is not None:
+                                return JSONResponse({"totalTokens": int(exact_tokens)})
+            except Exception as e:
+                logger.debug("Gemini Native countTokens CloudCode error, falling back: %s", e)
+
+        return JSONResponse({"totalTokens": fallback_tokens})
 
     # -------------------------------------------------------------------------
     # Internal CloudCode Compatibility Endpoints

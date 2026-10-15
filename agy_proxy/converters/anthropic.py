@@ -340,7 +340,7 @@ def anthropic_to_cloudcode_payload(
         "project": project_id,
         "requestId": req_id,
         "request": inner_request,
-        "model": backend_model,
+        "model": "gemini-3.8-flash-high" if backend_model == "gemini-3.8-flash-deepagent" else backend_model,
         "userAgent": "antigravity",
         "requestType": req_type,
     }

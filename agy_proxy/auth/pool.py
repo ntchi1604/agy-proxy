@@ -1826,6 +1826,182 @@ class AccountPool:
             pass
         return True
 
+    def export_pool(self, output_file: Path | str | None = None) -> dict[str, Any]:
+        """
+        Exports the entire account pool (OAuth, API keys, Web sessions) and routing strategy
+        into a single portable JSON structure suitable for backup or Cloudflare synchronization.
+        """
+        with self._save_lock:
+            accounts_data = []
+            for acc in self.accounts.values():
+                d = acc.to_dict()
+                if hasattr(acc, "refresh_token") and acc.refresh_token:
+                    d["refresh_token"] = acc.refresh_token
+                if hasattr(acc, "api_key") and acc.api_key:
+                    d["api_key"] = acc.api_key
+                    d["refresh_token"] = acc.api_key
+                if hasattr(acc, "access_token") and acc.access_token:
+                    d["access_token"] = acc.access_token
+                if hasattr(acc, "id_token") and acc.id_token:
+                    d["id_token"] = acc.id_token
+                if hasattr(acc, "_cookies") and acc._cookies:
+                    d["cookies"] = acc._cookies
+                accounts_data.append(d)
+
+            export_data = {
+                "version": "1.0",
+                "exported_at": time.time(),
+                "routing_strategy": self.routing_strategy,
+                "accounts": accounts_data,
+            }
+
+            if output_file:
+                out_p = Path(output_file)
+                out_p.parent.mkdir(parents=True, exist_ok=True)
+                tmp_out = out_p.with_suffix(f".tmp.{os.getpid()}.{time.time_ns()}")
+                with open(tmp_out, "w", encoding="utf-8") as f:
+                    json.dump(export_data, f, indent=2)
+                try:
+                    os.chmod(tmp_out, 0o600)
+                except Exception:
+                    pass
+                os.replace(tmp_out, out_p)
+
+            return export_data
+
+    def import_pool(
+        self,
+        data_or_path: Path | str | dict[str, Any],
+        merge: bool = True,
+    ) -> int:
+        """
+        Imports accounts from an exported pool JSON structure or file.
+        If merge=False, removes existing accounts before importing.
+        Saves changes to disk immediately.
+        Returns the number of imported accounts.
+        """
+        with self._save_lock:
+            if isinstance(data_or_path, (str, Path)):
+                in_p = Path(data_or_path)
+                with open(in_p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            elif isinstance(data_or_path, dict):
+                data = data_or_path
+            else:
+                raise ValueError("Expected Path, string path, or dict for pool import")
+
+            if not isinstance(data, dict):
+                raise ValueError("Invalid import payload format: root must be a JSON object")
+
+            raw_accounts = data.get("accounts", [])
+            if not isinstance(raw_accounts, list):
+                raw_accounts = data.get("web_sessions", []) or data.get("api_keys", [])
+
+            if not merge:
+                self.accounts.clear()
+
+            imported_count = 0
+            if "routing_strategy" in data and isinstance(data["routing_strategy"], str):
+                self._routing_strategy = data["routing_strategy"].lower()
+
+            for item in raw_accounts:
+                if not isinstance(item, dict):
+                    continue
+                auth_method = item.get("auth_method", "consumer")
+                acc_id = item.get("account_id")
+
+                if auth_method == "api_key" or item.get("api_key"):
+                    key = item.get("api_key") or item.get("refresh_token")
+                    if not key:
+                        continue
+                    if not acc_id:
+                        acc_id = f"key_{hashlib.md5(key.encode('utf-8')).hexdigest()[:8]}"
+                    acc = AIStudioApiKeySession(
+                        account_id=acc_id,
+                        api_key=key,
+                        name=item.get("name"),
+                        is_primary=bool(item.get("is_primary", False)),
+                        enabled=bool(item.get("enabled", True)),
+                        on_token_refreshed=self.save_accounts,
+                    )
+                elif auth_method == "gemini_web":
+                    cookies = item.get("cookies", {})
+                    psid = cookies.get("__Secure-1PSID") or item.get("__Secure-1PSID")
+                    if not psid and not cookies:
+                        continue
+                    if not acc_id:
+                        seed = (item.get("email") or item.get("name") or str(psid) or "").strip()
+                        acc_id = f"gw_{hashlib.md5(seed.encode('utf-8')).hexdigest()[:8]}" if seed else f"gw_{os.urandom(4).hex()}"
+                    acc = GeminiWebSession(
+                        account_id=acc_id,
+                        name=item.get("name"),
+                        email=item.get("email"),
+                        picture=item.get("picture"),
+                        cdp_port=item.get("cdp_port", 9222),
+                        cookies=cookies,
+                        is_primary=bool(item.get("is_primary", False)),
+                        enabled=bool(item.get("enabled", True)),
+                        on_token_refreshed=self.save_accounts,
+                        proxy_url=item.get("proxy_url"),
+                    )
+                else:  # consumer OAuth
+                    rf = item.get("refresh_token", "")
+                    if not rf and not item.get("access_token"):
+                        continue
+                    if not acc_id:
+                        seed = (item.get("email") or item.get("name") or rf or "").strip().lower()
+                        acc_id = f"acc_{hashlib.md5(seed.encode('utf-8')).hexdigest()[:8]}" if seed else f"acc_{os.urandom(4).hex()}"
+                    acc = AccountSession(
+                        account_id=acc_id,
+                        refresh_token=rf,
+                        access_token=item.get("access_token"),
+                        expiry_timestamp=item.get("expiry_timestamp", 0.0),
+                        email=item.get("email"),
+                        name=item.get("name"),
+                        picture=item.get("picture"),
+                        auth_method="consumer",
+                        project_id=item.get("project_id"),
+                        region_code=item.get("region_code"),
+                        is_primary=bool(item.get("is_primary", False)),
+                        enabled=bool(item.get("enabled", True)),
+                        on_token_refreshed=self.save_accounts,
+                        id_token=item.get("id_token"),
+                        proxy_url=item.get("proxy_url"),
+                    )
+
+                self.accounts[acc_id] = acc
+                imported_count += 1
+
+            self.save_accounts(force=True)
+            return imported_count
+
+    async def refresh_expiring_tokens(self, threshold_seconds: float = 600.0) -> int:
+        """
+        Proactively refreshes OAuth access tokens that expire within threshold_seconds (default 10 minutes).
+        Prevents user inference requests from incurring re-auth latency or 401s during task runs.
+        Returns the count of refreshed tokens.
+        """
+        now = time.time()
+        refreshed_count = 0
+        for acc in list(self.accounts.values()):
+            if not getattr(acc, "enabled", True) or getattr(acc, "auth_method", None) != "consumer":
+                continue
+            if not getattr(acc, "refresh_token", None):
+                continue
+            expiry = getattr(acc, "expiry_timestamp", 0.0)
+            if not acc.access_token or (expiry - now <= threshold_seconds):
+                try:
+                    logger.debug("[%s] Proactively refreshing expiring OAuth token (expires in %.0fs)...", acc.email or acc.account_id, max(0, expiry - now))
+                    await acc.refresh_access_token()
+                    refreshed_count += 1
+                except Exception as e:
+                    logger.warning("[%s] Proactive token refresh failed: %s", acc.email or acc.account_id, e)
+
+        if refreshed_count > 0:
+            self.save_accounts()
+            logger.info("Proactively refreshed %d expiring OAuth token(s)", refreshed_count)
+        return refreshed_count
+
 
 # Compatibility shim for AuthManager
 class AuthManager:

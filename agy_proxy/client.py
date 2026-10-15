@@ -583,12 +583,19 @@ class CloudCodeClient:
         timeout: float | httpx.Timeout | None = None,
         session_key: str | None = None,
         specific_account_id: str | None = None,
+        client_path: str = "/v1internal:streamGenerateContent",
+        is_streaming: bool = True,
+        is_subcall: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Executes request against CloudCode with automatic multi-account rotation, session affinity, and 429 failover.
         """
         if timeout is None:
             timeout = DEFAULT_STREAM_TIMEOUT
+        t0 = time.time()
+        recorded = False
+        prompt_tokens = 0
+        candidates_tokens = 0
         preferred_account = None
         if session_key:
             pinned = session_affinity.get_pinned_account(session_key)
@@ -714,6 +721,26 @@ class CloudCodeClient:
                                             }
                                 if failed_continuation:
                                     continue
+                                if not is_subcall:
+                                    dur_ms = (time.time() - t0) * 1000
+                                    try:
+                                        from agy_proxy.traffic import traffic_inspector
+                                        traffic_inspector.record(
+                                            method="POST",
+                                            path=client_path,
+                                            client_model=model_name,
+                                            backend_model="gemini-web",
+                                            account_id=acc.account_id,
+                                            account_email=acc.email,
+                                            status_code=200,
+                                            duration_ms=dur_ms,
+                                            stream=is_streaming,
+                                            prompt_tokens=prompt_tokens,
+                                            completion_tokens=candidates_tokens,
+                                        )
+                                        recorded = True
+                                    except Exception:
+                                        pass
                                 return
                             except RuntimeError as gw_err:
                                 if has_yielded:
@@ -879,10 +906,36 @@ class CloudCodeClient:
                                         try:
                                             data_obj = json.loads(raw_json)
                                             # Normalize response wrapper for AI Studio / CloudCode
+                                            resp_meta = data_obj.get("response", data_obj)
+                                            if isinstance(resp_meta, dict):
+                                                usage_m = resp_meta.get("usageMetadata", {})
+                                                if isinstance(usage_m, dict):
+                                                    prompt_tokens = usage_m.get("promptTokenCount", prompt_tokens)
+                                                    candidates_tokens = usage_m.get("candidatesTokenCount", candidates_tokens)
                                             has_yielded = True
                                             yield data_obj
                                         except json.JSONDecodeError as e:
                                             logger.warning("Failed to decode SSE JSON chunk: %s", e)
+                            if not is_subcall:
+                                dur_ms = (time.time() - t0) * 1000
+                                try:
+                                    from agy_proxy.traffic import traffic_inspector
+                                    traffic_inspector.record(
+                                        method="POST",
+                                        path=client_path,
+                                        client_model=model_name,
+                                        backend_model=backend_m,
+                                        account_id=acc.account_id,
+                                        account_email=acc.email,
+                                        status_code=200,
+                                        duration_ms=dur_ms,
+                                        stream=is_streaming,
+                                        prompt_tokens=prompt_tokens,
+                                        completion_tokens=candidates_tokens,
+                                    )
+                                    recorded = True
+                                except Exception:
+                                    pass
                             return  # Succeeded, end generator
 
                     except httpx.HTTPStatusError as e:
@@ -1030,8 +1083,13 @@ class CloudCodeClient:
                         timeout=timeout,
                         session_key=session_key,
                         specific_account_id=specific_account_id,
+                        client_path=client_path,
+                        is_streaming=is_streaming,
+                        is_subcall=True,
                     ):
                         yield chunk
+                    if not is_subcall:
+                        recorded = True
                     logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
                     return
 
@@ -1070,11 +1128,41 @@ class CloudCodeClient:
                         timeout=timeout,
                         session_key=session_key,
                         specific_account_id=specific_account_id,
+                        client_path=client_path,
+                        is_streaming=is_streaming,
+                        is_subcall=True,
                     ):
                         yield chunk
+                    if not is_subcall:
+                        recorded = True
                     logger.info("[Model Upgrade] ✅ Upgraded request to %s succeeded seamlessly!", upgrade_m)
                     return
 
+        if not recorded and not is_subcall:
+            dur_ms = (time.time() - t0) * 1000
+            st_code = 500
+            if last_error:
+                resp_obj = getattr(last_error, "response", None)
+                if resp_obj is not None:
+                    st_code = getattr(resp_obj, "status_code", 500)
+                elif "429" in str(last_error):
+                    st_code = 429
+            try:
+                from agy_proxy.traffic import traffic_inspector
+                traffic_inspector.record(
+                    method="POST",
+                    path=client_path,
+                    client_model=model_name,
+                    backend_model=model_name,
+                    account_id="",
+                    account_email="none",
+                    status_code=st_code,
+                    duration_ms=dur_ms,
+                    stream=is_streaming,
+                    error=str(last_error) if last_error else "All accounts failed",
+                )
+            except Exception:
+                pass
 
         if last_error:
             raise last_error
@@ -1130,6 +1218,8 @@ class CloudCodeClient:
                 model_name=model,
                 session_key=sess_key,
                 specific_account_id=specific_account_id,
+                client_path="/v1/chat/completions",
+                is_streaming=True,
             ):
                 resp = data.get("response", data)
                 candidates = resp.get("candidates", [])
@@ -1259,6 +1349,8 @@ class CloudCodeClient:
             model_name=model,
             session_key=sess_key,
             specific_account_id=specific_account_id,
+            client_path="/v1/chat/completions",
+            is_streaming=False,
         ):
             resp = data.get("response", data)
             candidates = resp.get("candidates", [])
@@ -1383,6 +1475,23 @@ class CloudCodeClient:
             }
             yield f"event: message_delta\ndata: {json.dumps(msg_delta)}\n\n"
             yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
+            try:
+                from agy_proxy.traffic import traffic_inspector
+                traffic_inspector.record(
+                    method="POST",
+                    path="/v1/messages",
+                    client_model=model,
+                    backend_model="builtin:web_search",
+                    account_id="local",
+                    account_email="local",
+                    status_code=200,
+                    duration_ms=0.0,
+                    stream=True,
+                    prompt_tokens=50,
+                    completion_tokens=150,
+                )
+            except Exception:
+                pass
             return
 
         # 0. Check if this is an explicit /compact command from Claude Code
@@ -1470,6 +1579,8 @@ class CloudCodeClient:
                 model_name=model,
                 session_key=sess_key,
                 specific_account_id=specific_account_id,
+                client_path="/v1/messages",
+                is_streaming=True,
             ):
                 resp = data.get("response", data)
                 candidates = resp.get("candidates", [])
@@ -1608,7 +1719,7 @@ class CloudCodeClient:
             search_results = await search_multi_engine(query, allowed_domains=allowed_domains, blocked_domains=blocked_domains, account_pool=self.pool)
             tool_id = f"srv_tool_{uuid.uuid4().hex[:8]}"
 
-            return {
+            search_resp = {
                 "id": msg_id,
                 "type": "message",
                 "role": "assistant",
@@ -1637,6 +1748,24 @@ class CloudCodeClient:
                     "output_tokens": 150,
                 },
             }
+            try:
+                from agy_proxy.traffic import traffic_inspector
+                traffic_inspector.record(
+                    method="POST",
+                    path="/v1/messages",
+                    client_model=model,
+                    backend_model="builtin:web_search",
+                    account_id="local",
+                    account_email="local",
+                    status_code=200,
+                    duration_ms=0.0,
+                    stream=False,
+                    prompt_tokens=50,
+                    completion_tokens=150,
+                )
+            except Exception:
+                pass
+            return search_resp
 
         # 0. Check if this is an explicit /compact command from Claude Code
         is_explicit_compact = False
@@ -1713,6 +1842,8 @@ class CloudCodeClient:
             model_name=model,
             session_key=sess_key,
             specific_account_id=specific_account_id,
+            client_path="/v1/messages",
+            is_streaming=False,
         ):
             resp = data.get("response", data)
             candidates = resp.get("candidates", [])
@@ -1812,6 +1943,8 @@ class CloudCodeClient:
                 build_payload,
                 model_name=backend_model,
                 specific_account_id=specific_account_id,
+                client_path=f"/v1beta/models/{model}:streamGenerateContent",
+                is_streaming=True,
             ):
                 yield f"data: {json.dumps(data)}\n\n"
         except Exception as e:

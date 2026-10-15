@@ -140,6 +140,10 @@ const MODEL_ALIASES = {
   "gemini-flash": "gemini-3.8-flash-high",
   "gemini-flash-thinking": "gemini-3.8-flash-high",
   "gemini-pro": "gemini-3.1-pro-low",
+  deepagent: "gemini-3.8-flash-high",
+  "deep-agent": "gemini-3.8-flash-high",
+  "gemini-deepagent": "gemini-3.8-flash-high",
+  "gemini-3.8-flash-deepagent": "gemini-3.8-flash-high",
 
   // Gemini 3.7
   "gemini-3.7-flash": "gemini-3.7-flash-high",

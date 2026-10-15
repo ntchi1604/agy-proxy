@@ -102,6 +102,16 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "agents",
         "desc": "v2.23.0 Flag: Enables autonomous agent swarm progress, health, and task monitoring",
     },
+    "enable-swarm-narrator": {
+        "value": True,
+        "category": "agents",
+        "desc": "Enables textual narrator and step review for multi-agent swarm actions",
+    },
+    "enable-agent-plugins-spec": {
+        "value": True,
+        "category": "agents",
+        "desc": "Enables agent plugin specifications and custom tools",
+    },
     "enable-subagent-hub": {
         "value": True,
         "category": "agents",
@@ -1176,6 +1186,14 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
 
 # Optimized non-bool flag overrides
 NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
+    "default_subagent_interaction_timeout_seconds": {
+        "intValue": "180",
+        "desc": "Subagent interaction timeout extended from 60s to 180s to prevent premature agent failure on long runs",
+    },
+    "invoke-subagent-config": {
+        "stringValue": '{"enabled": true, "always_inherit_model": false}',
+        "desc": "Allows subagents to select and invoke lighter models without inheriting parent flagship restrictions",
+    },
     "Chat__fca_chat_context_window_size": {
         "intValue": "3500000",
         "desc": "Expanded 3.5M token full codebase context window",
@@ -1312,10 +1330,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
         "stringValue": '{"max_fuzzy_edit_distance_fraction": 0.001, "allow_partial_replacement_success": true, "use_line_range": true, "fast_apply_fallback_config": {"enabled": false, "prompt_unchanged_threshold": 5, "content_view_radius_lines": 200, "content_edit_radius_lines": 5}}',
         "desc": "v2.22.0 Config: CASCADE_USE_REPLACE_CONTENT_EDIT_TOOL",
     },
-    "invoke-subagent-config": {
-        "stringValue": '{"enabled": true, "always_inherit_model": false}',
-        "desc": "v2.22.0 Config: invoke-subagent-config",
-    },
     "log-artifacts-config": {
         "stringValue": '{"enabled": true, "hideNominalToolSteps": false, "hidePlannerResponseText": false, "maxBytesPerStep": 4096, "maxBytesPerToolArg": 2048, "hideSystemSteps": false, "hideUserImplicitSteps": false}',
         "desc": "v2.22.0 Config: log-artifacts-config",
@@ -1387,10 +1401,6 @@ NON_BOOL_OPTIMIZATIONS: dict[str, dict[str, Any]] = {
     "continuous-pprof-heap-interval-minutes": {
         "intValue": "30",
         "desc": "v2.22.0 Int Value: continuous-pprof-heap-interval-minutes",
-    },
-    "default_subagent_interaction_timeout_seconds": {
-        "intValue": "60",
-        "desc": "v2.22.0 Int Value: default_subagent_interaction_timeout_seconds",
     },
     "agy-plugin-marketplaces": {
         "stringListValue": {"values": ["antigravity-plugins-official=https://www.gstatic.com/antigravity/plugins/marketplace.json"]},

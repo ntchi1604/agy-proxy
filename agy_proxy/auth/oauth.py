@@ -148,7 +148,7 @@ class AntigravityOAuthSession(AccountSession):
 
     async def get_valid_token(self) -> str:
         now = time.time()
-        if not self.access_token or (self.expiry_timestamp - now <= 60):
+        if not self.access_token or (self.expiry_timestamp - now <= 300):
             return await self.refresh_access_token()
         return self.access_token
 
@@ -309,8 +309,13 @@ class AntigravityOAuthSession(AccountSession):
             is_claude_5_5_model,
             is_claude_4_6_model,
             is_argon_model,
+            is_deepagent_model,
         )
         norm = normalize_model_name(model_name)
+
+        # 0. DeepAgent swarm preset routes through gemini-3.8-flash-high
+        if is_deepagent_model(norm):
+            return self.is_model_supported("gemini-3.8-flash-high")
 
         # 1. Any model explicitly marked unsupported on this account
         unsupported = getattr(self, "unsupported_models", None)

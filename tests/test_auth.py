@@ -771,6 +771,52 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pool2.accounts["ak_proxy"].proxy_url, "socks5://localhost:1080")
         self.assertEqual(pool2.accounts["gw_proxy"].proxy_url, "http://10.0.0.1:3128")
 
+    def test_export_and_import_pool(self):
+        pool = AccountPool(accounts_file=self.accounts_file)
+        oa = AntigravityOAuthSession(account_id="oa_exp", refresh_token="tok_exp", email="exp@example.com")
+        ak = AIStudioApiKeySession(account_id="ak_exp", api_key="AIzaSyTestKey", name="API Key Account")
+        gw = GeminiWebSession(account_id="gw_exp", name="Web Account", cookies={"__Secure-1PSID": "mock_psid"})
+        pool.accounts["oa_exp"] = oa
+        pool.accounts["ak_exp"] = ak
+        pool.accounts["gw_exp"] = gw
+
+        export_path = Path(self.tmp_dir.name) / "exported_pool.json"
+        data = pool.export_pool(output_file=export_path)
+
+        self.assertTrue(export_path.exists())
+        self.assertEqual(data["version"], "1.0")
+        self.assertEqual(len(data["accounts"]), 3)
+
+        # Import into fresh pool
+        new_pool_file = Path(self.tmp_dir.name) / "new_pool" / "accounts.json"
+        new_pool = AccountPool(accounts_file=new_pool_file)
+        imported_count = new_pool.import_pool(export_path, merge=False)
+
+        self.assertEqual(imported_count, 3)
+        self.assertIn("oa_exp", new_pool.accounts)
+        self.assertIn("ak_exp", new_pool.accounts)
+        self.assertIn("gw_exp", new_pool.accounts)
+        self.assertEqual(new_pool.accounts["oa_exp"].email, "exp@example.com")
+        self.assertEqual(new_pool.accounts["ak_exp"].refresh_token, "AIzaSyTestKey")
+
+    def test_proactive_token_refresh(self):
+        from unittest.mock import patch, AsyncMock
+        pool = AccountPool(accounts_file=self.accounts_file)
+        oa = AntigravityOAuthSession(
+            account_id="oa_refresh",
+            refresh_token="tok_refresh",
+            email="refresh@example.com",
+            access_token="old_access_token",
+            expiry_timestamp=time.time() + 120.0,  # Expires in 2 minutes
+        )
+        pool.accounts["oa_refresh"] = oa
+
+        with patch.object(oa, "refresh_access_token", new_callable=AsyncMock) as mock_refresh:
+            mock_refresh.return_value = "new_access_token"
+            count = asyncio.run(pool.refresh_expiring_tokens(threshold_seconds=300.0))
+            self.assertEqual(count, 1)
+            mock_refresh.assert_awaited_once()
+
     def test_split_files_auto_migration_from_unified(self):
         # Create legacy unified accounts.json containing both OAuth and API key
         self.accounts_file.write_text(json.dumps({
