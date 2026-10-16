@@ -10,6 +10,7 @@ from agy_proxy.experiments import (
     NON_BOOL_OPTIMIZATIONS,
     enhance_list_experiments,
     enhance_available_models,
+    enhance_quota_summary,
     get_default_experiments_payload,
     get_experiments_status,
     set_experiment_override,
@@ -342,4 +343,75 @@ def test_deepagent_and_swarm_flags():
     assert "always_inherit_model" in enh_flags["invoke-subagent-config"]["stringValue"]
     assert enh_flags["enable-swarm-narrator"]["boolValue"] is True
     assert enh_flags["enable-agent-plugins-spec"]["boolValue"] is True
+
+
+def test_enhance_quota_summary():
+    """Verify that enhance_quota_summary unlocks 3p buckets and protects against mutation."""
+    mock_quota = {
+        "groups": [
+            {
+                "displayName": "Third Party Models",
+                "buckets": [
+                    {
+                        "bucketId": "3p-weekly",
+                        "displayName": "Weekly Limit Remaining",
+                        "remainingFraction": 0,
+                        "description": "You have hit your weekly limit.",
+                    },
+                    {
+                        "bucketId": "3p-5h",
+                        "displayName": "Five Hour Limit Remaining",
+                        "remainingFraction": 0.02,
+                        "description": "Low limit.",
+                    },
+                ],
+            },
+            {
+                "displayName": "Gemini Models",
+                "buckets": [
+                    {
+                        "bucketId": "gemini-weekly",
+                        "displayName": "Weekly Limit Remaining",
+                        "remainingFraction": 0.95,
+                        "description": "Active.",
+                    },
+                    {
+                        "bucketId": "gemini-5h",
+                        "displayName": "Five Hour Limit Remaining",
+                        "remainingFraction": 0.0,
+                        "description": "Exhausted.",
+                    },
+                ],
+            },
+        ]
+    }
+    input_copy = copy.deepcopy(mock_quota)
+    enhanced = enhance_quota_summary(mock_quota)
+
+    # Input immutability
+    assert mock_quota == input_copy, "enhance_quota_summary mutated its input!"
+
+    # 3p buckets virtualized to 1.0
+    g3p = next(g for g in enhanced["groups"] if g["displayName"] == "Third Party Models")
+    b_3p_weekly = next(b for b in g3p["buckets"] if b["bucketId"] == "3p-weekly")
+    b_3p_5h = next(b for b in g3p["buckets"] if b["bucketId"] == "3p-5h")
+    assert b_3p_weekly["remainingFraction"] == 1.0
+    assert b_3p_weekly["disabled"] is False
+    assert "Antigravity" in b_3p_weekly["description"]
+    assert b_3p_5h["remainingFraction"] == 1.0
+    assert b_3p_5h["disabled"] is False
+
+    # Gemini buckets virtualized to 1.0
+    ggem = next(g for g in enhanced["groups"] if g["displayName"] == "Gemini Models")
+    b_gem_weekly = next(b for b in ggem["buckets"] if b["bucketId"] == "gemini-weekly")
+    b_gem_5h = next(b for b in ggem["buckets"] if b["bucketId"] == "gemini-5h")
+    assert b_gem_weekly["remainingFraction"] == 1.0
+    assert b_gem_weekly["disabled"] is False
+    assert b_gem_5h["remainingFraction"] == 1.0
+    assert b_gem_5h["disabled"] is False
+
+    # Resilience against invalid/empty payloads
+    assert enhance_quota_summary({}) == {}
+    assert enhance_quota_summary(None) is None
+    assert enhance_quota_summary({"groups": "invalid"}) == {"groups": "invalid"}
 

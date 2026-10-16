@@ -100,6 +100,11 @@ class TestDashboardTemplate(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, f"Node script failed: {proc.stderr}")
         self.assertIn("OK", proc.stdout)
 
+    def test_dashboard_submit_activate_session_modal_preserves_account_id(self):
+        html = get_dashboard_html()
+        self.assertIn("const accountIdToActivate = targetActivateAccountId;", html)
+        self.assertIn("${encodeURIComponent(accountIdToActivate)}/activate-cli", html)
+
 
 if __name__ == "__main__":
     unittest.main()

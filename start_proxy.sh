@@ -43,14 +43,52 @@ for ((i=0; i<${#args[@]}; i++)); do
         --host=*)
             PROXY_HOST="${arg#*=}"
             ;;
+        --reconnect)
+            AGY_RECONNECT=1
+            ;;
         --no-reconnect)
-            AGY_NO_RECONNECT=1
+            AGY_RECONNECT=0
             ;;
         --web|-w|--antigravity-web)
             START_WEB=1
             ;;
     esac
 done
+
+KNOWN_SUBCOMMANDS="update doctor bump switch usage quota auth accounts setup-claude claude-setup restore-claude claude-restore claude setup-codex codex-setup restore-codex codex-restore codex run-codex experiments exp web antigravity-web web-mode config service"
+IS_SERVER=1
+for arg in "${args[@]}"; do
+    case "$arg" in
+        --help|-h|--version|-V)
+            IS_SERVER=0
+            break
+            ;;
+        *)
+            for sub in $KNOWN_SUBCOMMANDS; do
+                if [ "$arg" = "$sub" ]; then
+                    IS_SERVER=0
+                    break 2
+                fi
+            done
+            ;;
+    esac
+done
+
+# Non-server commands (subcommands, CLI tools, --help): exec Python directly in foreground
+# to preserve interactive terminal TTY stdin/stdout (e.g. for `agy-proxy switch` prompts)
+if [ "$IS_SERVER" -eq 0 ]; then
+    if command -v uv >/dev/null 2>&1; then
+        exec uv run python main.py "$@"
+    elif command -v python3 >/dev/null 2>&1; then
+        exec python3 main.py "$@"
+    elif command -v python >/dev/null 2>&1; then
+        exec python main.py "$@"
+    else
+        echo "❌ Error: Neither 'uv' nor 'python3' was found in your PATH."
+        echo "Please install Python 3.10+ to run Antigravity Proxy."
+        exit 1
+    fi
+fi
 
 CHECK_HOST="$PROXY_HOST"
 if [ "$CHECK_HOST" = "0.0.0.0" ] || [ -z "$CHECK_HOST" ]; then
@@ -74,6 +112,10 @@ get_ls_pids() {
             cmd=$(ps -o command= -p "$pid" 2>/dev/null || true)
         fi
         if [[ "$cmd" =~ start_proxy ]] || [[ "$cmd" =~ patch_language_server ]] || [[ "$cmd" =~ agy_ls_watchdog ]] || [[ "$cmd" =~ grep ]]; then
+            continue
+        fi
+        # Never touch standalone web mode, web hub, or web runner processes
+        if [[ "$cmd" =~ --standalone ]] || [[ "$cmd" =~ --https_server_port ]] || [[ "$cmd" =~ start_web ]]; then
             continue
         fi
         if [[ "$cmd" =~ language_server ]]; then
@@ -106,9 +148,10 @@ is_direct_or_old_ls() {
     return 1
 }
 
-# Auto-reconnection: snapshot existing language_server instances
+# Auto-reconnection: disabled by default to avoid killing running language_server instances
+# (e.g. Web Hub or IDE). Use --reconnect to explicitly enable.
 INITIAL_LS_PIDS=""
-if [ "${AGY_NO_RECONNECT:-0}" != "1" ]; then
+if [ "${AGY_RECONNECT:-0}" = "1" ]; then
     INITIAL_LS_PIDS=$(get_ls_pids | tr '\n' ' ')
     if [ -n "$INITIAL_LS_PIDS" ]; then
         echo -e "\033[0;36m[agy-proxy]\033[0m 🔍 Found running language_server (PID: ${INITIAL_LS_PIDS% }). Soft-reconnect watcher scheduled."
@@ -141,17 +184,39 @@ if [ "${AGY_NO_RECONNECT:-0}" != "1" ]; then
             done
         fi
     ) &
+    WATCHER_PID=$!
+elif [ "${START_WEB:-0}" -eq 1 ]; then
+    (
+        for i in {1..40}; do
+            if curl -sf --max-time 1 "${CHECK_URL}/health" >/dev/null 2>&1 || \
+               curl -sf --max-time 1 "${CHECK_URL}/api/info" >/dev/null 2>&1; then
+                echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;36m🌐 Starting Antigravity Web Mode alongside proxy...\033[0m" >&2
+                "$SCRIPT_DIR/start_web.sh" --detach >/dev/null 2>&1 || true
+                break
+            fi
+            sleep 0.25
+        done
+    ) &
+    WATCHER_PID=$!
 fi
 
-# Graceful stop: signal language_server to fallback to direct mode immediately on exit
+CLEANED_UP=0
+# Graceful stop: stop proxy background jobs cleanly without terminating external language_server instances
 cleanup_on_stop() {
-    local current_pids
-    current_pids=$(get_ls_pids)
-    if [ -n "$current_pids" ]; then
-        echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;33m🛑 Proxy stopped. Signaling language_server to fallback to direct Google backend...\033[0m" >&2
-        for pid in $current_pids; do
-            kill -TERM "$pid" 2>/dev/null || true
-        done
+    if [ "$CLEANED_UP" -eq 1 ]; then
+        return
+    fi
+    CLEANED_UP=1
+
+    # Stop background reconnect watcher if still running
+    if [ -n "${WATCHER_PID:-}" ] && kill -0 "$WATCHER_PID" 2>/dev/null; then
+        kill -TERM "$WATCHER_PID" 2>/dev/null || true
+    fi
+
+    # Forward termination signal to Python proxy server and wait for clean shutdown
+    if [ -n "${PY_PID:-}" ] && kill -0 "$PY_PID" 2>/dev/null; then
+        kill -TERM "$PY_PID" 2>/dev/null || true
+        wait "$PY_PID" 2>/dev/null || true
     fi
 }
 trap cleanup_on_stop EXIT INT TERM

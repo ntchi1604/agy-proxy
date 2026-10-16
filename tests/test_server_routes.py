@@ -1515,6 +1515,72 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(data_batch["data"][0]["embedding"]), 768)
         self.assertEqual(len(data_batch["data"][1]["embedding"]), 768)
 
+    async def test_cloudcode_passthrough_cancellation(self):
+        acc = AsyncMock()
+        acc.enabled = True
+        acc.account_id = "test-cancel-acc"
+        acc.email = "cancel@example.com"
+        acc.is_model_supported = lambda m: True
+        acc.get_auth_headers = AsyncMock(return_value={})
+        mock_http = AsyncMock()
+        mock_http.post.side_effect = asyncio.CancelledError()
+        acc.get_http_client = AsyncMock(return_value=mock_http)
+        self.pool.accounts = {"test-cancel-acc": acc}
+        self.pool.primary_account = acc
+
+        resp = await self.client.post("/v1internal:loadCodeAssist", json={})
+        self.assertEqual(resp.status_code, 499)
+        data = resp.json()
+        self.assertEqual(data["error"]["code"], 499)
+        self.assertEqual(data["error"]["status"], "CANCELLED")
+
+    async def test_lifespan_cancellation_synthesizes_shutdown(self):
+        from agy_proxy.server import GracefulCancellationMiddleware
+        received_messages = []
+
+        async def dummy_app(scope, receive, send):
+            msg1 = await receive()
+            received_messages.append(msg1)
+            msg2 = await receive()
+            received_messages.append(msg2)
+
+        middleware = GracefulCancellationMiddleware(dummy_app)
+
+        async def fake_receive():
+            if len(received_messages) == 0:
+                return {"type": "lifespan.startup"}
+            raise asyncio.CancelledError()
+
+        async def fake_send(msg):
+            pass
+
+        scope = {"type": "lifespan"}
+        await middleware(scope, fake_receive, fake_send)
+        self.assertEqual(len(received_messages), 2)
+        self.assertEqual(received_messages[0]["type"], "lifespan.startup")
+        self.assertEqual(received_messages[1]["type"], "lifespan.shutdown")
+
+    async def test_http_cancellation_sends_499(self):
+        from agy_proxy.server import GracefulCancellationMiddleware
+        sent_messages = []
+
+        async def failing_app(scope, receive, send):
+            raise asyncio.CancelledError()
+
+        middleware = GracefulCancellationMiddleware(failing_app)
+
+        async def fake_receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def fake_send(msg):
+            sent_messages.append(msg)
+
+        scope = {"type": "http"}
+        await middleware(scope, fake_receive, fake_send)
+        self.assertTrue(len(sent_messages) >= 1)
+        self.assertEqual(sent_messages[0]["type"], "http.response.start")
+        self.assertEqual(sent_messages[0]["status"], 499)
+
 
 if __name__ == "__main__":
     unittest.main()

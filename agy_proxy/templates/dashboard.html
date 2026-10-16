@@ -2197,6 +2197,7 @@ ightarrow$ v1.0.3</p>
         showToast('No account selected. Please click the session button on an account card.', 'error');
         return;
       }
+      const accountIdToActivate = targetActivateAccountId;
       const radios = document.getElementsByName('agyTargetEnv');
       let target = "all";
       for (const r of radios) {
@@ -2206,15 +2207,15 @@ ightarrow$ v1.0.3</p>
         }
       }
       const setPrimary = document.getElementById('modalSetPrimaryToggle')?.checked ?? false;
-      const acc = rawAccountsData.find(a => a.account_id === targetActivateAccountId);
-      const accName = acc ? (acc.name || acc.email) : targetActivateAccountId;
+      const acc = rawAccountsData.find(a => a.account_id === accountIdToActivate);
+      const accName = acc ? (acc.name || acc.email) : accountIdToActivate;
 
       const targetLabel = target === 'cli' ? 'CLI' : (target === 'standalone' ? 'Standalone' : (target === 'ide' ? 'IDE' : 'All'));
       showToast(`Activating ${accName} in ${targetLabel}...`, 'info');
       closeActivateSessionModal();
 
       try {
-        const res = await fetch(`/api/accounts/${encodeURIComponent(targetActivateAccountId)}/activate-cli?target=${encodeURIComponent(target)}&set_primary=${setPrimary}`, {
+        const res = await fetch(`/api/accounts/${encodeURIComponent(accountIdToActivate)}/activate-cli?target=${encodeURIComponent(target)}&set_primary=${setPrimary}`, {
           method: 'POST'
         });
         let data = {};

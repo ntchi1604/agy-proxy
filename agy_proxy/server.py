@@ -20,6 +20,7 @@ import urllib.parse
 import httpx
 from fastapi import FastAPI, HTTPException, Header, Request, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Scope, Receive, Send
 from pathlib import Path
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 
@@ -58,6 +59,7 @@ from agy_proxy.ui import get_dashboard_html
 from agy_proxy.experiments import (
     enhance_list_experiments,
     enhance_available_models,
+    enhance_quota_summary,
     get_default_experiments_payload,
     get_experiments_status,
     save_experiment_config,
@@ -320,6 +322,8 @@ def _process_passthrough_metadata(action_key: str, data: dict[str, Any]) -> dict
         return enhance_list_experiments(data)
     elif action_key == "fetchAvailableModels":
         return enhance_available_models(data)
+    elif action_key == "retrieveUserQuotaSummary":
+        return enhance_quota_summary(data)
     return data
 
 
@@ -344,6 +348,85 @@ def _extract_error_message(resp: Any) -> str:
 
 
 _init_passthrough_cache()
+
+
+class GracefulCancellationMiddleware:
+    """
+    ASGI middleware that cleanly handles request cancellation, client disconnects,
+    and server shutdown for HTTP requests, WebSockets, and lifespan events,
+    preventing unhandled CancelledError tracebacks from polluting logs.
+    """
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "lifespan":
+            async def safe_lifespan_receive():
+                try:
+                    return await receive()
+                except asyncio.CancelledError:
+                    # Lifespan task was cancelled during shutdown; synthesize shutdown event
+                    return {"type": "lifespan.shutdown"}
+
+            async def safe_lifespan_send(message):
+                try:
+                    await send(message)
+                except Exception:
+                    pass
+
+            try:
+                await self.app(scope, safe_lifespan_receive, safe_lifespan_send)
+            except asyncio.CancelledError:
+                pass
+            return
+
+        if scope["type"] == "http":
+            response_started = False
+
+            async def safe_http_send(message):
+                nonlocal response_started
+                if message["type"] == "http.response.start":
+                    response_started = True
+                await send(message)
+
+            try:
+                await self.app(scope, receive, safe_http_send)
+            except asyncio.CancelledError:
+                # Client disconnected or in-flight request cancelled during graceful shutdown
+                if not response_started:
+                    try:
+                        await send({
+                            "type": "http.response.start",
+                            "status": 499,
+                            "headers": [
+                                (b"content-type", b"application/json"),
+                                (b"content-length", b"61"),
+                                (b"connection", b"close"),
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": b'{"error":{"code":499,"message":"Client Closed Request"}}',
+                            "more_body": False,
+                        })
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        await send({"type": "http.response.body", "body": b"", "more_body": False})
+                    except Exception:
+                        pass
+            return
+
+        if scope["type"] == "websocket":
+            try:
+                await self.app(scope, receive, send)
+            except asyncio.CancelledError:
+                pass
+            return
+
+        await self.app(scope, receive, send)
 
 
 def create_app(
@@ -422,7 +505,10 @@ def create_app(
                 pass
 
         for acc in pool.accounts.values():
-            await acc.close()
+            try:
+                await acc.close()
+            except Exception:
+                pass
 
     app = FastAPI(
         title="Antigravity Proxy",
@@ -467,6 +553,9 @@ def create_app(
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    # Clean cancellation and shutdown handling for HTTP, WebSockets, and lifespan events
+    app.add_middleware(GracefulCancellationMiddleware)
 
     def verify_api_key(
         authorization: str | None = None,
@@ -1826,6 +1915,12 @@ def create_app(
                 )
             logger.error("OpenAI Chat Completion Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             raise HTTPException(status_code=500, detail=err_msg)
+        except asyncio.CancelledError:
+            logger.info("OpenAI Chat Completion request cancelled / client disconnected")
+            return JSONResponse(
+                status_code=499,
+                content={"error": {"message": "Client Closed Request", "type": "client_closed", "code": 499}},
+            )
         except Exception as e:
             logger.error("OpenAI Chat Completion Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
@@ -2014,6 +2109,12 @@ def create_app(
                     },
                 )
             raise HTTPException(status_code=e.response.status_code, detail=str(e))
+        except asyncio.CancelledError:
+            logger.info("OpenAI Responses request cancelled / client disconnected")
+            return JSONResponse(
+                status_code=499,
+                content={"error": {"message": "Client Closed Request", "type": "client_closed", "code": 499}},
+            )
         except Exception as e:
             logger.error("OpenAI Responses Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
@@ -2150,6 +2251,18 @@ def create_app(
                 )
             logger.error("Anthropic Messages Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             raise HTTPException(status_code=500, detail=err_msg)
+        except asyncio.CancelledError:
+            logger.info("Anthropic Messages request cancelled / client disconnected")
+            return JSONResponse(
+                status_code=499,
+                content={
+                    "type": "error",
+                    "error": {
+                        "type": "client_closed",
+                        "message": "Client Closed Request",
+                    },
+                },
+            )
         except Exception as e:
             logger.error("Anthropic Messages Error: %s", e, exc_info=logger.isEnabledFor(logging.DEBUG))
             err_msg = str(e) or f"{type(e).__name__}: Upstream request failed"
@@ -2852,6 +2965,18 @@ def create_app(
                         media_type=resp.headers.get("content-type", "application/json"),
                     )
 
+            except asyncio.CancelledError:
+                logger.info("[%s] CloudCode passthrough cancelled / client disconnected (%s)", acc_label, route_desc)
+                return JSONResponse(
+                    status_code=499,
+                    content={
+                        "error": {
+                            "code": 499,
+                            "message": "Client Closed Request",
+                            "status": "CANCELLED",
+                        }
+                    },
+                )
             except Exception as e:
                 last_error = str(e)
                 if not is_generation and is_metadata:
@@ -2876,6 +3001,17 @@ def create_app(
                             fb_data = fb_resp.json()
                             _record_cloudcode_traffic(acc, 200, data_dict=fb_data, raw_text=fb_resp.text if hasattr(fb_resp, "text") else None)
                             return JSONResponse(status_code=200, content=fb_data)
+                    except asyncio.CancelledError:
+                        return JSONResponse(
+                            status_code=499,
+                            content={
+                                "error": {
+                                    "code": 499,
+                                    "message": "Client Closed Request",
+                                    "status": "CANCELLED",
+                                }
+                            },
+                        )
                     except Exception:
                         pass
 

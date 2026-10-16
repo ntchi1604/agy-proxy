@@ -304,7 +304,12 @@ async def handle_switch_command(
         if list_only:
             return
 
-        choice = Prompt.ask("\nEnter account #, email, name, or 'next' to rotate", default="next")
+        try:
+            choice = Prompt.ask("\nEnter account #, email, name, or 'next' to rotate", default="next")
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]Operation cancelled by user.[/dim]")
+            return
+
         if not choice or choice.lower() in ("next", "n"):
             to_next = True
             target = None
@@ -313,11 +318,15 @@ async def handle_switch_command(
             target = choice
 
         if not env_explicitly_set:
-            target_env = Prompt.ask(
-                "Target destination environment",
-                choices=["all", "cli", "standalone"],
-                default="all",
-            )
+            try:
+                target_env = Prompt.ask(
+                    "Target destination environment",
+                    choices=["all", "cli", "standalone"],
+                    default="all",
+                )
+            except (EOFError, KeyboardInterrupt):
+                console.print("\n[dim]Operation cancelled by user.[/dim]")
+                return
 
     try:
         env_label = "CLI only" if target_env == "cli" else ("Standalone only" if target_env == "standalone" else "All Environments")
@@ -1339,12 +1348,14 @@ def main():
 
     # Run Uvicorn with graceful shutdown handling
     uvicorn_log_level = "debug" if (args.debug or effective_log_level.lower() == "debug") else effective_log_level.lower()
+    shutdown_timeout = float(os.environ.get("AGY_PROXY_SHUTDOWN_TIMEOUT", "2.0"))
     config = uvicorn.Config(
         app,
         host=args.host,
         port=args.port,
         log_level=uvicorn_log_level,
         access_log=bool(args.debug or effective_log_level.lower() == "debug"),
+        timeout_graceful_shutdown=shutdown_timeout,
     )
     server = uvicorn.Server(config)
 

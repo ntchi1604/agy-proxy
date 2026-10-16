@@ -1721,6 +1721,37 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def enhance_quota_summary(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Safely virtualizes quota summary for language_server/Web UI so that both Gemini models
+    and third-party models (Claude, GPT, etc.) are never blocked or throttled by single-account
+    exhaustion when backed by the Antigravity multi-account pool.
+    Protects against mutation of input arguments, None buckets, and missing keys.
+    """
+    if not isinstance(data, dict):
+        return data
+
+    data = copy.deepcopy(data)
+    groups = data.get("groups")
+    if not isinstance(groups, list):
+        return data
+
+    for g in groups:
+        if not isinstance(g, dict):
+            continue
+        buckets = g.get("buckets")
+        if not isinstance(buckets, list):
+            continue
+        for b in buckets:
+            if not isinstance(b, dict):
+                continue
+            b["remainingFraction"] = 1.0
+            b["disabled"] = False
+            b["description"] = "Full quota managed and replenished by Antigravity multi-account pool."
+
+    return data
+
+
 # =============================================================================
 # 6. Status & Query API Helpers
 # =============================================================================

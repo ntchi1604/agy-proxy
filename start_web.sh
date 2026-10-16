@@ -19,6 +19,15 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
+# If patched Web Hub mode was requested, delegate to start_web_patched.sh
+for arg in "$@"; do
+    if [ "$arg" = "--patched" ] || [ "$arg" = "-P" ]; then
+        if [ -f "$SCRIPT_DIR/start_web_patched.sh" ]; then
+            exec "$SCRIPT_DIR/start_web_patched.sh" "${@/--patched/}"
+        fi
+    fi
+done
+
 # Try running via Python agy-proxy CLI first for rich diagnostics and process management
 if command -v uv >/dev/null 2>&1; then
     exec uv run python -m agy_proxy.cli web "$@"

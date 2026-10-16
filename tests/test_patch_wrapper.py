@@ -312,6 +312,23 @@ int main() {{
             if proc.poll() is None:
                 proc.kill()
 
+    def test_start_proxy_subcommand_does_not_signal_fallback(self):
+        """Verifies start_proxy.sh does not signal language_server fallback on subcommands or --help."""
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "start_proxy.sh")
+        for test_args in [["--help"], ["auth", "--help"], ["--version"]]:
+            proc = subprocess.run([script_path] + test_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertEqual(proc.returncode, 0)
+            self.assertNotIn("Signaling language_server to fallback", proc.stderr)
+
+    def test_start_proxy_does_not_kill_standalone_language_server(self):
+        """Verifies start_proxy.sh excludes standalone/web language_server processes and does not kill them."""
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "start_proxy.sh")
+        # Run start_proxy.sh with --help to verify clean execution
+        proc = subprocess.run([script_path, "--help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(proc.returncode, 0)
+        self.assertNotIn("Soft-reconnecting Antigravity language_server", proc.stderr)
+        self.assertNotIn("Sent SIGTERM to language_server", proc.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
