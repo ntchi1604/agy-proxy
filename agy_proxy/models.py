@@ -7,14 +7,53 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ---------------------------------------------------------
-# Standard Model Mappings and Aliases
-# ---------------------------------------------------------
+# ==============================================================================
+# СТРУКТУРА ТА КЛАСИФІКАЦІЯ МОДЕЛЕЙ AGY-PROXY
+# ==============================================================================
+#
+# Щоб уникнути будь-якої плутанини та не вводити користувачів в оману,
+# всі моделі в системі чітко поділяються на 4 окремі категорії:
+#
+# 1. НАТИВНІ МОДЕЛІ ANTIGRAVITY (CLOUDCODE API / GOOGLE API):
+#    - Справжні моделі Google CloudCode та Antigravity Language Server:
+#      * gemini-3.8-flash-* (High / Medium / Low / Tiered / Task) — офіційний робочий флагман
+#      * gemini-3.7-flash-*, gemini-3.6-flash-*, gemini-3.5-flash-*, gemini-3.1-pro-*
+#      * claude-sonnet-4-6, claude-opus-4-6-thinking (офіційні 3P моделі Anthropic в Antigravity)
+#      * gpt-oss-120b-medium (відкрита модель Google CloudCode)
+#      * gemini-3.8-flash-deepagent (автономний пресет рою агентів із 64k thinking)
+#
+# 2. МОДЕЛІ GEMINI WEB (ВЕБ-ІНТЕРФЕЙС / БРАУЗЕР):
+#    - Усі моделі з суфіксом `-web-*` (наприклад, `gemini-4-argon-web-*`, `gemini-3.8-flash-web-*`).
+#    - Вони НЕ надсилаються до CloudCode API. Запити до них виконуються через
+#      веб-автоматизацію сесії gemini.google.com у браузері користувача.
+#    - Gemini 4 Argon наразі доступний ВИКЛЮЧНО через веб-інтерфейс (як gemini-4-argon-web-*).
+#
+# 3. АЛІАСИ СУМІСНОСТІ (COMPATIBILITY ALIASES):
+#    - Аліаси потрібні виключно для зовнішніх клієнтів (Cursor, Cline, Aider, Claude Code, OpenAI SDK),
+#      які очікують стандартні імена моделей:
+#      * OpenAI: `gpt-4o`, `gpt-4`, `o1`, `o3-mini`, `gpt-6-astra` -> мапляться на `gemini-3.8-flash-high`
+#      * DeepSeek: `deepseek-r1`, `deepseek-v3` -> мапляться на `gemini-3.8-flash-high`
+#      * Claude: `claude-3-5-sonnet`, `claude-3-7-sonnet` -> мапляться на `claude-sonnet-4-6`
+#    - УВАГА: Це НЕ окремі фізичні моделі OpenAI/DeepSeek, а прозорі аліаси сумісності,
+#      які надсилають запит до найпотужнішої доступної нативної моделі Antigravity.
+#
+# 4. ФОЛБЕК-МЕХАНІЗМИ ТА НЕВИПУЩЕНІ МОДЕЛІ:
+#    - Claude 5.5 (`claude-sonnet-5-5-*`, `claude-opus-5-5-*`):
+#      Оскільки Anthropic ще не випустила Claude 5.5 в API, ці аліаси автоматично
+#      й безпечно виконують фолбек на доступний `claude-sonnet-4-6` / `claude-opus-4-6-thinking`.
+#    - Gemini 4 Argon CloudCode API (`gemini-4-argon-*` без `-web-`):
+#      У CloudCode API модель Argon наразі має статус Unavailable (Google ще не запустила її в API).
+#      Тому запити до API-версії gemini-4-argon фолбечаться на `gemini-3.8-flash-high`.
+#      Якщо потрібен саме справжній Argon — слід обирати `gemini-4-argon-web-*` із розділу Web!
+# ==============================================================================
 
 DEFAULT_MODEL = "gemini-3.8-flash-high"
 
 MODEL_ALIASES: dict[str, str] = {
-    # Gemini 4 Argon Aliases (Web Flagship & CloudCode)
+    # --------------------------------------------------------------------------
+    # 1. Gemini 4 Argon (API-аліаси: якщо надходять без -web, фолбечаться на 3.8 Flash,
+    #    оскільки Google CloudCode API ще не відкрив доступ до Argon)
+    # --------------------------------------------------------------------------
     "gemini-4-argon": "gemini-4-argon",
     "gemini-4-argon-high": "gemini-4-argon-high",
     "gemini-4-argon-medium": "gemini-4-argon-medium",
@@ -95,7 +134,10 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
     "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
 
-    # Gemini Web Direct Aliases
+    # --------------------------------------------------------------------------
+    # 2. МОДЕЛІ GEMINI WEB (Маршрутизуються ВИКЛЮЧНО через веб-сесію gemini.google.com)
+    #    Ці моделі працюють через браузер і не використовують CloudCode API.
+    # --------------------------------------------------------------------------
     "gemini-4-argon-web": "gemini-4-argon-web-high",
     "gemini-4-argon-web-high": "gemini-4-argon-web-high",
     "gemini-4-argon-web-medium": "gemini-4-argon-web-medium",
@@ -117,7 +159,9 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-3.5-flash-lite-web-medium": "gemini-3.5-flash-lite-web-medium",
     "gemini-3.5-flash-lite-web-low": "gemini-3.5-flash-lite-web-low",
 
-    # Claude Aliases
+    # --------------------------------------------------------------------------
+    # 3. ОФІЦІЙНІ 3P МОДЕЛІ CLAUDE В ANTIGRAVITY (Підтримуються нативно в API)
+    # --------------------------------------------------------------------------
     "claude": "claude-sonnet-4-6",
     "claude-sonnet-4-6": "claude-sonnet-4-6",
     "claude-sonnet-4.6": "claude-sonnet-4-6",
@@ -138,7 +182,11 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-3.5-haiku": "gemini-3.1-flash-lite",
     "claude-3-haiku": "gemini-3.1-flash-lite",
 
-    # Claude 5.5 Aliases
+    # --------------------------------------------------------------------------
+    # 4. ЕКСПЕРИМЕНТАЛЬНІ АЛІАСИ CLAUDE 5.5
+    #    (Оскільки Anthropic ще не запустила 5.5 в API, ці аліаси прозоро й
+    #     безпечно виконують фолбек на доступний Sonnet 4.6 / Opus 4.6 Thinking)
+    # --------------------------------------------------------------------------
     "claude-5-5": "claude-sonnet-5-5-high",
     "claude-5.5": "claude-sonnet-5-5-high",
     "claude-sonnet-5-5": "claude-sonnet-5-5-high",
@@ -166,7 +214,11 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-5-5-opus": "claude-opus-5-5-high",
     "claude-5.5-opus": "claude-opus-5-5-high",
 
-    # OpenAI Codex CLI Model Aliases
+    # --------------------------------------------------------------------------
+    # 5. СУМІСНІСТЬ З OPENAI CODEX CLI ТА СТАНДАРТНИМИ OPENAI МОДЕЛЯМИ
+    #    (Ці аліаси існують виключно для сумісності з клієнтами типу Cursor/Cline;
+    #     вони мапляться на нативний працездатний флагман Gemini 3.8 Flash)
+    # --------------------------------------------------------------------------
     "gpt-6-astra": "gemini-3.8-flash-high",
     "gpt-6": "gemini-3.8-flash-high",
     "gpt-5.6-sol": "gemini-3.8-flash-high",
@@ -180,8 +232,6 @@ MODEL_ALIASES: dict[str, str] = {
     "gpt-daybreak-blue-latest": "gemini-3.8-flash-high",
     "gpt-daybreak-red-latest": "gemini-3.8-flash-high",
     "codex-auto-review": "gemini-3.1-flash-lite",
-
-    # OpenAI Aliases -> mapped to highest reasoning default (Gemini 3.8 Flash High)
     "gpt-4o": "gemini-3.8-flash-high",
     "gpt-4o-mini": "gemini-3.1-flash-lite",
     "gpt-4-turbo": "gemini-3.8-flash-high",
@@ -193,11 +243,15 @@ MODEL_ALIASES: dict[str, str] = {
     "gpt-oss-120b": "gpt-oss-120b-medium",
     "gpt-oss-120b-medium": "gpt-oss-120b-medium",
 
-    # DeepSeek / Open Source Aliases
+    # --------------------------------------------------------------------------
+    # 6. СУМІСНІСТЬ З DEEPSEEK (Аліаси мапляться на Gemini 3.8 Flash High)
+    # --------------------------------------------------------------------------
     "deepseek-r1": "gemini-3.8-flash-high",
     "deepseek-v3": "gemini-3.8-flash-high",
 
-    # DeepAgent Swarm Presets
+    # --------------------------------------------------------------------------
+    # 7. DEEPAGENT SWARM PRESETS (Автономний пресет рою агентів із 64k thinking)
+    # --------------------------------------------------------------------------
     "deepagent": "gemini-3.8-flash-deepagent",
     "deep-agent": "gemini-3.8-flash-deepagent",
     "gemini-deepagent": "gemini-3.8-flash-deepagent",
