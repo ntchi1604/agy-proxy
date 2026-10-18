@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from agy_proxy.claude_helper import (
     get_claude_dir,
+    get_claude_models,
     get_claude_status,
     restore_claude,
     setup_claude,
@@ -95,6 +96,14 @@ class TestClaudeHelper(unittest.TestCase):
         self.assertTrue(status2["configured"])
         self.assertTrue(status2["has_auth_token"])
         self.assertIn("127.0.0.1", status2["base_url"])
+
+    def test_get_claude_models(self):
+        models = get_claude_models()
+        self.assertIn("claude-sonnet-4-6", models)
+        self.assertIn("claude-opus-4-6-thinking", models)
+        self.assertIn("claude-3-7-sonnet", models)
+        self.assertIn("anthropic.gemini-3.8-flash-high", models)
+        self.assertEqual(models["claude-sonnet-4-6"]["effortLevel"], "high")
 
 
 if __name__ == "__main__":

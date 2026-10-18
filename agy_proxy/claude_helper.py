@@ -14,6 +14,50 @@ from typing import Any
 logger = logging.getLogger("agy_proxy.claude_helper")
 
 
+CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
+    "claude-sonnet-4-6": {
+        "displayName": "Claude Sonnet 4.6 (Thinking)",
+        "description": "Anthropic flagship hybrid model with extended thinking (Default 3P)",
+        "effortLevel": "high",
+    },
+    "claude-opus-4-6-thinking": {
+        "displayName": "Claude Opus 4.6 (Thinking)",
+        "description": "Anthropic high-capability reasoning model with thinking",
+        "effortLevel": "high",
+    },
+    "claude-3-7-sonnet": {
+        "displayName": "Claude 3.7 Sonnet",
+        "description": "Standard alias mapping to Claude Sonnet 4.6 with hybrid reasoning",
+        "effortLevel": "high",
+    },
+    "claude-3-5-sonnet": {
+        "displayName": "Claude 3.5 Sonnet",
+        "description": "Standard alias mapping to Claude Sonnet 4.6",
+        "effortLevel": "medium",
+    },
+    "claude-3-5-haiku": {
+        "displayName": "Claude 3.5 Haiku",
+        "description": "Ultra fast lightweight model alias",
+        "effortLevel": "low",
+    },
+    "anthropic.gemini-3.8-flash-high": {
+        "displayName": "Gemini 3.8 Flash (High Reasoning)",
+        "description": "Google Flagship model with deep thinking & reasoning capabilities",
+        "effortLevel": "high",
+    },
+    "gemini-3.8-flash-deepagent": {
+        "displayName": "Gemini 3.8 Flash (DeepAgent Swarm)",
+        "description": "Autonomous multi-agent swarm preset with 64k thinking budget",
+        "effortLevel": "high",
+    },
+}
+
+
+def get_claude_models() -> dict[str, dict[str, str]]:
+    """Returns the dictionary of recommended models for Claude Code CLI integration."""
+    return CLAUDE_RECOMMENDED_MODELS
+
+
 def get_claude_dir(custom_dir: str | Path | None = None) -> Path:
     """Returns the base directory for Claude Code configuration (~/.claude)."""
     if custom_dir:
@@ -87,7 +131,8 @@ def setup_claude(
     if "modelSettings" not in data or not isinstance(data["modelSettings"], dict):
         data["modelSettings"] = {}
     if model not in data["modelSettings"]:
-        data["modelSettings"][model] = {"effortLevel": "high"}
+        effort = CLAUDE_RECOMMENDED_MODELS.get(model, {}).get("effortLevel", "high")
+        data["modelSettings"][model] = {"effortLevel": effort}
 
     try:
         with open(settings_file, "w", encoding="utf-8") as f:
@@ -103,6 +148,7 @@ def setup_claude(
             "backup_created": backup_created,
             "proxy_url": target_url,
             "model": model,
+            "available_models": list(CLAUDE_RECOMMENDED_MODELS.keys()),
         }
     except Exception as e:
         logger.error("Failed to write ~/.claude/settings.json: %s", e)
