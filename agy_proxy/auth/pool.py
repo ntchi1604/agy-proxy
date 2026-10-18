@@ -514,6 +514,7 @@ class AccountPool:
                         on_token_refreshed=self.save_accounts,
                         id_token=item.get("id_token"),
                         proxy_url=proxy_val,
+                        tier_info=item.get("tier_info"),
                     )
 
                     _restore_stats(acc, item)
@@ -827,6 +828,8 @@ class AccountPool:
                         "proxy_url": getattr(acc, "proxy_url", None),
                         "available_models": list((getattr(acc, "available_models", None) or {}).keys()),
                         "supports_claude_5_5": getattr(acc, "supports_claude_5_5", False),
+                        "tier_id": getattr(acc, "tier_id", "free-tier"),
+                        "tier_info": getattr(acc, "tier_info", {}),
                     }
                     sensitive = {
                         "refresh_token": acc.refresh_token,
@@ -1200,11 +1203,20 @@ class AccountPool:
                             allow_auto_routing=False,
                         )
                 if is_argon_model(norm_model):
-                    # No Gemini Web session active — raise a clear error instead of silently switching models.
-                    raise RuntimeError(
-                        f"Model {norm_model} requires an active Gemini Web session. "
-                        "Add one via 'agy-proxy accounts add --har <file.har>' or enable an existing gemini_web account."
-                    )
+                    fallback_m = get_argon_fallback_model(norm_model) or "gemini-3.8-flash-high"
+                    fallback_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m)]
+                    if fallback_pool:
+                        logger.warning(
+                            "[Model Fallback] Gemini Web session is not available for %s. Auto-routing to %s on available accounts to avoid interruption.",
+                            norm_model,
+                            fallback_m,
+                        )
+                        return self.get_candidate_accounts(
+                            model=fallback_m,
+                            specific_account_id=specific_account_id,
+                            preferred_account_id=preferred_account_id,
+                            allow_auto_routing=False,
+                        )
 
             is_3p = is_3p_model(norm_model)
             if is_3p:
@@ -1259,17 +1271,37 @@ class AccountPool:
                             allow_auto_routing=False,
                         )
                 if is_argon_model(norm_model):
-                    # All Gemini Web sessions are rate-limited — raise a clear error instead of silently switching models.
-                    raise RuntimeError(
-                        f"All Gemini Web accounts supporting {norm_model} have reached quota or rate limits. "
-                        "Wait for the rate limit to reset or add another gemini_web account."
-                    )
+                    fallback_m = get_argon_fallback_model(norm_model) or "gemini-3.8-flash-high"
+                    fb_pool = [
+                        a for a in self.accounts.values()
+                        if a.enabled and a.is_model_supported(fallback_m)
+                        and not a.is_rate_limited(fallback_m) and not a.is_quota_exhausted(fallback_m)
+                    ]
+                    if fb_pool:
+                        logger.warning(
+                            "[Model Fallback] ⚠️ All accounts supporting %s have reached quota or rate limits. 🔄 Auto-routing to %s to avoid interruption!",
+                            norm_model,
+                            fallback_m,
+                        )
+                        return self.get_candidate_accounts(
+                            model=fallback_m,
+                            specific_account_id=specific_account_id,
+                            preferred_account_id=preferred_account_id,
+                            allow_auto_routing=False,
+                        )
             # Fall back to accounts that are at least not rate limited, or all active accounts to allow retry
             not_rate_limited = [acc for acc in active_pool if not acc.is_rate_limited(norm_model)]
             available = not_rate_limited if not_rate_limited else list(active_pool)
 
-        # Prioritize full API accounts (consumer OAuth, API key) over reverse-engineered browser sessions (gemini_web)
-        auth_priority = {"consumer": 0, "api_key": 1, "gemini_web": 2}
+        from agy_proxy.models import is_argon_model, is_gemini_web_model
+        is_argon = is_argon_model(norm_model)
+        is_web = is_gemini_web_model(norm_model) or is_argon
+        if is_web:
+            # For Gemini Web or Gemini 4 Argon models, gemini_web browser session is the native engine
+            auth_priority = {"gemini_web": 0, "consumer": 1, "api_key": 2}
+        else:
+            # Prioritize full API accounts (consumer OAuth, API key) over reverse-engineered browser sessions (gemini_web)
+            auth_priority = {"consumer": 0, "api_key": 1, "gemini_web": 2}
 
         # If preferred sticky account is valid and healthy in available pool, place it FIRST
         if preferred_account_id and any(a.account_id == preferred_account_id for a in available):
@@ -1277,7 +1309,7 @@ class AccountPool:
             rest = [a for a in available if a.account_id != preferred_account_id]
             if self.routing_strategy == "primary":
                 rest.sort(key=lambda a: (
-                    0 if getattr(a, "is_primary", False) else 1,
+                    0 if (is_web and getattr(a, "auth_method", "") == "gemini_web") else (0 if getattr(a, "is_primary", False) else 1),
                     auth_priority.get(getattr(a, "auth_method", ""), 99),
                     a.last_used_timestamp,
                     a.total_requests,
@@ -1316,7 +1348,7 @@ class AccountPool:
 
         # Default "primary" mode: Sort by primary account first, then auth priority (OAuth -> API key -> Web), least recently used, and lowest total requests
         available.sort(key=lambda a: (
-            0 if getattr(a, "is_primary", False) else 1,
+            0 if (is_web and getattr(a, "auth_method", "") == "gemini_web") else (0 if getattr(a, "is_primary", False) else 1),
             auth_priority.get(getattr(a, "auth_method", ""), 99),
             a.last_used_timestamp,
             a.total_requests,

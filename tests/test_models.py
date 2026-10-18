@@ -22,6 +22,7 @@ from agy_proxy.models import (
     get_claude_5_5_upgrade_model,
     is_argon_model,
     get_argon_fallback_model,
+    is_gemini_web_model,
 )
 
 
@@ -70,6 +71,25 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(normalize_model_name("claude-opus-5.5"), "claude-opus-5-5-high")
         self.assertEqual(normalize_model_name("claude-opus-5.5-low"), "claude-opus-5-5-low")
         self.assertEqual(normalize_model_name("claude-opus-5.5-med"), "claude-opus-5-5-medium")
+        # Gemini Web and Thinking Models
+        self.assertEqual(normalize_model_name("gemini-4-argon-web-high"), "gemini-4-argon-web-high")
+        self.assertEqual(normalize_model_name("gemini-4-argon-web-medium"), "gemini-4-argon-web-medium")
+        self.assertEqual(normalize_model_name("gemini-4-argon-web-low"), "gemini-4-argon-web-low")
+        self.assertEqual(normalize_model_name("gemini-4-argon-web-task"), "gemini-4-argon-web-task")
+        self.assertEqual(normalize_model_name("gemini-3.8-flash-web-high"), "gemini-3.8-flash-web-high")
+        self.assertEqual(normalize_model_name("gemini-3.8-flash-web-medium"), "gemini-3.8-flash-web-medium")
+        self.assertEqual(normalize_model_name("gemini-3.8-flash-web-low"), "gemini-3.8-flash-web-low")
+        self.assertEqual(normalize_model_name("gemini-3.8-flash-web-task"), "gemini-3.8-flash-web-task")
+        self.assertEqual(normalize_model_name("gemini-3.1-pro-web-high"), "gemini-3.1-pro-web-high")
+        self.assertEqual(normalize_model_name("gemini-3.1-pro-web-medium"), "gemini-3.1-pro-web-medium")
+        self.assertEqual(normalize_model_name("gemini-3.1-pro-web-low"), "gemini-3.1-pro-web-low")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-web-high"), "gemini-3.5-flash-lite-web-high")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-web-medium"), "gemini-3.5-flash-lite-web-medium")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-web-low"), "gemini-3.5-flash-lite-web-low")
+        self.assertEqual(normalize_model_name("gemini-3.1-pro-medium"), "gemini-3.1-pro-medium")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-high"), "gemini-3.5-flash-lite-high")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-medium"), "gemini-3.5-flash-lite-medium")
+        self.assertEqual(normalize_model_name("gemini-3.5-flash-lite-low"), "gemini-3.5-flash-lite-low")
 
     def test_prefix_stripping(self):
         self.assertEqual(normalize_model_name("anthropic/claude-sonnet-4-6"), "claude-sonnet-4-6")
@@ -115,6 +135,19 @@ class TestModelNormalization(unittest.TestCase):
         self.assertTrue(is_3p_model("anthropic"))
         self.assertTrue(is_3p_model("gpt-oss-120b"))
         self.assertTrue(is_3p_model("gpt-oss-120b-medium"))
+
+    def test_is_gemini_web_model(self):
+        self.assertTrue(is_gemini_web_model("gemini-4-argon-web-high"))
+        self.assertTrue(is_gemini_web_model("gemini-3.8-flash-web-high"))
+        self.assertTrue(is_gemini_web_model("gemini-3.1-pro-web-low"))
+        self.assertTrue(is_gemini_web_model("gemini-3.5-flash-lite-web-medium"))
+        self.assertTrue(is_gemini_web_model("gemini-4-argon-web-task"))
+        self.assertTrue(is_gemini_web_model("gemini-3.8-flash-web-task"))
+        self.assertTrue(is_gemini_web_model("Gemini 4 Argon (Web) (High)"))
+        self.assertFalse(is_gemini_web_model("gemini-3.8-flash-high"))
+        self.assertFalse(is_gemini_web_model("gemini-3.7-flash-high"))
+        self.assertFalse(is_gemini_web_model("claude-sonnet-5-5-high"))
+        self.assertFalse(is_gemini_web_model(None))
 
     def test_claude_5_5_detection_and_fallback(self):
         # Detection

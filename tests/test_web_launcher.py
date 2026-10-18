@@ -85,7 +85,7 @@ def test_build_web_args_with_proxy(tmp_path):
         port=44741,
         csrf_token="my-token",
         proxy_url="http://127.0.0.1:8000",
-        ide_version="2.23.0",
+        ide_version="2.24.0",
     )
     assert str(fake_bin) in args
     assert "--standalone" in args
@@ -94,7 +94,7 @@ def test_build_web_args_with_proxy(tmp_path):
     assert "--subclient_type" in args
     assert "hub" in args
     assert "--override_ide_version" in args
-    assert "2.23.0" in args
+    assert "2.24.0" in args
     assert "--https_server_port" in args
     assert "44741" in args
     assert "--csrf_token" in args

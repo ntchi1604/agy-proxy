@@ -105,6 +105,13 @@ class TestDashboardTemplate(unittest.TestCase):
         self.assertIn("const accountIdToActivate = targetActivateAccountId;", html)
         self.assertIn("${encodeURIComponent(accountIdToActivate)}/activate-cli", html)
 
+    def test_dashboard_renders_tier_badges(self):
+        html = get_dashboard_html()
+        self.assertIn("AI Pro", html)
+        self.assertIn("Free Tier", html)
+        self.assertIn("AI Studio", html)
+        self.assertIn("g1-pro-tier", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -193,8 +193,10 @@ class AntigravityOAuthSession(AccountSession):
             if resp.status_code == 200:
                 data = resp.json()
                 self.tier_info = data.get("currentTier", {})
+                if "paidTier" in data and isinstance(data["paidTier"], dict):
+                    self.tier_info["paidTier"] = data["paidTier"]
                 self.project_id = data.get("cloudaicompanionProject") or "aicode-consumers"
-                logger.info("[%s] Discovered project: %s (Tier: %s)", self.email, self.project_id, self.tier_info.get("name"))
+                logger.info("[%s] Discovered project: %s (Tier: %s / %s)", self.email, self.project_id, self.tier_id, self.tier_badge)
                 # Automatically ensure account is onboarded to grant backend serviceUsage permissions
                 await self.onboard_user(tier_id=self.tier_info.get("id", "free-tier"))
             else:
@@ -561,5 +563,8 @@ class AntigravityOAuthSession(AccountSession):
 
     def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
-        d["tier_name"] = self.tier_info.get("name", "Antigravity")
+        d["tier_id"] = self.tier_id
+        d["tier_badge"] = self.tier_badge
+        d["has_g1_credits"] = self.has_g1_credits
+        d["tier_name"] = self.tier_info.get("name") or self.tier_badge
         return d

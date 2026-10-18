@@ -165,6 +165,18 @@ def test_enhance_available_models_resilience():
     assert flash_caps["code"]["boolValue"] is True
 
 
+def test_enhance_load_code_assist():
+    from agy_proxy.experiments import enhance_load_code_assist
+    data = {
+        "currentTier": {"id": "free-tier"},
+        "ineligibleTiers": [{"tierId": "free-tier"}],
+    }
+    enhanced = enhance_load_code_assist(data)
+    assert enhanced["currentTier"]["id"] == "g1-pro-tier"
+    assert enhanced["currentTier"]["name"] == "Google AI Pro"
+    assert "ineligibleTiers" not in enhanced
+
+
 def test_experiments_status_and_overrides():
     status = get_experiments_status()
     assert "active" in status
@@ -298,20 +310,23 @@ def test_enhance_list_experiments_input_immutability():
     assert enhanced["flags"] != original_input["flags"]
 
 
-def test_v2_23_0_updates():
-    """Verify v2.23.0 User-Agent, new experiment IDs, and experimental flags."""
+def test_v2_24_0_updates():
+    """Verify v2.24.0 User-Agent, new experiment IDs, and experimental flags."""
     from agy_proxy.auth.constants import USER_AGENT
-    assert "2.23.0" in USER_AGENT
-    assert "cl=998057262" in USER_AGENT
+    assert "2.24.0" in USER_AGENT
+    assert "cl=1000335682" in USER_AGENT
 
     payload = get_default_experiments_payload()
     exp_ids = payload["experimentIds"]
-    assert 106596396 in exp_ids
-    assert 106834476 in exp_ids
-    assert 106838234 in exp_ids
-    assert 106544526 in exp_ids
+    assert 106712041 in exp_ids
+    assert 106761937 in exp_ids
+    assert 106793467 in exp_ids
+    assert 106863974 in exp_ids
 
     flags_dict = {f["name"]: f.get("boolValue") for f in payload["flags"] if "name" in f}
+    assert flags_dict.get("ambient_memory_si_enabled") is True
+    assert flags_dict.get("enable-browser-subagent-webview") is False
+    assert flags_dict.get("enable-citc-workspace-hygiene-rule") is True
     assert flags_dict.get("enable-swarm-monitor") is True
     assert flags_dict.get("enable-resource-manager") is True
     assert flags_dict.get("enable-fast-output-close") is True

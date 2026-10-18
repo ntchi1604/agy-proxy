@@ -10,8 +10,10 @@ import json
 import logging
 import os
 import random
+import re
 import socket
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 import hashlib
@@ -42,6 +44,7 @@ from agy_proxy.models import (
     ModelListResponse,
     VALID_CLOUDCODE_MODELS,
     PROXY_CATALOG_MODELS,
+    CLOUDCODE_PLACEHOLDER_MAP,
     OpenAIChatRequest,
     OpenAIEmbeddingRequest,
     normalize_model_name,
@@ -60,6 +63,7 @@ from agy_proxy.experiments import (
     enhance_list_experiments,
     enhance_available_models,
     enhance_quota_summary,
+    enhance_load_code_assist,
     get_default_experiments_payload,
     get_experiments_status,
     save_experiment_config,
@@ -92,7 +96,20 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
             meta = PROXY_CATALOG_MODELS.get(m, {})
             disp = meta.get("displayName", m)
             max_tok = meta.get("maxTokens", 1048576)
-            models_dict[m] = {
+            supports_thinking = (
+                any(k in m for k in ("high", "medium", "low", "thinking", "tiered"))
+                or "argon" in m
+            )
+            thinking_budget = -1
+            thinking_level = 2
+            if "low" in m:
+                thinking_budget = 1000
+                thinking_level = 1
+            elif "medium" in m or "med" in m:
+                thinking_budget = 4000
+                thinking_level = 2
+
+            m_entry = {
                 "displayName": disp,
                 "maxTokens": max_tok,
                 "capabilities": {
@@ -108,10 +125,22 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
                     }
                 },
             }
+            if m in CLOUDCODE_PLACEHOLDER_MAP:
+                m_entry["model"] = CLOUDCODE_PLACEHOLDER_MAP[m]
+            if supports_thinking:
+                m_entry["supportsThinking"] = True
+                m_entry["thinkingBudget"] = thinking_budget
+                m_entry["minThinkingBudget"] = 32
+                m_entry["thinkingLevel"] = thinking_level
+            models_dict[m] = m_entry
         sorted_model_ids = [
             "gemini-3.8-flash-high",
             "gemini-3.8-flash-medium",
             "gemini-3.8-flash-low",
+            "gemini-4-argon-high",
+            "gemini-4-argon-medium",
+            "gemini-4-argon-low",
+            "gemini-4-argon",
             "gemini-3.7-flash-high",
             "gemini-3.7-flash-medium",
             "gemini-3.7-flash-low",
@@ -159,16 +188,16 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
     elif action_key == "loadCodeAssist":
         return {
             "currentTier": {
-                "id": "free-tier",
-                "name": "Antigravity",
-                "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+                "id": "g1-pro-tier",
+                "name": "Google AI Pro",
+                "description": "Google AI Pro Plan",
                 "privacyNotice": {"showNotice": False},
             },
             "allowedTiers": [
                 {
-                    "id": "free-tier",
-                    "name": "Antigravity",
-                    "description": "Gemini-powered code suggestions and chat in multiple IDEs",
+                    "id": "g1-pro-tier",
+                    "name": "Google AI Pro",
+                    "description": "Google AI Pro Plan",
                     "isDefault": True,
                 },
                 {
@@ -324,6 +353,8 @@ def _process_passthrough_metadata(action_key: str, data: dict[str, Any]) -> dict
         return enhance_available_models(data)
     elif action_key == "retrieveUserQuotaSummary":
         return enhance_quota_summary(data)
+    elif action_key == "loadCodeAssist":
+        return enhance_load_code_assist(data)
     return data
 
 
@@ -2558,10 +2589,15 @@ def create_app(
                         elif r_lower in ("model", "assistant"):
                             item["role"] = "model"
 
+        from agy_proxy.models import (
+            normalize_model_name,
+            is_argon_model,
+            is_gemini_web_model,
+            get_argon_fallback_model,
+        )
         req_model = DEFAULT_MODEL
         if isinstance(body, dict):
             req_model = body.get("model") or body.get("request", {}).get("model") or DEFAULT_MODEL
-            from agy_proxy.models import normalize_model_name
             req_model = normalize_model_name(req_model)
             if "model" in body:
                 body["model"] = req_model
@@ -2607,11 +2643,26 @@ def create_app(
                 logger.debug("Failed to get candidate accounts: %s", e)
                 candidates = [a for a in pool.accounts.values() if getattr(a, "enabled", True)]
 
-            # Prioritize target_account if requested and healthy
-            if target_account and target_account in candidates:
-                candidates = [target_account] + [a for a in candidates if a.account_id != target_account.account_id]
-            elif target_account and getattr(target_account, "enabled", True):
-                candidates = [target_account] + candidates
+            # For Gemini Web or Gemini 4 Argon requests: prioritize accounts with Gemini Web session or verified Argon access
+            if is_gemini_web_model(req_model) or is_argon_model(req_model):
+                web_ready = [
+                    a for a in candidates
+                    if getattr(a, "auth_method", "") == "gemini_web" or getattr(a, "has_argon_access", False)
+                ]
+                if web_ready:
+                    candidates = web_ready + [a for a in candidates if a not in web_ready]
+
+            # Prioritize target_account if requested and healthy (unless model is Argon/Web and target lacks capability)
+            target_can_handle = (
+                (not is_argon_model(req_model) and not is_gemini_web_model(req_model))
+                or getattr(target_account, "auth_method", "") == "gemini_web"
+                or getattr(target_account, "has_argon_access", False)
+            )
+            if target_account and target_can_handle:
+                if target_account in candidates:
+                    candidates = [target_account] + [a for a in candidates if a.account_id != target_account.account_id]
+                elif getattr(target_account, "enabled", True):
+                    candidates = [target_account] + candidates
         else:
             if target_account:
                 candidates = [target_account]
@@ -2621,6 +2672,8 @@ def create_app(
                     candidates = [primary_acc]
                 else:
                     candidates = [a for a in pool.accounts.values() if getattr(a, "enabled", True)]
+            # Metadata passthrough endpoints cannot use Gemini Web browser sessions
+            candidates = [a for a in candidates if getattr(a, "auth_method", "") != "gemini_web"]
 
         # Action key normalized
         action_key = (action or action_path or "").split("?")[0].strip(":")
@@ -2671,6 +2724,289 @@ def create_app(
                 if "request" in candidate_body and isinstance(candidate_body["request"], dict):
                     if "project" in candidate_body["request"]:
                         candidate_body["request"]["project"] = acc_proj
+
+            # ── Gemini Web browser session handling for generation ────────────────
+            if getattr(acc, "auth_method", "") == "gemini_web":
+                if not is_generation:
+                    continue
+
+                from agy_proxy.auth.gemini_web import GeminiWebSession
+                if not isinstance(acc, GeminiWebSession):
+                    continue
+
+                # Ensure cookies & AT token are available
+                at_token = await acc.get_at_token()
+                if not at_token and acc.cdp_port:
+                    logger.info("[%s] GeminiWeb AT token missing, refreshing via CDP...", acc_label)
+                    await acc.refresh_cookies_from_browser()
+                    at_token = await acc.get_at_token(force_refresh=True)
+
+                if not at_token:
+                    logger.warning("[%s] GeminiWeb AT token unavailable, failing over to next account...", acc_label)
+                    continue
+
+                session_key = None
+                if isinstance(candidate_body, dict):
+                    session_key = (
+                        candidate_body.get("requestId")
+                        or candidate_body.get("request", {}).get("sessionId")
+                        or candidate_body.get("sessionId")
+                    )
+
+                req_dict = candidate_body.get("request", candidate_body) if isinstance(candidate_body, dict) else {}
+                declared_tools = req_dict.get("tools", [])
+                has_tools = bool(declared_tools)
+
+                # Initialize stream generator with continuation support
+                gen_success = False
+                gen = None
+                first_chunk = None
+
+                for retry_turn in range(2):
+                    sess_ctx = acc.get_session_context(session_key)
+                    is_continuation = bool(sess_ctx.get("conv_id") and sess_ctx.get("resp_id")) and retry_turn == 0
+                    user_message_text = CloudCodeClient._format_gemini_web_prompt(candidate_body, is_continuation=is_continuation)
+
+                    try:
+                        temp_gen = acc.stream_generate(user_message_text, model=req_model, session_id=session_key)
+                        first_chunk = await temp_gen.__anext__()
+                        if first_chunk.get("type") == "error":
+                            err_msg = first_chunk.get("message", "Unknown error")
+                            if is_continuation and any(kw in err_msg for kw in ("HTTP 400", "expired", "not found")):
+                                logger.warning("[%s] GeminiWeb continuation failed (%s), retrying fresh conversation...", acc_label, err_msg)
+                                acc.reset_conversation(session_key)
+                                continue
+                            raise RuntimeError(err_msg)
+                        gen = temp_gen
+                        gen_success = True
+                        break
+                    except StopAsyncIteration:
+                        gen_success = True
+                        first_chunk = {"type": "done", "text": ""}
+                        break
+                    except Exception as gw_err:
+                        if is_continuation and retry_turn == 0:
+                            logger.warning("[%s] GeminiWeb continuation error (%s), resetting and retrying...", acc_label, gw_err)
+                            acc.reset_conversation(session_key)
+                            continue
+                        logger.warning("[%s] GeminiWeb generation init error: %s", acc_label, gw_err)
+                        break
+
+                if not gen_success or first_chunk is None:
+                    if not is_last:
+                        logger.warning("[%s] GeminiWeb failed to generate, failing over to next candidate account...", acc_label)
+                        continue
+                    else:
+                        logger.error("[%s] GeminiWeb generation failed and no more candidates available", acc_label)
+                        return JSONResponse(status_code=500, content={"error": {"code": 500, "message": "GeminiWeb generation failed", "status": "INTERNAL"}})
+
+                # Success! Record usage
+                acc.total_requests = getattr(acc, "total_requests", 0) + 1
+                acc.last_used_timestamp = time.time()
+                acc.last_used_model = req_model
+                acc.last_client_type = "Gemini Web"
+
+                is_sse = query_params.get("alt") == "sse" or "alt=sse" in str(request.url)
+
+                async def sse_stream_gemini_web():
+                    accumulated_text = ""
+                    parts_to_process = [first_chunk]
+
+                    async def chunk_source():
+                        for p in parts_to_process:
+                            yield p
+                        if gen is not None:
+                            async for ch in gen:
+                                yield ch
+
+                    try:
+                        async for chunk in chunk_source():
+                            if chunk.get("type") == "error":
+                                raise RuntimeError(chunk.get("message", "Stream error"))
+                            elif chunk.get("type") == "thinking":
+                                event = {
+                                    "response": {
+                                        "candidates": [{
+                                            "content": {
+                                                "role": "model",
+                                                "parts": [{"thought": True, "text": chunk.get("text", "")}],
+                                            },
+                                            "finishReason": None,
+                                            "index": 0,
+                                        }],
+                                        "modelVersion": req_model,
+                                    }
+                                }
+                                yield f"data: {json.dumps(event)}\n\n"
+                            elif chunk.get("type") == "text":
+                                if has_tools:
+                                    accumulated_text += chunk.get("text", "")
+                                else:
+                                    event = {
+                                        "response": {
+                                            "candidates": [{
+                                                "content": {
+                                                    "role": "model",
+                                                    "parts": [{"text": chunk.get("text", "")}],
+                                                },
+                                                "finishReason": None,
+                                                "index": 0,
+                                            }],
+                                            "modelVersion": req_model,
+                                        }
+                                    }
+                                    yield f"data: {json.dumps(event)}\n\n"
+                            elif chunk.get("type") == "done":
+                                if has_tools:
+                                    preamble, tool_call = CloudCodeClient._extract_gemini_web_tool_call(accumulated_text, declared_tools)
+                                    clean_preamble = re.sub(r"(?:```)?(?:json)?\s*$", "", (preamble or "").strip(), flags=re.IGNORECASE).strip()
+                                    if clean_preamble:
+                                        event_preamble = {
+                                            "response": {
+                                                "candidates": [{
+                                                    "content": {
+                                                        "role": "model",
+                                                        "parts": [{"text": clean_preamble}],
+                                                    },
+                                                    "finishReason": None,
+                                                    "index": 0,
+                                                }],
+                                                "modelVersion": req_model,
+                                            }
+                                        }
+                                        yield f"data: {json.dumps(event_preamble)}\n\n"
+
+                                    if tool_call:
+                                        call_id = f"call_{uuid.uuid4().hex[:8]}"
+                                        logger.info(
+                                            "[%s] [GeminiWeb] Synthesized tool call: %s(%s)",
+                                            acc_label,
+                                            tool_call["name"],
+                                            list(tool_call.get("arguments", {}).keys()),
+                                        )
+                                        event_tool = {
+                                            "response": {
+                                                "candidates": [{
+                                                    "content": {
+                                                        "role": "model",
+                                                        "parts": [{
+                                                            "functionCall": {
+                                                                "name": tool_call["name"],
+                                                                "args": tool_call.get("arguments", {}),
+                                                                "id": call_id,
+                                                            }
+                                                        }],
+                                                    },
+                                                    "finishReason": "STOP",
+                                                    "index": 0,
+                                                }],
+                                                "usageMetadata": {
+                                                    "promptTokenCount": 0,
+                                                    "candidatesTokenCount": 0,
+                                                    "totalTokenCount": 0,
+                                                },
+                                                "modelVersion": req_model,
+                                            }
+                                        }
+                                        yield f"data: {json.dumps(event_tool)}\n\n"
+                                    else:
+                                        clean_acc = accumulated_text.strip()
+                                        event_text = {
+                                            "response": {
+                                                "candidates": [{
+                                                    "content": {
+                                                        "role": "model",
+                                                        "parts": [{"text": clean_acc if clean_acc else "Task completed."}],
+                                                    },
+                                                    "finishReason": "STOP",
+                                                    "index": 0,
+                                                }],
+                                                "usageMetadata": {
+                                                    "promptTokenCount": 0,
+                                                    "candidatesTokenCount": 0,
+                                                    "totalTokenCount": 0,
+                                                },
+                                                "modelVersion": req_model,
+                                            }
+                                        }
+                                        yield f"data: {json.dumps(event_text)}\n\n"
+                                else:
+                                    event = {
+                                        "response": {
+                                            "candidates": [{
+                                                "content": {
+                                                    "role": "model",
+                                                    "parts": [{"text": ""}],
+                                                },
+                                                "finishReason": "STOP",
+                                                "index": 0,
+                                            }],
+                                            "usageMetadata": {
+                                                "promptTokenCount": 0,
+                                                "candidatesTokenCount": 0,
+                                                "totalTokenCount": 0,
+                                            },
+                                            "modelVersion": req_model,
+                                        }
+                                    }
+                                    yield f"data: {json.dumps(event)}\n\n"
+                    except Exception as stream_err:
+                        logger.warning("[%s] GeminiWeb SSE streaming error: %s", acc_label, stream_err)
+                        err_event = {
+                            "error": {
+                                "code": 500,
+                                "message": f"GeminiWeb stream error: {stream_err}",
+                                "status": "INTERNAL",
+                            }
+                        }
+                        yield f"data: {json.dumps(err_event)}\n\n"
+
+                if is_sse:
+                    return StreamingResponse(
+                        sse_stream_gemini_web(),
+                        media_type="text/event-stream",
+                        headers={
+                            "Content-Type": "text/event-stream",
+                            "Cache-Control": "no-cache",
+                            "Connection": "keep-alive",
+                            "X-Accel-Buffering": "no",
+                        },
+                    )
+                else:
+                    return JSONResponse(status_code=200, content={
+                        "response": {
+                            "candidates": [{
+                                "content": {"role": "model", "parts": [{"text": accumulated_text or first_chunk.get("text", "")}]},
+                                "finishReason": "STOP",
+                                "index": 0,
+                            }],
+                            "modelVersion": req_model,
+                        }
+                    })
+
+            # ── Non-gemini_web accounts: normalize web alias and fallback Argon if needed ──
+            if getattr(acc, "auth_method", "") != "gemini_web":
+                target_m = req_model
+                if "-web" in target_m or "_web" in target_m:
+                    clean_m = target_m.replace("-web", "").replace("_web", "")
+                    clean_m = normalize_model_name(clean_m)
+                    target_m = clean_m
+                    if isinstance(candidate_body, dict):
+                        candidate_body["model"] = clean_m
+                        if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                            candidate_body["request"]["model"] = clean_m
+
+                if is_argon_model(target_m):
+                    has_argon = getattr(acc, "has_argon_access", False) or (
+                        getattr(acc, "available_models", {}) and any("argon" in m for m in acc.available_models)
+                    )
+                    if not has_argon:
+                        fallback_m = get_argon_fallback_model(target_m)
+                        logger.info("[%s] Account does not have Argon access. Auto-mapping %s -> %s", acc_label, target_m, fallback_m)
+                        if isinstance(candidate_body, dict):
+                            candidate_body["model"] = fallback_m
+                            if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                                candidate_body["request"]["model"] = fallback_m
 
             try:
                 headers = await acc.get_auth_headers()

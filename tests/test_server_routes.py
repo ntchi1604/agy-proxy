@@ -528,6 +528,104 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(contents[1]["role"], "user")
         self.assertEqual(contents[2]["role"], "model")
 
+    async def test_cloudcode_passthrough_gemini_web_streaming(self):
+        from agy_proxy.auth import GeminiWebSession
+        gw = GeminiWebSession(
+            account_id="gw_test_acc",
+            email="gemini-web@browser.local",
+            cookies={"__Secure-1PSID": "test_sid"},
+        )
+        gw.enabled = True
+        gw.get_at_token = unittest.mock.AsyncMock(return_value="test_at_token")
+
+        async def mock_stream_gen(*args, **kwargs):
+            yield {"type": "thinking", "text": "Analyzing request..."}
+            yield {"type": "text", "text": "Hello from Gemini 4 Argon!"}
+            yield {"type": "done", "conv_id": "c1", "resp_id": "r1", "text": "Hello from Gemini 4 Argon!"}
+
+        gw.stream_generate = mock_stream_gen
+        self.pool.accounts = {"gw_test_acc": gw}
+
+        payload = {
+            "model": "gemini-4-argon",
+            "request": {
+                "contents": [
+                    {"role": "user", "parts": [{"text": "Hello"}]}
+                ]
+            }
+        }
+        resp = await self.client.post("/v1internal:streamGenerateContent?alt=sse", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/event-stream", resp.headers["content-type"])
+        text = resp.text
+        self.assertIn("Analyzing request...", text)
+        self.assertIn("Hello from Gemini 4 Argon!", text)
+
+    async def test_cloudcode_passthrough_gemini_web_streaming_with_tools(self):
+        from agy_proxy.auth import GeminiWebSession
+        gw = GeminiWebSession(
+            account_id="gw_test_acc2",
+            email="gemini-web@browser.local",
+            cookies={"__Secure-1PSID": "test_sid"},
+        )
+        gw.enabled = True
+        gw.get_at_token = unittest.mock.AsyncMock(return_value="test_at_token")
+
+        tool_json_output = (
+            "Investigating Current Context\n\n"
+            "json\n"
+            "{\n"
+            '  "name": "run_command",\n'
+            '  "arguments": {\n'
+            '    "CommandLine": "lscpu | grep -E \'Model name|CPU\\\\(s\\\\)|Thread\'"\n'
+            "  }\n"
+            "}"
+        )
+
+        async def mock_stream_gen(*args, **kwargs):
+            yield {"type": "thinking", "text": "Checking CPU..."}
+            yield {"type": "text", "text": tool_json_output}
+            yield {"type": "done", "conv_id": "c1", "resp_id": "r1", "text": tool_json_output}
+
+        gw.stream_generate = mock_stream_gen
+        self.pool.accounts = {"gw_test_acc2": gw}
+
+        payload = {
+            "model": "gemini-4-argon",
+            "request": {
+                "contents": [
+                    {"role": "user", "parts": [{"text": "що за пк?"}]}
+                ],
+                "tools": [
+                    {
+                        "functionDeclarations": [
+                            {
+                                "name": "run_command",
+                                "description": "Run command",
+                                "parameters": {
+                                    "type": "OBJECT",
+                                    "properties": {
+                                        "CommandLine": {"type": "STRING"},
+                                    },
+                                    "required": ["CommandLine"],
+                                },
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        resp = await self.client.post("/v1internal:streamGenerateContent?alt=sse", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/event-stream", resp.headers["content-type"])
+        text = resp.text
+        self.assertNotIn("GeminiWeb stream error", text)
+        self.assertNotIn("name 're' is not defined", text)
+        self.assertIn("functionCall", text)
+        self.assertIn("run_command", text)
+        self.assertIn("call_", text)
+        self.assertIn('"finishReason": "STOP"', text)
+
     async def test_cloudcode_passthrough_failover_on_error(self):
         acc1 = AccountSession(
             account_id="acc_fail1",

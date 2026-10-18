@@ -1692,11 +1692,12 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(models, dict):
         return data
 
+    # 3. Enhance capabilities & modelExperiments on all models
     for model_id, model_data in models.items():
         if not isinstance(model_data, dict):
             continue
 
-        # 1. Capabilities (chat, code, streaming, toolCalling)
+        # Capabilities (chat, code, streaming, toolCalling)
         caps = model_data.get("capabilities")
         if isinstance(caps, dict):
             for section in caps.values():
@@ -1709,7 +1710,7 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                 elif isinstance(section, bool):
                     pass
 
-        # 2. ModelExperiments (extended context, reasoning, deep research)
+        # ModelExperiments (extended context, reasoning, deep research)
         model_exp = model_data.get("modelExperiments")
         if isinstance(model_exp, dict):
             experiments = model_exp.get("experiments")
@@ -1717,6 +1718,62 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                 for exp_name, exp_val in experiments.items():
                     if isinstance(exp_val, dict) and "boolValue" in exp_val:
                         exp_val["boolValue"] = True
+
+    # Unlock Gemini 4 Argon if returned as disabled for consumer tier
+    if "gemini-4-argon-disabled" in models and "gemini-4-argon" not in models:
+        argon_entry = copy.deepcopy(models["gemini-4-argon-disabled"])
+        argon_entry["recommended"] = True
+        argon_entry.pop("tagTitle", None)
+        argon_entry.pop("tagDescription", None)
+        models["gemini-4-argon"] = argon_entry
+
+    # 4. Ensure all proxy catalog models are exposed with placeholder mappings
+    try:
+        from agy_proxy.models import VALID_CLOUDCODE_MODELS, PROXY_CATALOG_MODELS, CLOUDCODE_PLACEHOLDER_MAP
+        for m in sorted(list(VALID_CLOUDCODE_MODELS)):
+            if m not in models:
+                meta = PROXY_CATALOG_MODELS.get(m, {})
+                disp = meta.get("displayName", m)
+                max_tok = meta.get("maxTokens", 1048576)
+                supports_thinking = (
+                    any(k in m for k in ("high", "medium", "low", "thinking", "tiered"))
+                    or "argon" in m
+                )
+                thinking_budget = -1
+                thinking_level = 2
+                if "low" in m:
+                    thinking_budget = 1000
+                    thinking_level = 1
+                elif "medium" in m or "med" in m:
+                    thinking_budget = 4000
+                    thinking_level = 2
+
+                m_entry = {
+                    "displayName": disp,
+                    "maxTokens": max_tok,
+                    "capabilities": {
+                        "chat": {"boolValue": True},
+                        "code": {"boolValue": True},
+                        "streaming": {"boolValue": True},
+                        "toolCalling": {"boolValue": True},
+                    },
+                    "modelExperiments": {
+                        "experiments": {
+                            "extended_context": {"boolValue": True},
+                            "reasoning": {"boolValue": True},
+                        }
+                    },
+                }
+                if m in CLOUDCODE_PLACEHOLDER_MAP:
+                    m_entry["model"] = CLOUDCODE_PLACEHOLDER_MAP[m]
+                if supports_thinking:
+                    m_entry["supportsThinking"] = True
+                    m_entry["thinkingBudget"] = thinking_budget
+                    m_entry["minThinkingBudget"] = 32
+                    m_entry["thinkingLevel"] = thinking_level
+                models[m] = m_entry
+    except Exception as e:
+        logger.debug("Failed to append extra proxy models: %s", e)
 
     return data
 
@@ -1749,6 +1806,26 @@ def enhance_quota_summary(data: dict[str, Any]) -> dict[str, Any]:
             b["disabled"] = False
             b["description"] = "Full quota managed and replenished by Antigravity multi-account pool."
 
+    return data
+
+
+def enhance_load_code_assist(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Virtualizes user tier for language_server so that Google AI Pro capabilities
+    (such as Gemini 4 Argon) are enabled without restrictive free-tier blocks.
+    """
+    if not isinstance(data, dict):
+        return data
+
+    data = copy.deepcopy(data)
+    data["currentTier"] = {
+        "id": "g1-pro-tier",
+        "name": "Google AI Pro",
+        "description": "Google AI Pro Plan",
+        "privacyNotice": {"showNotice": False},
+    }
+    data["gcpManaged"] = False
+    data.pop("ineligibleTiers", None)
     return data
 
 

@@ -166,18 +166,20 @@ echo -e "📦 Web bundle directory:   ${BOLD}${BUNDLE_DIR}${NC}"
 
 # Check if extraction / patching is required (auto-repatch if fix is missing)
 NEEDS_EXTRACT=0
-if [ "$FORCE_EXTRACT" -eq 1 ] || [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/main.js" ] || [ ! -f "$BUNDLE_DIR/index.html" ] || ! grep -q 'typeof a.getState==="function"' "$BUNDLE_DIR/main.js" 2>/dev/null; then
+if [ "$FORCE_EXTRACT" -eq 1 ] || [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/main.js" ] || [ ! -f "$BUNDLE_DIR/index.html" ] || [ ! -f "$BUNDLE_DIR/.patched" ] || ! grep -q 'restrictToCorpDomain:!1' "$BUNDLE_DIR/main.js" 2>/dev/null || ! grep -q 'agy.selectedModelLabel' "$BUNDLE_DIR/main.js" 2>/dev/null; then
     NEEDS_EXTRACT=1
 fi
 
 if [ "$NEEDS_EXTRACT" -eq 1 ]; then
     echo -e "\n${YELLOW}⚙️  Extracting embedded Web UI zip and applying feature patches...${NC}"
     
-    python3 - << EOF
-import sys, os, zipfile, io, struct
+    export REAL_LS
+    export BUNDLE_DIR
+    python3 - << 'EOF'
+import sys, os, zipfile, io, struct, re
 
-binary_path = "$REAL_LS"
-out_dir = "$BUNDLE_DIR"
+binary_path = os.environ["REAL_LS"]
+out_dir = os.environ["BUNDLE_DIR"]
 os.makedirs(out_dir, exist_ok=True)
 
 # 1. Scan binary for embedded zip using EOCD signatures
@@ -225,49 +227,78 @@ if not os.path.isfile(main_js_path):
 with open(main_js_path, 'r', encoding='utf-8') as f:
     js = f.read()
 
-print("[*] Applying patches to main.js...")
+print("[*] Applying robust patches to main.js...")
 
-# Unlock Terminal domain restriction
-t1 = '{runtimeGating:{host:[Qi.Web],userCohort:["google"],customFlag:"enable-jetbox-terminal-v2",isInIframe:!1,isDevMode:!1},feature:{terminalCapabilities:cV,showCorpPasswordWarning:!0,restrictToCorpDomain:!0}}'
-r1 = '{runtimeGating:{host:[Qi.Web],userCohort:["google"],customFlag:"enable-jetbox-terminal-v2",isInIframe:!1,isDevMode:!1},feature:{terminalCapabilities:cV,showCorpPasswordWarning:!1,restrictToCorpDomain:!1}}'
-js = js.replace(t1, r1)
+# 1. Unlock Terminal domain restriction
+js = re.sub(r'restrictToCorpDomain:!0', 'restrictToCorpDomain:!1', js)
+js = re.sub(r'showCorpPasswordWarning:!0', 'showCorpPasswordWarning:!1', js)
+js = re.sub(
+    r'return\s+c\?\.restrictToCorpDomain&&typeof window!=="undefined"&&window\.location\.hostname!=="jetski\.corp\.google\.com"\?A\.createElement\(\w+,null\):A\.createElement\("div",\{"data-testid":"terminal-tab-surface"',
+    'return A.createElement("div",{"data-testid":"terminal-tab-surface"',
+    js
+)
 
-t2 = 'n=!!a?.restrictToCorpDomain&&\ntypeof window!=="undefined"&&window.location.hostname!=="jetski.corp.google.com"'
-r2 = 'n=!1'
-js = js.replace(t2, r2)
+# 2. Disable Google3 Chat Migration warning card
+js = re.sub(
+    r'projectV5Migration:\{feature:\{enabled:!1,regroupCard:null\},applyFirst:\[\{runtimeGating:\{userCohort:\["google"\]\},feature:\w+\}\]\}',
+    'projectV5Migration:{feature:{enabled:!1,regroupCard:null}}',
+    js
+)
+js = re.sub(r'(\b\w+=\["App","Jetski Chat"),"Regroup Google3 Chats"(\])', r'\1\2', js)
 
-t3 = 'return c?.restrictToCorpDomain&&typeof window!=="undefined"&&window.location.hostname!=="jetski.corp.google.com"?A.createElement(B5b,null):A.createElement("div",{"data-testid":"terminal-tab-surface"'
-r3 = 'return A.createElement("div",{"data-testid":"terminal-tab-surface"'
-js = js.replace(t3, r3)
+# 3. Disable broken Agent Team blaze run script
+js = re.sub(r'enabled:\w+\(\w+,"enable-agent-team"\)', 'enabled:void 0', js)
 
-# Disable Google3 Chat Migration warning card
-t4 = 'projectV5Migration:{feature:{enabled:!1,regroupCard:null},applyFirst:[{runtimeGating:{userCohort:["google"]},feature:Lcc}]}'
-r4 = 'projectV5Migration:{feature:{enabled:!1,regroupCard:null}}'
-js = js.replace(t4, r4)
+# 4. Robustness: Guard state/Zustand hooks against non-store arguments
+m_hook = re.search(r'=\s*a\s*=>\s*(\w+)\(a\?\?(\w+),\{selector:\w+\}\)', js)
+if m_hook:
+    hook_fn = m_hook.group(1)
+    dummy_store = m_hook.group(2)
+    target_hook = f'var {hook_fn}=(a,b,...c)=>{{var e=b.selector,f=b.equalityFn'
+    replacement_hook = f'var {hook_fn}=(a,b,...c)=>{{a=a&&typeof a.getState==="function"?a:{dummy_store};var e=b.selector,f=b.equalityFn'
+    js = js.replace(target_hook, replacement_hook)
+else:
+    js = re.sub(
+        r'var\s+(\w+)=\(a,b,\.\.\.c\)=>\{var e=b\.selector,f=b\.equalityFn',
+        r'var \1=(a,b,...c)=>{a=a&&typeof a.getState==="function"?a:(typeof Bi!=="undefined"?Bi:Ai);var e=b.selector,f=b.equalityFn',
+        js,
+        count=1
+    )
 
-t5 = 'zeb=["App","Jetski Chat","Regroup Google3 Chats"]'
-r5 = 'zeb=["App","Jetski Chat"]'
-js = js.replace(t5, r5)
+# 5. Remove broken Concierge / Chief of Staff archive
+js = re.sub(r'conciergeAgent:\{label:"Chief of Staff",description:[^}]+settingKey:\w+\.CONCIERGE_AGENT_ENABLED,customFlag:"labs-concierge-agent",visibilityCustomFlag:"enable-concierge-agent"\},', '', js)
+js = re.sub(r'conciergeAgent:\{feature:\{enabled:!1\},applyAll:\[.*?\}\]\}', 'conciergeAgent:{feature:{enabled:!1}}', js, flags=re.DOTALL)
 
-# Disable broken Agent Team blaze run script (use void 0 so Pj safely falls back to Ai dummy store)
-js = js.replace('enabled:nk(L,"enable-agent-team")', 'enabled:void 0')
+# 6. Inject real proxied models and fix model selection
+old_tk = r'var tk=a=>a\.modelOrAlias\?\{label:a\.label,value:a\.modelOrAlias\.choice\.case==="model"\?a\.modelOrAlias\.choice\.value:I\.Model\.UNSPECIFIED,modelAlias:a\.modelOrAlias\.choice\.case==="alias"\?a\.modelOrAlias\.choice\.value:void 0'
+new_tk = r'var tk=a=>a.modelOrAlias?{label:a.label,value:a.value??(a.modelOrAlias.choice.case==="model"?a.modelOrAlias.choice.value:(typeof MODEL_ENUM_MAP!=="undefined"&&MODEL_ENUM_MAP[a.modelId||a.label]?MODEL_ENUM_MAP[a.modelId||a.label]:I.Model.UNSPECIFIED)),modelAlias:a.modelAlias||(a.modelOrAlias.choice.case==="alias"?a.modelOrAlias.choice.value:a.modelId)'
+js = re.sub(old_tk, new_tk, js)
 
-# Robustness: Guard Mj and Pj hooks against non-store arguments (e.g. boolean flags, null, undefined)
-t_mj = 'var Mj=(a,b,...c)=>{var e=b.selector,f=b.equalityFn'
-r_mj = 'var Mj=(a,b,...c)=>{a=a&&typeof a.getState==="function"?a:Ai;var e=b.selector,f=b.equalityFn'
-js = js.replace(t_mj, r_mj)
-
-t_pj = 'Pj=a=>Mj(a??Ai,{selector:Gi});'
-r_pj = 'Pj=a=>Mj(a&&typeof a.getState==="function"?a:Ai,{selector:Gi});'
-js = js.replace(t_pj, r_pj)
-
-# Remove broken Concierge / Chief of Staff archive
-t6 = 'conciergeAgent:{label:"Chief of Staff",description:"A permanent Chief of Staff conversation in the sidebar that manages your other conversations: delegate tasks, check status, and read results from one place.",\nsettingKey:Ui.CONCIERGE_AGENT_ENABLED,customFlag:"labs-concierge-agent",visibilityCustomFlag:"enable-concierge-agent"},'
-js = js.replace(t6, '')
-
-t7 = 'conciergeAgent:{feature:{enabled:!1},applyAll:[{runtimeGating:{customFlag:Zz.conciergeAgent.customFlag},feature:{enabled:!0}}]}'
-r7 = 'conciergeAgent:{feature:{enabled:!1}}'
-js = js.replace(t7, r7)
+if '_agyEnhanced' not in js or 'agy.selectedModelLabel' not in js:
+    p_ala = r'function\s+ALa\(\{children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k\}\)\{.*?\bensureConversationModelSeeded:G\}\),\[x,v,u,B,e,H,f,K,C,D,E,F,G\]\);return A\.createElement\(zLa\.Provider,\{value:g\},a\)\}'
+    m_ala = re.search(p_ala, js, flags=re.DOTALL)
+    if m_ala:
+        patched_ala = '''var MODEL_ENUM_MAP={
+"gemini-4-argon-web-high":1501,"gemini-4-argon-web-medium":1502,"gemini-4-argon-web-low":1503,"gemini-4-argon-web-task":1504,
+"gemini-3.8-flash-web-high":1505,"gemini-3.8-flash-web-medium":1506,"gemini-3.8-flash-web-low":1507,"gemini-3.8-flash-web-task":1508,
+"gemini-3.1-pro-web-high":1509,"gemini-3.1-pro-web-medium":1510,"gemini-3.1-pro-web-low":1511,
+"gemini-3.5-flash-lite-web-high":1512,"gemini-3.5-flash-lite-web-medium":1513,"gemini-3.5-flash-lite-web-low":1514,
+"claude-sonnet-5-5-high":1515,"claude-sonnet-5-5-medium":1516,"claude-sonnet-5-5-low":1517,
+"claude-opus-5-5-high":1518,"claude-opus-5-5-medium":1519,"claude-opus-5-5-low":1520,
+"claude-sonnet-4-6":1035,"claude-opus-4-6-thinking":1026,
+"gemini-4-argon-high":1421,"gemini-4-argon-medium":1422,"gemini-4-argon-low":1423,"gemini-4-argon":1421,
+"gemini-3.8-flash-high":1318,"gemini-3.8-flash-medium":1319,"gemini-3.8-flash-low":1320,
+"gemini-3.8-flash-tiered":1521,"gemini-3.8-flash-deepagent":1522,
+"gemini-3.7-flash-high":1315,"gemini-3.7-flash-medium":1316,"gemini-3.7-flash-low":1317,"gemini-3.7-flash-tiered":1523,
+"gemini-3.6-flash-high":1524,"gemini-3.6-flash-medium":1525,"gemini-3.6-flash-low":1526,
+"gemini-3-flash-agent":1527,"gemini-3.5-flash-low":1528,"gemini-3.5-flash-extra-low":1529,
+"gemini-3.5-flash-lite":1530,"gemini-3.1-pro-high":1531,"gemini-3.1-pro-medium":1532,"gemini-3.1-pro-low":1533,
+"gemini-3.1-flash-lite":1534,"gemini-3 Flash":1535,"gemini-3-flash":1535,"gemini-2.5-pro":1536,"gemini-2.5-flash":1537,
+"gemini-2.5-flash-lite":1538,"gemini-2.5-flash-thinking":1539,"gpt-oss-120b-medium":1540
+};
+var __enhanceUserStatus=function(b){if(!b||!b.cascadeModelConfigData||b._agyEnhanced)return b;try{var d=b.cascadeModelConfigData,origConfigs=d.clientModelConfigs||[],origSorts=d.clientModelSorts||[],newConfigs=[...origConfigs],existingLabels=new Set(newConfigs.map(m=>m.label)),template=origConfigs.find(m=>!m.disabled)||origConfigs[0]||{},extra=[{label:"Gemini 4 Argon (Web) (High)",alias:"gemini-4-argon-web-high"},{label:"Gemini 4 Argon (Web) (Medium)",alias:"gemini-4-argon-web-medium"},{label:"Gemini 4 Argon (Web) (Low)",alias:"gemini-4-argon-web-low"},{label:"Gemini 4 Argon (Web) (Agent)",alias:"gemini-4-argon-web-task"},{label:"Gemini 3.8 Flash (Web) (High)",alias:"gemini-3.8-flash-web-high"},{label:"Gemini 3.8 Flash (Web) (Medium)",alias:"gemini-3.8-flash-web-medium"},{label:"Gemini 3.8 Flash (Web) (Low)",alias:"gemini-3.8-flash-web-low"},{label:"Gemini 3.8 Flash (Web) (Agent)",alias:"gemini-3.8-flash-web-task"},{label:"Gemini 3.1 Pro (Web) (High)",alias:"gemini-3.1-pro-web-high"},{label:"Gemini 3.1 Pro (Web) (Medium)",alias:"gemini-3.1-pro-web-medium"},{label:"Gemini 3.1 Pro (Web) (Low)",alias:"gemini-3.1-pro-web-low"},{label:"Gemini 3.5 Flash-Lite (Web) (High)",alias:"gemini-3.5-flash-lite-web-high"},{label:"Gemini 3.5 Flash-Lite (Web) (Medium)",alias:"gemini-3.5-flash-lite-web-medium"},{label:"Gemini 3.5 Flash-Lite (Web) (Low)",alias:"gemini-3.5-flash-lite-web-low"},{label:"Claude Sonnet 5.5 (High)",alias:"claude-sonnet-5-5-high"},{label:"Claude Sonnet 5.5 (Medium)",alias:"claude-sonnet-5-5-medium"},{label:"Claude Sonnet 5.5 (Low)",alias:"claude-sonnet-5-5-low"},{label:"Claude Opus 5.5 (High)",alias:"claude-opus-5-5-high"},{label:"Claude Opus 5.5 (Medium)",alias:"claude-opus-5-5-medium"},{label:"Claude Opus 5.5 (Low)",alias:"claude-opus-5-5-low"},{label:"Claude Sonnet 4.6 (Thinking)",alias:"claude-sonnet-4-6"},{label:"Claude Opus 4.6 (Thinking)",alias:"claude-opus-4-6-thinking"},{label:"Gemini 4 Argon (High)",alias:"gemini-4-argon-high"},{label:"Gemini 4 Argon (Medium)",alias:"gemini-4-argon-medium"},{label:"Gemini 4 Argon (Low)",alias:"gemini-4-argon-low"},{label:"Gemini 3.8 Flash (High)",alias:"gemini-3.8-flash-high"},{label:"Gemini 3.8 Flash (Medium)",alias:"gemini-3.8-flash-medium"},{label:"Gemini 3.8 Flash (Low)",alias:"gemini-3.8-flash-low"},{label:"Gemini 3.8 Flash (Tiered)",alias:"gemini-3.8-flash-tiered"},{label:"Gemini 3.8 Flash (DeepAgent)",alias:"gemini-3.8-flash-deepagent"},{label:"Gemini 3.7 Flash (High)",alias:"gemini-3.7-flash-high"},{label:"Gemini 3.7 Flash (Medium)",alias:"gemini-3.7-flash-medium"},{label:"Gemini 3.7 Flash (Low)",alias:"gemini-3.7-flash-low"},{label:"Gemini 3.7 Flash (Tiered)",alias:"gemini-3.7-flash-tiered"},{label:"Gemini 3.6 Flash (High)",alias:"gemini-3.6-flash-high"},{label:"Gemini 3.6 Flash (Medium)",alias:"gemini-3.6-flash-medium"},{label:"Gemini 3.6 Flash (Low)",alias:"gemini-3.6-flash-low"},{label:"Gemini 3.5 Flash (High)",alias:"gemini-3-flash-agent"},{label:"Gemini 3.5 Flash (Medium)",alias:"gemini-3.5-flash-low"},{label:"Gemini 3.5 Flash (Low)",alias:"gemini-3.5-flash-extra-low"},{label:"Gemini 3.5 Flash Lite",alias:"gemini-3.5-flash-lite"},{label:"Gemini 3.1 Pro (High)",alias:"gemini-3.1-pro-high"},{label:"Gemini 3.1 Pro (Medium)",alias:"gemini-3.1-pro-medium"},{label:"Gemini 3.1 Pro (Low)",alias:"gemini-3.1-pro-low"},{label:"Gemini 3.1 Flash Lite",alias:"gemini-3.1-flash-lite"},{label:"Gemini 3 Flash",alias:"gemini-3-flash"},{label:"Gemini 2.5 Pro",alias:"gemini-2.5-pro"},{label:"Gemini 2.5 Flash",alias:"gemini-2.5-flash"},{label:"Gemini 2.5 Flash Lite",alias:"gemini-2.5-flash-lite"},{label:"Gemini 2.5 Flash (Thinking)",alias:"gemini-2.5-flash-thinking"},{label:"GPT-OSS 120B",alias:"gpt-oss-120b-medium"}],toAdd=extra.filter(item=>!existingLabels.has(item.label)),newSorts=JSON.parse(JSON.stringify(origSorts)),recGroup=newSorts.find(s=>s.name&&s.name.toLowerCase()==="recommended")?.groups?.[0];!recGroup&&newSorts.length>0&&newSorts[0].groups&&(recGroup=newSorts[0].groups[0]);if(toAdd.length>0){var sep="──────────────";if(!existingLabels.has(sep)){var sepEntry=Object.assign({},template,{label:sep,disabled:!0,isRecommended:!1,modelId:"separator",modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"alias",value:"separator"}},supportedMimeTypes:{}});delete sepEntry.tagTitle;delete sepEntry.tagDescription;newConfigs.push(sepEntry);existingLabels.add(sep);recGroup&&Array.isArray(recGroup.modelLabels)&&recGroup.modelLabels.push(sep)}for(var item of toAdd){var enumVal=MODEL_ENUM_MAP[item.alias]||1500;var entry=Object.assign({},template,{label:item.label,disabled:!1,isRecommended:!0,modelId:item.alias,modelAlias:item.alias,value:enumVal,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"model",value:enumVal}},supportedMimeTypes:{}});delete entry.tagTitle;delete entry.tagDescription;newConfigs.push(entry);existingLabels.add(item.label);recGroup&&Array.isArray(recGroup.modelLabels)&&!recGroup.modelLabels.includes(item.label)&&recGroup.modelLabels.push(item.label)}}return Object.assign({},b,{_agyEnhanced:!0,cascadeModelConfigData:Object.assign({},d,{clientModelConfigs:newConfigs,clientModelSorts:newSorts})})}catch(err){console.error("[AGY-Proxy] enhanceUserStatus failed:",err);return b}};
+function ALa({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){b=__enhanceUserStatus(b);var [_selLabel,_setSelLabel]=(0,A.useState)(()=>{try{return localStorage.getItem("agy.selectedModelLabel")||null}catch(E){return null}}),[l,m]=(0,A.useState)(null),[n,q]=(0,A.useState)({}),[r,t]=(0,A.useState)(void 0),u=(0,A.useMemo)(()=>{var J=xLa(k);for(let L of J)L.disabled=!f;return J},[k,f]),v=(0,A.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map(tk).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),w=(0,A.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);wLa(v,w,g,h,e);var x=(0,A.useMemo)(()=>{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],M=J?.clientModelSorts||[];J=L.map(tk).filter(O=>O!==null).filter(O=>!O.disabled);L=wla(L,M);return L.length>0?L:vla(J)},[b?.cascadeModelConfigData]),y=(0,A.useCallback)((J,L)=>{if(v.length!==0||u.length!==0){if(L){let M=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(M)return M}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J=uk(J,v)))return J;if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(M)return M}return x.at(0)?.groups.at(0)?.options.at(0)??u.at(0)}},[v,u,x,_selLabel]),B=(0,A.useMemo)(()=>{if(v.length!==0||u.length!==0){if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(M)return M}return y(c,l)}},[y,c,v,u,l,_selLabel]),C=(0,A.useCallback)(J=>{if(J!==void 0&&(J=n[J],J!==void 0)){if(J.customLabel){let M=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(M)return M}return y(J.model,J.customLabel)}return B},[n,y,B,v,u]),D=(0,A.useCallback)((J,L,M,O,N)=>{J!==void 0&&q(P=>{var Q=P[J],R={model:L,customLabel:O,contextWindow:Gz(Q??r,L,N)};return Q?.model===L&&Q?.customLabel===O&&Q?.contextWindow===R.contextWindow?P:{...P,[J]:R}});if(M||J===void 0){e(L);t(P=>{var Q=Gz(P,L,N);return P?.model===L&&P?.contextWindow===Q?P:{model:L,contextWindow:Q}});m(O??null)}},[e,r]),E=(0,A.useCallback)((J,L,M,O)=>{var N=yLa(v,u,J);if(N){_setSelLabel(J);try{localStorage.setItem("agy.selectedModelLabel",J)}catch(err){}D(L,N.value,M,J,O)}else console.error(`[Model Select] Invalid model label: ${J}`)},[v,u,D]),F=(0,A.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:Gz(r,B?.value),[n,r,B]),G=(0,A.useCallback)((J,L,M)=>{var O=Gz(r,L);q(N=>J in N?N:{...N,[J]:{model:L,customLabel:M,contextWindow:O}})},[r]),H=(0,A.useCallback)(J=>{E(J,void 0,!0)},[E]),K=(0,A.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);g=(0,A.useMemo)(()=>({modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:F,ensureConversationModelSeeded:G}),[x,v,u,B,e,H,f,K,C,D,E,F,G]);return A.createElement(zLa.Provider,{value:g},a)}'''
+        js = js[:m_ala.start()] + patched_ala + js[m_ala.end():]
 
 with open(main_js_path, 'w', encoding='utf-8') as f:
     f.write(js)
@@ -335,6 +366,10 @@ if 'Auto-unlock Developer' not in html:
     html = html.replace('  </head>', init_script)
     with open(index_html_path, 'w', encoding='utf-8') as f:
         f.write(html)
+
+# 5. Write completion marker
+with open(os.path.join(out_dir, '.patched'), 'w', encoding='utf-8') as f:
+    f.write('patched=true\n')
 
 print("[+] Bundle successfully extracted and patched!")
 EOF

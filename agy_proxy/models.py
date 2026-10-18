@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 DEFAULT_MODEL = "gemini-3.8-flash-high"
 
 MODEL_ALIASES: dict[str, str] = {
-    # Gemini 4 Argon Aliases (Web Flagship)
+    # Gemini 4 Argon Aliases (Web Flagship & CloudCode)
     "gemini-4-argon": "gemini-4-argon",
     "gemini-4-argon-high": "gemini-4-argon-high",
     "gemini-4-argon-medium": "gemini-4-argon-medium",
@@ -31,6 +31,7 @@ MODEL_ALIASES: dict[str, str] = {
     "argon-spark": "gemini-4-argon-task",
     "spark": "gemini-4-argon-task",
     "task": "gemini-4-argon-task",
+    "gemini-4-argon-disabled": "gemini-4-argon",
 
     # Gemini 3.8 Aliases (Latest default)
     "gemini-3.8-flash": "gemini-3.8-flash-high",
@@ -69,25 +70,52 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-3.6-flash-high": "gemini-3.6-flash-high",
     "gemini-3.6-flash-medium": "gemini-3.6-flash-medium",
     "gemini-3.6-flash-low": "gemini-3.6-flash-low",
-    "gemini-3.6-flash-tiered": "gemini-3.6-flash-tiered",
     "gemini-3.5-flash": "gemini-3.5-flash-low",
+    "gemini-3.5-flash-high": "gemini-3-flash-agent",
+    "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
     "gemini-3.5-flash-low": "gemini-3.5-flash-low",
     "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
     "gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
     "gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
     "gemini-3.5-lite": "gemini-3.5-flash-lite",
-    "gemini-3-flash": "gemini-3.8-flash-tiered",
-    "gemini-3-flash-agent": "gemini-3.8-flash-tiered",
+    "gemini-3.5-flash-lite-high": "gemini-3.5-flash-lite-high",
+    "gemini-3.5-flash-lite-medium": "gemini-3.5-flash-lite-medium",
+    "gemini-3.5-flash-lite-low": "gemini-3.5-flash-lite-low",
+    "gemini-3-flash": "gemini-3-flash",
+    "gemini-3-flash-agent": "gemini-3-flash-agent",
     "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
     "gemini-3.1-flash-image": "gemini-3.1-flash-image",
     "gemini-3.1-pro": "gemini-3.1-pro-low",
     "gemini-3.1-pro-high": "gemini-3.1-pro-high",
+    "gemini-3.1-pro-medium": "gemini-3.1-pro-medium",
     "gemini-3.1-pro-low": "gemini-3.1-pro-low",
     "gemini-pro-agent": "gemini-pro-agent",
     "gemini-2.5-pro": "gemini-2.5-pro",
     "gemini-2.5-flash": "gemini-2.5-flash",
     "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
     "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
+
+    # Gemini Web Direct Aliases
+    "gemini-4-argon-web": "gemini-4-argon-web-high",
+    "gemini-4-argon-web-high": "gemini-4-argon-web-high",
+    "gemini-4-argon-web-medium": "gemini-4-argon-web-medium",
+    "gemini-4-argon-web-low": "gemini-4-argon-web-low",
+    "gemini-4-argon-web-task": "gemini-4-argon-web-task",
+    "gemini-4-argon-web-spark": "gemini-4-argon-web-task",
+    "gemini-3.8-flash-web": "gemini-3.8-flash-web-high",
+    "gemini-3.8-flash-web-high": "gemini-3.8-flash-web-high",
+    "gemini-3.8-flash-web-medium": "gemini-3.8-flash-web-medium",
+    "gemini-3.8-flash-web-low": "gemini-3.8-flash-web-low",
+    "gemini-3.8-flash-web-task": "gemini-3.8-flash-web-task",
+    "gemini-3.8-flash-web-spark": "gemini-3.8-flash-web-task",
+    "gemini-3.1-pro-web": "gemini-3.1-pro-web-high",
+    "gemini-3.1-pro-web-high": "gemini-3.1-pro-web-high",
+    "gemini-3.1-pro-web-medium": "gemini-3.1-pro-web-medium",
+    "gemini-3.1-pro-web-low": "gemini-3.1-pro-web-low",
+    "gemini-3.5-flash-lite-web": "gemini-3.5-flash-lite-web-high",
+    "gemini-3.5-flash-lite-web-high": "gemini-3.5-flash-lite-web-high",
+    "gemini-3.5-flash-lite-web-medium": "gemini-3.5-flash-lite-web-medium",
+    "gemini-3.5-flash-lite-web-low": "gemini-3.5-flash-lite-web-low",
 
     # Claude Aliases
     "claude": "claude-sonnet-4-6",
@@ -178,7 +206,7 @@ MODEL_ALIASES: dict[str, str] = {
 
 
 VALID_CLOUDCODE_MODELS = {
-    # Gemini 4 Argon (Web Flagship)
+    # Gemini 4 Argon (CloudCode)
     "gemini-4-argon",
     "gemini-4-argon-high",
     "gemini-4-argon-medium",
@@ -205,8 +233,12 @@ VALID_CLOUDCODE_MODELS = {
     "gemini-3.5-flash-low",
     "gemini-3.5-flash-extra-low",
     "gemini-3.5-flash-lite",
+    "gemini-3.5-flash-lite-high",
+    "gemini-3.5-flash-lite-medium",
+    "gemini-3.5-flash-lite-low",
     "gemini-pro-agent",
     "gemini-3.1-pro-high",
+    "gemini-3.1-pro-medium",
     "gemini-3.1-pro-low",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-image",
@@ -216,6 +248,21 @@ VALID_CLOUDCODE_MODELS = {
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash-thinking",
+    # Gemini Web browser models
+    "gemini-4-argon-web-high",
+    "gemini-4-argon-web-medium",
+    "gemini-4-argon-web-low",
+    "gemini-4-argon-web-task",
+    "gemini-3.8-flash-web-high",
+    "gemini-3.8-flash-web-medium",
+    "gemini-3.8-flash-web-low",
+    "gemini-3.8-flash-web-task",
+    "gemini-3.1-pro-web-high",
+    "gemini-3.1-pro-web-medium",
+    "gemini-3.1-pro-web-low",
+    "gemini-3.5-flash-lite-web-high",
+    "gemini-3.5-flash-lite-web-medium",
+    "gemini-3.5-flash-lite-web-low",
     # 3rd Party models
     "claude-sonnet-4-6",
     "claude-opus-4-6-thinking",
@@ -233,13 +280,78 @@ VALID_CLOUDCODE_MODELS = {
     "tab_jump_flash_lite_preview",
 }
 
+CLOUDCODE_PLACEHOLDER_MAP: dict[str, str] = {
+    "claude-opus-4-6-thinking": "MODEL_PLACEHOLDER_M26",
+    "claude-sonnet-4-6": "MODEL_PLACEHOLDER_M35",
+    "gemini-3.7-flash-high": "MODEL_PLACEHOLDER_M315",
+    "gemini-3.7-flash-medium": "MODEL_PLACEHOLDER_M316",
+    "gemini-3.7-flash-low": "MODEL_PLACEHOLDER_M317",
+    "gemini-3.7-flash": "MODEL_PLACEHOLDER_M315",
+    "gemini-3.8-flash-high": "MODEL_PLACEHOLDER_M318",
+    "gemini-3.8-flash-medium": "MODEL_PLACEHOLDER_M319",
+    "gemini-3.8-flash-low": "MODEL_PLACEHOLDER_M320",
+    "gemini-4-argon-high": "MODEL_PLACEHOLDER_M421",
+    "gemini-4-argon-medium": "MODEL_PLACEHOLDER_M422",
+    "gemini-4-argon-low": "MODEL_PLACEHOLDER_M423",
+    "gemini-4-argon": "MODEL_PLACEHOLDER_M421",
+    "gpt-oss-120b-medium": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
+    # Injected web & cloud models
+    "gemini-4-argon-web-high": "MODEL_PLACEHOLDER_M501",
+    "gemini-4-argon-web-medium": "MODEL_PLACEHOLDER_M502",
+    "gemini-4-argon-web-low": "MODEL_PLACEHOLDER_M503",
+    "gemini-4-argon-web-task": "MODEL_PLACEHOLDER_M504",
+    "gemini-3.8-flash-web-high": "MODEL_PLACEHOLDER_M505",
+    "gemini-3.8-flash-web-medium": "MODEL_PLACEHOLDER_M506",
+    "gemini-3.8-flash-web-low": "MODEL_PLACEHOLDER_M507",
+    "gemini-3.8-flash-web-task": "MODEL_PLACEHOLDER_M508",
+    "gemini-3.1-pro-web-high": "MODEL_PLACEHOLDER_M509",
+    "gemini-3.1-pro-web-medium": "MODEL_PLACEHOLDER_M510",
+    "gemini-3.1-pro-web-low": "MODEL_PLACEHOLDER_M511",
+    "gemini-3.5-flash-lite-web-high": "MODEL_PLACEHOLDER_M512",
+    "gemini-3.5-flash-lite-web-medium": "MODEL_PLACEHOLDER_M513",
+    "gemini-3.5-flash-lite-web-low": "MODEL_PLACEHOLDER_M514",
+    "claude-sonnet-5-5-high": "MODEL_PLACEHOLDER_M515",
+    "claude-sonnet-5-5-medium": "MODEL_PLACEHOLDER_M516",
+    "claude-sonnet-5-5-low": "MODEL_PLACEHOLDER_M517",
+    "claude-opus-5-5-high": "MODEL_PLACEHOLDER_M518",
+    "claude-opus-5-5-medium": "MODEL_PLACEHOLDER_M519",
+    "claude-opus-5-5-low": "MODEL_PLACEHOLDER_M520",
+    "gemini-3.8-flash-tiered": "MODEL_PLACEHOLDER_M521",
+    "gemini-3.8-flash-deepagent": "MODEL_PLACEHOLDER_M522",
+    "gemini-3.7-flash-tiered": "MODEL_PLACEHOLDER_M523",
+    "gemini-3.6-flash-high": "MODEL_PLACEHOLDER_M524",
+    "gemini-3.6-flash-medium": "MODEL_PLACEHOLDER_M525",
+    "gemini-3.6-flash-low": "MODEL_PLACEHOLDER_M526",
+    "gemini-3-flash-agent": "MODEL_PLACEHOLDER_M527",
+    "gemini-3.5-flash-low": "MODEL_PLACEHOLDER_M528",
+    "gemini-3.5-flash-extra-low": "MODEL_PLACEHOLDER_M529",
+    "gemini-3.5-flash-lite": "MODEL_PLACEHOLDER_M530",
+    "gemini-3.1-pro-high": "MODEL_PLACEHOLDER_M531",
+    "gemini-3.1-pro-medium": "MODEL_PLACEHOLDER_M532",
+    "gemini-3.1-pro-low": "MODEL_PLACEHOLDER_M533",
+    "gemini-3.1-flash-lite": "MODEL_PLACEHOLDER_M534",
+    "gemini-3-flash": "MODEL_PLACEHOLDER_M535",
+    "gemini-2.5-pro": "MODEL_PLACEHOLDER_M536",
+    "gemini-2.5-flash": "MODEL_PLACEHOLDER_M537",
+    "gemini-2.5-flash-lite": "MODEL_PLACEHOLDER_M538",
+    "gemini-2.5-flash-thinking": "MODEL_PLACEHOLDER_M539",
+    "gemini-4-argon-task": "MODEL_PLACEHOLDER_M541",
+    "gemini-3.8-flash-task": "MODEL_PLACEHOLDER_M542",
+    "gemini-3.6-flash-tiered": "MODEL_PLACEHOLDER_M543",
+    "gemini-3.5-flash-lite-high": "MODEL_PLACEHOLDER_M544",
+    "gemini-3.5-flash-lite-medium": "MODEL_PLACEHOLDER_M545",
+    "gemini-3.5-flash-lite-low": "MODEL_PLACEHOLDER_M546",
+    "gemini-pro-agent": "MODEL_PLACEHOLDER_M547",
+    "gemini-3.1-flash-image": "MODEL_PLACEHOLDER_M548",
+}
+
 EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
-    # Gemini 4 Argon (Web Flagship)
-    "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576},
+    # Gemini 4 Argon (CloudCode)
+    "gemini-4-argon": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
     "gemini-4-argon-high": {"displayName": "Gemini 4 Argon (High)", "maxTokens": 1048576},
     "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon (Medium)", "maxTokens": 1048576},
     "gemini-4-argon-low": {"displayName": "Gemini 4 Argon (Low)", "maxTokens": 1048576},
-    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Spark Agent)", "maxTokens": 1048576},
+    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Agent)", "maxTokens": 1048576},
     "gemini-4": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
     "gemini-4.0": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
     # Gemini 3.8
@@ -248,7 +360,7 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
     "gemini-3.8-flash-n": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
-    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576},
+    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Agent)", "maxTokens": 1048576},
     "gemini-3.8-flash-deepagent": {"displayName": "Gemini 3.8 Flash DeepAgent (Autonomous Swarm, 64k Reasoning)", "maxTokens": 1048576},
     "deepagent": {"displayName": "DeepAgent Swarm Preset (64k Reasoning)", "maxTokens": 1048576},
     # Gemini 3.7
@@ -262,16 +374,12 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.6-flash-low": {"displayName": "Gemini 3.6 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.6-flash-tiered": {"displayName": "Gemini 3.6 Flash (Tiered)", "maxTokens": 1048576},
     # Gemini 3.5 & earlier
-    "gemini-3.5-flash-low": {"displayName": "Gemini 3.5 Flash (Low)", "maxTokens": 1048576},
-    "gemini-3.5-flash-extra-low": {"displayName": "Gemini 3.5 Flash (Extra Low)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite", "maxTokens": 1048576},
-    "gemini-pro-agent": {"displayName": "Gemini Pro Agent", "maxTokens": 1048576},
     "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro (High)", "maxTokens": 1048576},
     "gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro (Low)", "maxTokens": 1048576},
     "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite", "maxTokens": 1048576},
     "gemini-3.1-flash-image": {"displayName": "Gemini 3.1 Flash Image", "maxTokens": 1048576},
     "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576},
-    "gemini-3-flash-agent": {"displayName": "Gemini 3 Flash Agent", "maxTokens": 1048576},
     "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro", "maxTokens": 1048576},
     "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash", "maxTokens": 1048576},
     "gemini-2.5-flash-lite": {"displayName": "Gemini 2.5 Flash Lite", "maxTokens": 1048576},
@@ -317,6 +425,20 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "claude-3-opus": {"displayName": "Claude 3 Opus", "maxTokens": 200000},
     "claude-3-5-haiku": {"displayName": "Claude 3.5 Haiku", "maxTokens": 200000},
     # Gemini Web browser models
+    "gemini-4-argon-web-high": {"displayName": "Gemini 4 Argon (Web) (High)", "maxTokens": 1048576},
+    "gemini-4-argon-web-medium": {"displayName": "Gemini 4 Argon (Web) (Medium)", "maxTokens": 1048576},
+    "gemini-4-argon-web-low": {"displayName": "Gemini 4 Argon (Web) (Low)", "maxTokens": 1048576},
+    "gemini-4-argon-web-task": {"displayName": "Gemini 4 Argon (Web) (Agent)", "maxTokens": 1048576},
+    "gemini-3.8-flash-web-high": {"displayName": "Gemini 3.8 Flash (Web) (High)", "maxTokens": 1048576},
+    "gemini-3.8-flash-web-medium": {"displayName": "Gemini 3.8 Flash (Web) (Medium)", "maxTokens": 1048576},
+    "gemini-3.8-flash-web-low": {"displayName": "Gemini 3.8 Flash (Web) (Low)", "maxTokens": 1048576},
+    "gemini-3.8-flash-web-task": {"displayName": "Gemini 3.8 Flash (Web) (Agent)", "maxTokens": 1048576},
+    "gemini-3.1-pro-web-high": {"displayName": "Gemini 3.1 Pro (Web) (High)", "maxTokens": 1048576},
+    "gemini-3.1-pro-web-medium": {"displayName": "Gemini 3.1 Pro (Web) (Medium)", "maxTokens": 1048576},
+    "gemini-3.1-pro-web-low": {"displayName": "Gemini 3.1 Pro (Web) (Low)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-web-high": {"displayName": "Gemini 3.5 Flash-Lite (Web) (High)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-web-medium": {"displayName": "Gemini 3.5 Flash-Lite (Web) (Medium)", "maxTokens": 1048576},
+    "gemini-3.5-flash-lite-web-low": {"displayName": "Gemini 3.5 Flash-Lite (Web) (Low)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576},
@@ -361,15 +483,15 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
     "claude-3-5-haiku": {"displayName": "Claude 3.5 Haiku", "maxTokens": 200000, "description": "Claude 3.5 Haiku fast lightweight alias", "category": "Anthropic"},
 
     # Google Gemini Models
-    "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "description": "Google Next-Gen Gemini 4 Argon flagship web model (Default Web)", "category": "Google Gemini"},
+    "gemini-4-argon": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576, "description": "Google Next-Gen Gemini 4 Argon flagship CloudCode model", "category": "Google Gemini"},
     "gemini-4-argon-high": {"displayName": "Gemini 4 Argon (High)", "maxTokens": 1048576, "description": "Gemini 4 Argon with deep reasoning", "category": "Google Gemini"},
     "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon (Medium)", "maxTokens": 1048576, "description": "Gemini 4 Argon with balanced reasoning", "category": "Google Gemini"},
     "gemini-4-argon-low": {"displayName": "Gemini 4 Argon (Low)", "maxTokens": 1048576, "description": "Gemini 4 Argon with fast reasoning", "category": "Google Gemini"},
-    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Spark Agent)", "maxTokens": 1048576, "description": "Gemini 4 Argon autonomous agent task mode (Spark)", "category": "Google Gemini"},
+    "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Task (Agent)", "maxTokens": 1048576, "description": "Gemini 4 Argon autonomous agent task mode", "category": "Google Gemini"},
     "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High Reasoning)", "maxTokens": 1048576, "description": "Google Flagship model with deep thinking & reasoning (Default)", "category": "Google Gemini"},
     "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium Reasoning)", "maxTokens": 1048576, "description": "Balances speed and reasoning depth", "category": "Google Gemini"},
     "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low Reasoning)", "maxTokens": 1048576, "description": "Fast responses with light reasoning", "category": "Google Gemini"},
-    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Spark Agent)", "maxTokens": 1048576, "description": "Gemini 3.8 Flash autonomous agent task mode (Spark)", "category": "Google Gemini"},
+    "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Agent)", "maxTokens": 1048576, "description": "Gemini 3.8 Flash autonomous agent task mode", "category": "Google Gemini"},
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576, "description": "Dynamic tiered reasoning allocation", "category": "Google Gemini"},
     "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.7 Flash with high reasoning depth", "category": "Google Gemini"},
     "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.7 Flash with medium reasoning", "category": "Google Gemini"},
@@ -380,14 +502,17 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
     "gemini-3.6-flash-low": {"displayName": "Gemini 3.6 Flash (Low Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.6 Flash with low reasoning", "category": "Google Gemini"},
     "gemini-3.6-flash-tiered": {"displayName": "Gemini 3.6 Flash", "maxTokens": 1048576, "description": "Gemini 3.6 Flash tiered", "category": "Google Gemini"},
     "gemini-3.5-flash-low": {"displayName": "Gemini 3.5 Flash (Low Reasoning)", "maxTokens": 1048576, "description": "Gemini 3.5 Flash low reasoning", "category": "Google Gemini"},
+    "gemini-3.5-flash-extra-low": {"displayName": "Gemini 3.5 Flash (Extra Low)", "maxTokens": 1048576, "description": "Gemini 3.5 Flash extra-low latency", "category": "Google Gemini"},
     "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite", "maxTokens": 1048576, "description": "Gemini 3.5 Flash Lite low-latency", "category": "Google Gemini"},
+    "gemini-pro-agent": {"displayName": "Gemini Pro Agent", "maxTokens": 1048576, "description": "Gemini Pro autonomous agent model", "category": "Google Gemini"},
     "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro (High Reasoning)", "maxTokens": 1048576, "description": "Google Pro tier model with deep reasoning", "category": "Google Gemini"},
     "gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro (Low Reasoning)", "maxTokens": 1048576, "description": "Google Pro tier model with standard reasoning", "category": "Google Gemini"},
     "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite (Ultra Fast)", "maxTokens": 1048576, "description": "Ultra fast low-latency model", "category": "Google Gemini"},
+    "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576, "description": "Gemini 3 Flash stable", "category": "Google Gemini"},
+    "gemini-3-flash-agent": {"displayName": "Gemini 3 Flash Agent", "maxTokens": 1048576, "description": "Gemini 3 Flash autonomous agent model", "category": "Google Gemini"},
     "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro", "maxTokens": 1048576, "description": "Gemini 2.5 Pro stable architecture", "category": "Google Gemini"},
     "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash", "maxTokens": 1048576, "description": "Gemini 2.5 Flash stable", "category": "Google Gemini"},
     "gemini-2.5-flash-thinking": {"displayName": "Gemini 2.5 Flash Thinking", "maxTokens": 1048576, "description": "Gemini 2.5 with reasoning traces", "category": "Google Gemini"},
-    "gemini-pro-agent": {"displayName": "Gemini Pro Agent", "maxTokens": 1048576, "description": "Gemini Pro autonomous agent model", "category": "Google Gemini"},
 
     # DeepSeek Models
     "deepseek-r1": {"displayName": "DeepSeek R1", "maxTokens": 128000, "description": "DeepSeek R1 open reasoning model", "category": "DeepSeek"},
@@ -435,6 +560,8 @@ def normalize_model_name(model_name: str | None) -> str:
                 return "gemini-4-argon-low"
             if "med" in cleaned:
                 return "gemini-4-argon-medium"
+            if "high" in cleaned:
+                return "gemini-4-argon-high"
             return "gemini-4-argon"
         if "3.8" in cleaned or "3-8" in cleaned:
             if "low" in cleaned:
@@ -456,11 +583,21 @@ def normalize_model_name(model_name: str | None) -> str:
             return "gemini-3.6-flash-tiered"
         if "3.5" in cleaned or "3-5" in cleaned:
             if "lite" in cleaned:
+                if "high" in cleaned:
+                    return "gemini-3.5-flash-lite-high"
+                if "med" in cleaned:
+                    return "gemini-3.5-flash-lite-medium"
+                if "low" in cleaned:
+                    return "gemini-3.5-flash-lite-low"
                 return "gemini-3.5-flash-lite"
             if "extra-low" in cleaned or "extra_low" in cleaned:
                 return "gemini-3.5-flash-extra-low"
             return "gemini-3.5-flash-low"
         if "3.1-pro" in cleaned or "3_1-pro" in cleaned or "3-1-pro" in cleaned:
+            if "high" in cleaned:
+                return "gemini-3.1-pro-high"
+            if "med" in cleaned:
+                return "gemini-3.1-pro-medium"
             return "gemini-3.1-pro-low"
         if "2.5-pro" in cleaned or "2_5-pro" in cleaned:
             return "gemini-2.5-pro"
@@ -613,6 +750,20 @@ def is_argon_model(model_name: str | None) -> bool:
         return False
     norm = normalize_model_name(model_name)
     return "argon" in norm
+
+
+def is_gemini_web_model(model_name: str | None) -> bool:
+    """Checks whether the requested model explicitly targets the Gemini Web browser backend."""
+    if not model_name:
+        return False
+    norm = normalize_model_name(model_name).lower()
+    raw = str(model_name).lower()
+    return "-web" in norm or "_web" in norm or "-web" in raw or "(web)" in raw
+
+
+def is_web_only_argon_model(model_name: str | None) -> bool:
+    """Legacy helper: Gemini 4 Argon is a standard model and no longer segregated into web-only."""
+    return False
 
 
 def get_argon_fallback_model(model_name: str | None) -> str:

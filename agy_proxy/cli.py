@@ -187,6 +187,7 @@ async def handle_auth_list():
     table = Table(title="Antigravity Account Pool", border_style="blue")
     table.add_column("Account / Name", style="cyan")
     table.add_column("Type", style="magenta")
+    table.add_column("Tier / Plan", style="bold")
     table.add_column("Identity / Email", style="white")
     table.add_column("Gemini Quota", style="green")
     table.add_column("Claude/3P Quota", style="yellow")
@@ -194,10 +195,33 @@ async def handle_auth_list():
 
     for acc in pool.accounts.values():
         is_api_key = acc.auth_method == "api_key"
-        acc_type = "API Key" if is_api_key else "OAuth"
+        is_web = acc.auth_method == "gemini_web"
+        acc_type = "API Key" if is_api_key else ("Web" if is_web else "OAuth")
         display_name = acc.name or ("Primary Account" if acc.is_primary else acc.account_id)
         if acc.is_primary:
             display_name += " ⭐"
+
+        # Tier / Plan badge
+        tid = getattr(acc, "tier_id", "free-tier")
+        if is_api_key:
+            tier_display = "[yellow]AI Studio PayG[/yellow]"
+        elif is_web:
+            tier_display = "[teal]Gemini Web Pro[/teal]"
+        elif tid == "g1-ultra-tier":
+            tier_display = "[bold magenta]Google AI Ultra[/bold magenta]"
+        elif tid == "g1-pro-tier":
+            tier_display = "[bold cyan]Google AI Pro[/bold cyan]"
+        elif tid == "standard-tier":
+            tier_display = "[blue]GCP Enterprise[/blue]"
+        else:
+            tier_info = getattr(acc, "tier_info", {}) or {}
+            paid_info = tier_info.get("paidTier") or {}
+            credits = paid_info.get("availableCredits") or []
+            has_g1 = any(c.get("creditType") == "GOOGLE_ONE_AI" for c in credits)
+            if has_g1:
+                tier_display = "[dim]Free Tier[/dim] [yellow](G1 Ready)[/yellow]"
+            else:
+                tier_display = "[dim]Free Tier[/dim]"
 
         if is_api_key:
             if acc.error_message:
@@ -220,6 +244,7 @@ async def handle_auth_list():
         table.add_row(
             display_name,
             acc_type,
+            tier_display,
             acc.email or "N/A",
             gemini_q,
             claude_q,
@@ -900,7 +925,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
     web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--restart", "-r", action="store_true", help="Force restart Antigravity Web even if already running")
-    web_parser.add_argument("--ide-version", type=str, default="2.23.0", help="Reported IDE version (default: 2.23.0)")
+    web_parser.add_argument("--ide-version", type=str, default="2.24.0", help="Reported IDE version (default: 2.24.0)")
 
     # config subcommand (agy-proxy config [get|set|list|reset])
     config_parser = subparsers.add_parser("config", help="Manage persistent user configuration (e.g. language_server and editor paths)")
@@ -1137,8 +1162,11 @@ def main():
                 target=getattr(args, "target", None),
             ))
             return
+        elif not args.auth_action:
+            asyncio.run(handle_auth_list())
+            return
         else:
-            auth_parser.print_help()
+            parser.print_help()
             return
     elif args.subcommand in ("setup-claude", "claude-setup"):
         handle_setup_claude(
@@ -1200,7 +1228,7 @@ def main():
             ls_path=getattr(args, "ls_path", None),
             editor_path=getattr(args, "editor", None),
             detach=getattr(args, "detach", False),
-            ide_version=getattr(args, "ide_version", "2.23.0"),
+            ide_version=getattr(args, "ide_version", "2.24.0"),
             verbose=getattr(args, "verbose", False),
             direct=getattr(args, "direct", False),
             restart=getattr(args, "restart", False),

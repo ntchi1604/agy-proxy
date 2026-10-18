@@ -118,14 +118,18 @@
     106701431,
     106701435,
     106711598,
+    106712041,
     106713377,
     106713379,
     106713380,
     106713382,
     106724030,
     106754391,
+    106761937,
+    106793467,
     106834476,
-    106838234
+    106838234,
+    106863974
   ],
   "flags": [
     {
@@ -294,7 +298,8 @@
     },
     {
       "name": "CliComplexityBasedRouting__enabled",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45750526
     },
     {
       "name": "CliComplexityBasedRouting__prompt_complexity",
@@ -822,7 +827,8 @@
     },
     {
       "name": "GcliAgentHistoryTruncation__enable_agent_history_truncation",
-      "boolValue": false
+      "boolValue": false,
+      "flagId": 45773188
     },
     {
       "name": "GcliCompressionPrompt__compression_prompt",
@@ -856,35 +862,43 @@
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_lite_ga_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45784352
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_lite_preview_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45771641
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_flash_preview_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45761848
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_1_pro_preview_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45760185
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_8_flash_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45842815
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_flash_ga_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45780819
     },
     {
       "name": "GeminiCLIIsLaunched__gemini_3_pro_launched",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45743869
     },
     {
       "name": "GeminiCLIPreviewAvailable__enable_preview",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45740196
     },
     {
       "name": "GeminiFreeTier__call_onboard_user_from_legacy_flow",
@@ -1215,7 +1229,7 @@
     },
     {
       "name": "enable-aux-pane-redesign",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-background-task-accumulator",
@@ -1223,7 +1237,8 @@
     },
     {
       "name": "enable-base-ui-tooltips",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45834473
     },
     {
       "name": "enable-battle-contrib-variants",
@@ -1259,7 +1274,8 @@
     },
     {
       "name": "enable-context-menu-system",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45838944
     },
     {
       "name": "enable-context-role",
@@ -1467,7 +1483,8 @@
     },
     {
       "name": "enable-hub-builtin-browser",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45844839
     },
     {
       "name": "enable-image-generator-subagent",
@@ -1487,7 +1504,8 @@
     },
     {
       "name": "enable-jetbox-gcert-v2",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45807049
     },
     {
       "name": "enable-jetbox-terminal-v2",
@@ -1630,10 +1648,6 @@
       "boolValue": true
     },
     {
-      "name": "enable-remote-3p-environment",
-      "boolValue": false
-    },
-    {
       "name": "enable-remote-agent-fastpush-pin",
       "boolValue": true
     },
@@ -1715,7 +1729,8 @@
     },
     {
       "name": "enable-split-view",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45823456
     },
     {
       "name": "enable-sqlite-trajectory",
@@ -1727,7 +1742,8 @@
     },
     {
       "name": "enable-styles-css-cleanup",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45817109
     },
     {
       "name": "enable-subagent-hub",
@@ -1795,11 +1811,13 @@
     },
     {
       "name": "enable-upload-html-artifact-to-drive",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45856317
     },
     {
       "name": "enable-url-artifacts",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45825098
     },
     {
       "name": "enable-voice-relay",
@@ -1807,7 +1825,8 @@
     },
     {
       "name": "enable-vscode-injection-removal",
-      "boolValue": false
+      "boolValue": false,
+      "flagId": 45827954
     },
     {
       "name": "enable-wait-tool",
@@ -1815,7 +1834,8 @@
     },
     {
       "name": "google-workspace-mentions",
-      "boolValue": true
+      "boolValue": true,
+      "flagId": 45825097
     },
     {
       "name": "inject_3_memories_1_skill",
@@ -1951,7 +1971,7 @@
     },
     {
       "name": "remote-control-webrtc-mesh",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "remove-conversation-history",
@@ -2056,6 +2076,55 @@
     {
       "name": "voice-engine-addr",
       "stringValue": ""
+    },
+    {
+      "name": "pin-depot-head",
+      "boolValue": false
+    },
+    {
+      "name": "cli-disable-stream-conversation-updates-rehydration",
+      "boolValue": false
+    },
+    {
+      "name": "enable-side-question-rework",
+      "flagId": 45837903,
+      "boolValue": false
+    },
+    {
+      "name": "enable-advanced-builtin-workflow",
+      "boolValue": false
+    },
+    {
+      "name": "ambient_memory_si_enabled",
+      "boolValue": true
+    },
+    {
+      "name": "enable-citc-workspace-hygiene-rule",
+      "boolValue": true
+    },
+    {
+      "name": "use-aicode-mendel",
+      "boolValue": false
+    },
+    {
+      "name": "enable-browser-subagent-webview",
+      "boolValue": false
+    },
+    {
+      "name": "enable-inference-traffic-migration",
+      "boolValue": false
+    },
+    {
+      "name": "max_injected_skills",
+      "intValue": "-1"
+    },
+    {
+      "name": "max_injected_memories",
+      "intValue": "-1"
+    },
+    {
+      "name": "cli-seasonal-theme-periods",
+      "stringListValue": {}
     }
   ]
 }

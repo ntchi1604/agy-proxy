@@ -369,7 +369,21 @@ class CloudCodeClient:
                     f"{current_user_msg}\n\n"
                     f"[System Directive: {query_directive}"
                     f"Using the tool execution output above, provide a direct, helpful response to the user's request. "
-                    f"Respond in the user's language. If further tools are required, output JSON for the next tool. Otherwise, answer directly.]"
+                    f"Respond in the user's language. If further tools are required, output a single ```json``` block "
+                    f"with {{\"name\": \"<tool_name>\", \"arguments\": {{...}}}} — do NOT write plain bash/python blocks. "
+                    f"Know when to STOP: if the tool result confirms success (exit 0, file written, no error), "
+                    f"that step is DONE — do not repeat the same call. "
+                    f"Otherwise, answer directly.]"
+                )
+            if tools:
+                return (
+                    f"{current_user_msg}\n\n"
+                    f"[System Directive: You are an active AI coding assistant in the user's IDE. "
+                    f"If fulfilling this request requires inspecting the PC/system, viewing files, running commands, or modifying code, "
+                    f"you MUST execute the appropriate tool call by outputting a single ```json``` block: "
+                    f"```json\n{{\"name\": \"<tool_name>\", \"arguments\": {{...}}}}\n``` "
+                    f"A plain ```bash```, ```sh```, or ```python``` block is NOT executed by the IDE. "
+                    f"Do NOT decline or say you cannot access the PC. Invoke the tool directly.]"
                 )
             return current_user_msg
 
@@ -378,6 +392,31 @@ class CloudCodeClient:
             prompt_sections.append("[Conversation History:\n" + "\n---\n".join(recent) + "\n]")
 
         prompt_sections.append(current_user_msg)
+
+        # Tail anchor: highest-priority reminder placed AFTER the user message so it is
+        # the last thing the model reads, preventing large system prompts from drowning out
+        # the tool-calling format instructions (mirrors gemini-web2api-go approach).
+        if tools:
+            tool_names = []
+            for t in tools:
+                if isinstance(t, dict):
+                    for fd in t.get("functionDeclarations", []):
+                        if fd.get("name"):
+                            tool_names.append(fd["name"])
+                    if t.get("name"):
+                        tool_names.append(t["name"])
+            names_str = ", ".join(tool_names[:6]) or "the available tools"
+            prompt_sections.append(
+                f"[System instruction — highest priority]\n"
+                f"To use a tool ({names_str}, etc.) you MUST output a single ```json``` code block "
+                f"containing {{\"name\": \"<tool_name>\", \"arguments\": {{...}}}} — this is the ONLY execution channel.\n"
+                f"A plain ```bash```, ```python```, or ```sh``` code block is NOT executed by the IDE.\n"
+                f"Act, do not explain: when the request needs a tool, your reply is ONE ```json``` block and nothing else.\n"
+                f"Know when to STOP: once a tool result confirms success (e.g. exit 0, file written, no error), "
+                f"that step is DONE — do not repeat the same call.\n"
+                f"[/System instruction — highest priority]"
+            )
+
         return "\n\n".join(prompt_sections)
 
     @staticmethod
@@ -557,19 +596,25 @@ class CloudCodeClient:
                             depth -= 1
                             if depth == 0:
                                 cand = text[start : j + 1]
+                                parsed = None
                                 try:
-                                    parsed = json.loads(cand)
-                                    if isinstance(parsed, dict):
-                                        t_name = parsed.get("name") or parsed.get("tool") or parsed.get("function") or parsed.get("action") or parsed.get("call")
-                                        t_args = parsed.get("arguments") or parsed.get("parameters") or parsed.get("input") or parsed.get("action_input") or parsed.get("args") or {}
-                                        if t_name and isinstance(t_args, dict):
-                                            matched_name = match_tool_name(str(t_name))
-                                            if matched_name:
-                                                clean_args = normalize_tool_args(matched_name, t_args)
-                                                preamble = re.sub(r"```(?:json)?\s*$", "", text[:start], flags=re.IGNORECASE).strip()
-                                                return preamble, {"name": matched_name, "arguments": clean_args}
+                                    parsed = json.loads(cand, strict=False)
                                 except Exception:
-                                    pass
+                                    try:
+                                        fixed_cand = re.sub(r'\\([^"\\/bfnrtu])', r'\\\\\1', cand)
+                                        parsed = json.loads(fixed_cand, strict=False)
+                                    except Exception:
+                                        parsed = None
+
+                                if isinstance(parsed, dict):
+                                    t_name = parsed.get("name") or parsed.get("tool") or parsed.get("function") or parsed.get("action") or parsed.get("call")
+                                    t_args = parsed.get("arguments") or parsed.get("parameters") or parsed.get("input") or parsed.get("action_input") or parsed.get("args") or {}
+                                    if t_name and isinstance(t_args, dict):
+                                        matched_name = match_tool_name(str(t_name))
+                                        if matched_name:
+                                            clean_args = normalize_tool_args(matched_name, t_args)
+                                            preamble = re.sub(r"(?:```)?(?:json)?\s*$", "", text[:start], flags=re.IGNORECASE).strip()
+                                            return preamble, {"name": matched_name, "arguments": clean_args}
                                 i = j
                                 break
             i += 1
@@ -1137,6 +1182,43 @@ class CloudCodeClient:
                         recorded = True
                     logger.info("[Model Upgrade] ✅ Upgraded request to %s succeeded seamlessly!", upgrade_m)
                     return
+
+            from agy_proxy.models import is_argon_model, get_argon_fallback_model
+            if is_argon_model(model_name):
+                fallback_m = get_argon_fallback_model(model_name) or "gemini-3.8-flash-high"
+                logger.warning(
+                    "[Model Fallback] ⚠️ Gemini 4 Argon (%s) failed or is unavailable on Gemini Web session. 🔄 Auto-falling back to %s on CloudCode to avoid interruption!",
+                    model_name,
+                    fallback_m,
+                )
+                logger.info("[Model Fallback] %s active (Antigravity CloudCode - Fallback from %s)", fallback_m, model_name)
+
+                def fb_argon_payload_builder(proj: str):
+                    base = payload_builder_fn(proj)
+                    if isinstance(base, dict):
+                        p_copy = copy.deepcopy(base)
+                        p_copy["model"] = fallback_m
+                        if "request" in p_copy and isinstance(p_copy["request"], dict):
+                            p_copy["request"]["model"] = fallback_m
+                        return p_copy
+                    return base
+
+                async for chunk in self._post_sse_stream_with_failover(
+                    endpoint,
+                    fb_argon_payload_builder,
+                    model_name=fallback_m,
+                    timeout=timeout,
+                    session_key=session_key,
+                    specific_account_id=specific_account_id,
+                    client_path=client_path,
+                    is_streaming=is_streaming,
+                    is_subcall=True,
+                ):
+                    yield chunk
+                if not is_subcall:
+                    recorded = True
+                logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
+                return
 
         if not recorded and not is_subcall:
             dur_ms = (time.time() - t0) * 1000

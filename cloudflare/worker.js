@@ -13,7 +13,7 @@
  */
 
 const DEFAULT_USER_AGENT =
-  "antigravity/hub/2.23.0 (aidev_client; os_type=linux; arch=amd64; cl=998057262)";
+  "antigravity/hub/2.24.0 (aidev_client; os_type=linux; arch=amd64; cl=1000335682)";
 
 const DEFAULT_MODEL = "gemini-3.8-flash-high";
 
@@ -47,13 +47,11 @@ const VALID_CLOUDCODE_MODELS = new Set([
   "gemini-4-argon-high",
   "gemini-4-argon-medium",
   "gemini-4-argon-low",
-  "gemini-4-argon-task",
   // Gemini 3.8
   "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low",
   "gemini-3.8-flash-tiered",
-  "gemini-3.8-flash-task",
   // Gemini 3.7
   "gemini-3.7-flash-high",
   "gemini-3.7-flash-medium",
@@ -68,8 +66,12 @@ const VALID_CLOUDCODE_MODELS = new Set([
   "gemini-3.5-flash-low",
   "gemini-3.5-flash-extra-low",
   "gemini-3.5-flash-lite",
+  "gemini-3.5-flash-lite-high",
+  "gemini-3.5-flash-lite-medium",
+  "gemini-3.5-flash-lite-low",
   "gemini-pro-agent",
   "gemini-3.1-pro-high",
+  "gemini-3.1-pro-medium",
   "gemini-3.1-pro-low",
   "gemini-3.1-flash-lite",
   "gemini-3.1-flash-image",
@@ -79,6 +81,21 @@ const VALID_CLOUDCODE_MODELS = new Set([
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.5-flash-thinking",
+  // Gemini Web browser models
+  "gemini-4-argon-web-high",
+  "gemini-4-argon-web-medium",
+  "gemini-4-argon-web-low",
+  "gemini-4-argon-web-task",
+  "gemini-3.8-flash-web-high",
+  "gemini-3.8-flash-web-medium",
+  "gemini-3.8-flash-web-low",
+  "gemini-3.8-flash-web-task",
+  "gemini-3.1-pro-web-high",
+  "gemini-3.1-pro-web-medium",
+  "gemini-3.1-pro-web-low",
+  "gemini-3.5-flash-lite-web-high",
+  "gemini-3.5-flash-lite-web-medium",
+  "gemini-3.5-flash-lite-web-low",
   "chat_20706",
   "chat_23310",
   "tab_flash_lite_preview",
@@ -101,28 +118,29 @@ const MODEL_ALIASES = {
   "gemini-4-argon-high": "gemini-4-argon-high",
   "gemini-4-argon-medium": "gemini-4-argon-medium",
   "gemini-4-argon-low": "gemini-4-argon-low",
-  "gemini-4-argon-task": "gemini-4-argon-task",
-  "gemini-4-argon-spark": "gemini-4-argon-task",
-  "gemini-4-task": "gemini-4-argon-task",
-  "gemini-4-spark": "gemini-4-argon-task",
+  "gemini-4-argon-task": "gemini-4-argon-web-task",
+  "gemini-4-argon-spark": "gemini-4-argon-web-task",
+  "gemini-4-task": "gemini-4-argon-web-task",
+  "gemini-4-spark": "gemini-4-argon-web-task",
   "gemini-4": "gemini-4-argon",
   "gemini-4.0": "gemini-4-argon",
   "gemini-4-pro": "gemini-4-argon",
   argon: "gemini-4-argon",
-  "argon-task": "gemini-4-argon-task",
-  "argon-spark": "gemini-4-argon-task",
-  spark: "gemini-4-argon-task",
-  task: "gemini-4-argon-task",
+  "argon-task": "gemini-4-argon-web-task",
+  "argon-spark": "gemini-4-argon-web-task",
+  spark: "gemini-4-argon-web-task",
+  task: "gemini-4-argon-web-task",
+  "gemini-4-argon-disabled": "gemini-4-argon",
 
   // Gemini 3.8
   "gemini-3.8-flash": "gemini-3.8-flash-high",
   "gemini-3.8-flash-high": "gemini-3.8-flash-high",
   "gemini-3.8-flash-medium": "gemini-3.8-flash-medium",
   "gemini-3.8-flash-low": "gemini-3.8-flash-low",
-  "gemini-3.8-flash-task": "gemini-3.8-flash-task",
-  "gemini-3.8-flash-spark": "gemini-3.8-flash-task",
-  "gemini-3.8-task": "gemini-3.8-flash-task",
-  "gemini-3.8-spark": "gemini-3.8-flash-task",
+  "gemini-3.8-flash-task": "gemini-3.8-flash-web-task",
+  "gemini-3.8-flash-spark": "gemini-3.8-flash-web-task",
+  "gemini-3.8-task": "gemini-3.8-flash-web-task",
+  "gemini-3.8-spark": "gemini-3.8-flash-web-task",
   "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
   "gemini-3.8": "gemini-3.8-flash-high",
   "gemini-3-8": "gemini-3.8-flash-high",
@@ -161,23 +179,51 @@ const MODEL_ALIASES = {
 
   // Gemini 3.5 & earlier
   "gemini-3.5-flash": "gemini-3.5-flash-low",
+  "gemini-3.5-flash-high": "gemini-3-flash-agent",
+  "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
   "gemini-3.5-flash-low": "gemini-3.5-flash-low",
   "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
   "gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
   "gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
   "gemini-3.5-lite": "gemini-3.5-flash-lite",
-  "gemini-3-flash": "gemini-3.8-flash-tiered",
-  "gemini-3-flash-agent": "gemini-3.8-flash-tiered",
+  "gemini-3.5-flash-lite-high": "gemini-3.5-flash-lite-high",
+  "gemini-3.5-flash-lite-medium": "gemini-3.5-flash-lite-medium",
+  "gemini-3.5-flash-lite-low": "gemini-3.5-flash-lite-low",
+  "gemini-3-flash": "gemini-3-flash",
+  "gemini-3-flash-agent": "gemini-3-flash-agent",
   "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
   "gemini-3.1-flash-image": "gemini-3.1-flash-image",
   "gemini-3.1-pro": "gemini-3.1-pro-low",
   "gemini-3.1-pro-high": "gemini-3.1-pro-high",
+  "gemini-3.1-pro-medium": "gemini-3.1-pro-medium",
   "gemini-3.1-pro-low": "gemini-3.1-pro-low",
   "gemini-pro-agent": "gemini-pro-agent",
   "gemini-2.5-pro": "gemini-2.5-pro",
   "gemini-2.5-flash": "gemini-2.5-flash",
   "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
   "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
+
+  // Gemini Web Direct Aliases
+  "gemini-4-argon-web": "gemini-4-argon-web-high",
+  "gemini-4-argon-web-high": "gemini-4-argon-web-high",
+  "gemini-4-argon-web-medium": "gemini-4-argon-web-medium",
+  "gemini-4-argon-web-low": "gemini-4-argon-web-low",
+  "gemini-4-argon-web-task": "gemini-4-argon-web-task",
+  "gemini-4-argon-web-spark": "gemini-4-argon-web-task",
+  "gemini-3.8-flash-web": "gemini-3.8-flash-web-high",
+  "gemini-3.8-flash-web-high": "gemini-3.8-flash-web-high",
+  "gemini-3.8-flash-web-medium": "gemini-3.8-flash-web-medium",
+  "gemini-3.8-flash-web-low": "gemini-3.8-flash-web-low",
+  "gemini-3.8-flash-web-task": "gemini-3.8-flash-web-task",
+  "gemini-3.8-flash-web-spark": "gemini-3.8-flash-web-task",
+  "gemini-3.1-pro-web": "gemini-3.1-pro-web-high",
+  "gemini-3.1-pro-web-high": "gemini-3.1-pro-web-high",
+  "gemini-3.1-pro-web-medium": "gemini-3.1-pro-web-medium",
+  "gemini-3.1-pro-web-low": "gemini-3.1-pro-web-low",
+  "gemini-3.5-flash-lite-web": "gemini-3.5-flash-lite-web-high",
+  "gemini-3.5-flash-lite-web-high": "gemini-3.5-flash-lite-web-high",
+  "gemini-3.5-flash-lite-web-medium": "gemini-3.5-flash-lite-web-medium",
+  "gemini-3.5-flash-lite-web-low": "gemini-3.5-flash-lite-web-low",
 
   // Claude Aliases
   claude: "claude-sonnet-4-6",
@@ -266,13 +312,13 @@ const PROXY_MODELS_LIST = [
   { id: "gemini-4-argon-high", object: "model", owned_by: "google", description: "Gemini 4 Argon High (Web Thinking)" },
   { id: "gemini-4-argon-medium", object: "model", owned_by: "google", description: "Gemini 4 Argon Medium (Web Thinking)" },
   { id: "gemini-4-argon-low", object: "model", owned_by: "google", description: "Gemini 4 Argon Low (Web)" },
-  { id: "gemini-4-argon-task", object: "model", owned_by: "google", description: "Gemini 4 Argon Task (Spark Agent)" },
+  { id: "gemini-4-argon-web-task", object: "model", owned_by: "google", description: "Gemini 4 Argon (Web) (Agent)" },
 
   // Flagship Gemini 3.8
   { id: "gemini-3.8-flash-high", object: "model", owned_by: "google", description: "Google Gemini 3.8 Flash High Reasoning (Default)" },
   { id: "gemini-3.8-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Medium Reasoning" },
   { id: "gemini-3.8-flash-low", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Low Reasoning" },
-  { id: "gemini-3.8-flash-task", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Task (Spark Agent)" },
+  { id: "gemini-3.8-flash-web-task", object: "model", owned_by: "google", description: "Gemini 3.8 Flash (Web) (Agent)" },
   { id: "gemini-3.8-flash-tiered", object: "model", owned_by: "google", description: "Gemini 3.8 Flash Tiered" },
   { id: "gemini-3.7-flash-high", object: "model", owned_by: "google", description: "Gemini 3.7 Flash High Reasoning" },
   { id: "gemini-3.7-flash-medium", object: "model", owned_by: "google", description: "Gemini 3.7 Flash Medium Reasoning" },
@@ -355,9 +401,9 @@ function normalizeModelName(rawModel) {
   // Version-specific keyword matches
   if (cleaned.includes("task") || cleaned.includes("spark")) {
     if (cleaned.includes("3.8") || (cleaned.includes("flash") && !cleaned.includes("lite"))) {
-      return "gemini-3.8-flash-task";
+      return "gemini-3.8-flash-web-task";
     }
-    return "gemini-4-argon-task";
+    return "gemini-4-argon-web-task";
   }
 
   if (cleaned.includes("argon") || cleaned.includes("gemini-4") || cleaned.includes("gemini-4.0") || cleaned === "gemini-4") {

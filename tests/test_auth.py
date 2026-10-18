@@ -655,21 +655,16 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(oauth_acc.is_model_supported("gemini-4-argon-disabled"))
         self.assertTrue(oauth_acc.is_model_supported("gemini-3.8-flash-high"))
 
-        # 2. When only OAuth accounts exist: raises RuntimeError (no silent model swap)
-        with self.assertRaises(RuntimeError) as ctx:
-            pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=True)
-        self.assertIn("Gemini Web session", str(ctx.exception))
+        # 2. When only OAuth accounts exist: auto-fallback to gemini-3.8-flash-high with allow_auto_routing=True
+        cands_fallback = pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=True)
+        self.assertEqual(len(cands_fallback), 1)
+        self.assertEqual(cands_fallback[0].account_id, "oa_1")
 
-        with self.assertRaises(RuntimeError):
-            pool.get_candidate_accounts("anthropic.gemini-4-argon-high", allow_auto_routing=True)
+        cands_argon = pool.get_candidate_accounts("gemini-4-argon", allow_auto_routing=True)
+        self.assertEqual(len(cands_argon), 1)
+        self.assertEqual(cands_argon[0].account_id, "oa_1")
 
-        with self.assertRaises(RuntimeError):
-            pool.get_candidate_accounts("gemini-4-argon", allow_auto_routing=True)
-
-        with self.assertRaises(RuntimeError):
-            pool.get_candidate_accounts("gemini-4-argon-task", allow_auto_routing=True)
-
-        # 3. With allow_auto_routing=False: also raises RuntimeError
+        # 3. With allow_auto_routing=False: raises RuntimeError (no active accounts support model)
         with self.assertRaises(RuntimeError) as ctx:
             pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=False)
         self.assertIn("gemini-4-argon-high", str(ctx.exception))
@@ -854,6 +849,62 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
             ak_data = json.load(f)
         self.assertEqual(len(ak_data["api_keys"]), 1)
         self.assertEqual(ak_data["api_keys"][0]["account_id"], "legacy_key")
+
+    def test_account_tier_attributes_and_badges(self):
+        pool = AccountPool(accounts_file=self.accounts_file)
+        # 1. Free tier
+        oa_free = AntigravityOAuthSession(
+            account_id="oa_free",
+            email="free@example.com",
+            tier_info={"id": "free-tier", "name": "Antigravity"},
+        )
+        self.assertEqual(oa_free.tier_id, "free-tier")
+        self.assertEqual(oa_free.tier_badge, "Free Tier")
+        self.assertFalse(oa_free.has_g1_credits)
+
+        # 2. Free tier with Google One credits
+        oa_g1 = AntigravityOAuthSession(
+            account_id="oa_g1",
+            email="g1@example.com",
+            tier_info={
+                "id": "free-tier",
+                "name": "Antigravity",
+                "paidTier": {
+                    "id": "g1-pro-tier",
+                    "availableCredits": [{"creditType": "GOOGLE_ONE_AI"}],
+                },
+            },
+        )
+        self.assertEqual(oa_g1.tier_id, "free-tier")
+        self.assertTrue(oa_g1.has_g1_credits)
+
+        # 3. Google AI Pro
+        oa_pro = AntigravityOAuthSession(
+            account_id="oa_pro",
+            email="pro@example.com",
+            tier_info={"id": "g1-pro-tier", "name": "Google AI Pro"},
+        )
+        self.assertEqual(oa_pro.tier_id, "g1-pro-tier")
+        self.assertEqual(oa_pro.tier_badge, "Google AI Pro")
+
+        # 4. Google AI Ultra
+        oa_ultra = AntigravityOAuthSession(
+            account_id="oa_ultra",
+            email="ultra@example.com",
+            tier_info={"id": "g1-ultra-tier", "name": "Google AI Ultra"},
+        )
+        self.assertEqual(oa_ultra.tier_id, "g1-ultra-tier")
+        self.assertEqual(oa_ultra.tier_badge, "Google AI Ultra")
+
+        # 5. API Key
+        ak = AIStudioApiKeySession(account_id="ak1", api_key="AIzaSy123")
+        self.assertEqual(ak.tier_id, "api-key")
+        self.assertEqual(ak.tier_badge, "AI Studio PayG")
+
+        # 6. Gemini Web
+        gw = GeminiWebSession(account_id="gw1", name="Web GW", cookies={"__Secure-1PSID": "psid"})
+        self.assertEqual(gw.tier_id, "gemini-web")
+        self.assertEqual(gw.tier_badge, "Gemini Web Pro")
 
 
 

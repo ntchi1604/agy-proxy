@@ -244,6 +244,37 @@ class BaseAccountSession:
             return True
         return False
 
+    @property
+    def tier_id(self) -> str:
+        if self.auth_method == "api_key":
+            return "api-key"
+        if self.auth_method == "gemini_web":
+            return "gemini-web"
+        tier_info = getattr(self, "tier_info", {}) or {}
+        return tier_info.get("id") or "free-tier"
+
+    @property
+    def tier_badge(self) -> str:
+        tid = self.tier_id
+        if self.auth_method == "api_key":
+            return "AI Studio PayG"
+        if self.auth_method == "gemini_web":
+            return "Gemini Web Pro"
+        if tid == "g1-ultra-tier":
+            return "Google AI Ultra"
+        if tid == "g1-pro-tier":
+            return "Google AI Pro"
+        if tid == "standard-tier":
+            return "GCP Enterprise"
+        return "Free Tier"
+
+    @property
+    def has_g1_credits(self) -> bool:
+        tier_info = getattr(self, "tier_info", {}) or {}
+        paid_tier = tier_info.get("paidTier") or {}
+        credits = paid_tier.get("availableCredits") or []
+        return any(c.get("creditType") == "GOOGLE_ONE_AI" for c in credits)
+
     def to_dict(self) -> dict[str, Any]:
         now = time.time()
         active_limits = {k: max(0, int(v - now)) for k, v in list(self.rate_limited_models.items()) if v > now}
@@ -258,7 +289,11 @@ class BaseAccountSession:
             "project_id": getattr(self, "project_id", None),
             "is_primary": self.is_primary,
             "enabled": self.enabled,
-            "tier_name": getattr(self, "tier_info", {}).get("name", "Antigravity"),
+            "tier_id": self.tier_id,
+            "tier_badge": self.tier_badge,
+            "has_g1_credits": self.has_g1_credits,
+            "tier_name": getattr(self, "tier_info", {}).get("name", self.tier_badge),
+            "tier_info": getattr(self, "tier_info", {}),
             "region_code": getattr(self, "region_code", None),
             "expiry_timestamp": getattr(self, "expiry_timestamp", 0.0),
             "total_requests": self.total_requests,

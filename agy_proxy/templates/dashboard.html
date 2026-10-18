@@ -635,9 +635,8 @@
                 <option value="gemini-3.8-flash-tiered">gemini-3.8-flash-tiered (1M Context)</option>
                 <option value="gemini-3.7-flash-high">gemini-3.7-flash-high (Thinking)</option>
                 <option value="gemini-3.1-pro">gemini-3.1-pro (Web Thinking)</option>
+                <option value="gemini-4-argon">gemini-4-argon (Flagship)</option>
                 <option value="gemini-3-pro">gemini-3-pro (Web Deep Reasoning)</option>
-                <option value="gemini-pro-agent">gemini-pro-agent (Deep Reasoning)</option>
-                <option value="gemini-3-flash-agent">gemini-3-flash-agent (Fast Tooling)</option>
                 <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Zero Thinking)</option>
                 <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic Protocol)</option>
                 <option value="claude-opus-4-6-thinking">claude-opus-4-6-thinking</option>
@@ -2008,10 +2007,10 @@ ightarrow$ v1.0.3</p>
       let name = 'Snippet';
 
       if (param === 'claude') {
-        text = `export ANTHROPIC_BASE_URL="http://127.0.0.1:8000" && claude --settings '{"availableModels": ["anthropic.gemini-3.8-flash-high", "anthropic.gemini-pro-agent", "anthropic.gemini-3.8-flash-tiered"]}'`;
+        text = `export ANTHROPIC_BASE_URL="http://127.0.0.1:8000" && claude --settings '{"availableModels": ["anthropic.gemini-3.8-flash-high", "anthropic.gemini-4-argon", "anthropic.gemini-3.8-flash-tiered"]}'`;
         name = 'Claude Code launcher';
       } else if (param === 'agy') {
-        text = `agy --model gemini-pro-agent --dangerously-skip-permissions`;
+        text = `agy --model gemini-4-argon --dangerously-skip-permissions`;
         name = 'AGY command';
       } else if (param === 'codex') {
         text = `OPENAI_API_KEY="dummy" codex -c 'openai_base_url="http://127.0.0.1:8000/v1"' -m "gemini-3.8-flash-high"`;
@@ -3503,6 +3502,28 @@ ightarrow$ v1.0.3</p>
         agyActiveCardBadge = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Active session in Standalone Web Agent"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span><span>Standalone Active</span></span>';
       }
 
+      // Tier / Subscription Badge
+      const tid = acc.tier_id || (acc.tier_info ? acc.tier_info.id : (isApiKey ? 'api-key' : (isWeb ? 'gemini-web' : 'free-tier')));
+      let tierBadgeHtml = '';
+      if (tid === 'g1-ultra-tier') {
+        tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 font-semibold border border-fuchsia-500/30 flex items-center gap-1 shrink-0 shadow-sm" title="Google AI Ultra Plan"><i class="fa-solid fa-gem text-fuchsia-400 text-[9px]"></i><span>AI Ultra</span></span>';
+      } else if (tid === 'g1-pro-tier') {
+        tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 flex items-center gap-1 shrink-0 shadow-sm" title="Google AI Pro Plan"><i class="fa-solid fa-crown text-cyan-400 text-[9px]"></i><span>AI Pro</span></span>';
+      } else if (tid === 'standard-tier') {
+        tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30 flex items-center gap-1 shrink-0 shadow-sm" title="GCP Enterprise Assistant"><i class="fa-solid fa-building text-blue-400 text-[9px]"></i><span>Enterprise</span></span>';
+      } else if (isApiKey) {
+        tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30 flex items-center gap-1 shrink-0 shadow-sm" title="Google AI Studio PayG API Key"><i class="fa-solid fa-key text-amber-400 text-[9px]"></i><span>AI Studio</span></span>';
+      } else if (isWeb) {
+        tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-300 font-semibold border border-teal-500/30 flex items-center gap-1 shrink-0 shadow-sm" title="Gemini Web Advanced Browser Session"><i class="fa-solid fa-globe text-teal-400 text-[9px]"></i><span>Web Pro</span></span>';
+      } else {
+        const hasG1 = Boolean(acc.has_g1_credits || (acc.tier_info && acc.tier_info.paidTier && acc.tier_info.paidTier.availableCredits && acc.tier_info.paidTier.availableCredits.some(c => c.creditType === 'GOOGLE_ONE_AI')));
+        if (hasG1) {
+          tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-medium border border-amber-500/25 flex items-center gap-1 shrink-0 cursor-pointer" onclick="window.open(\'https://antigravity.google/g1-upgrade\', \'_blank\')" title="Google One AI detected! Click to link Google AI Pro on antigravity.google"><i class="fa-solid fa-arrow-up-right-from-square text-amber-400 text-[9px]"></i><span>Free Tier (G1 Ready)</span></span>';
+        } else {
+          tierBadgeHtml = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-medium border border-slate-700 flex items-center gap-1 shrink-0" title="Antigravity Free Tier"><i class="fa-solid fa-cube text-slate-500 text-[9px]"></i><span>Free Tier</span></span>';
+        }
+      }
+
       return `
         <div class="p-4 sm:p-5 rounded-2xl border transition space-y-3 relative overflow-hidden min-w-0 ${
           isBothActive
@@ -3528,6 +3549,7 @@ ightarrow$ v1.0.3</p>
                   ${acc.is_primary 
                     ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30 flex items-center space-x-1 shrink-0 shadow-sm"><i class="fa-solid fa-star text-amber-400 text-[9px]"></i><span>Primary</span></span>' 
                     : `<button onclick="setPrimaryAccount('${acc.account_id}')" class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-slate-800/90 hover:bg-indigo-600 hover:text-white text-slate-400 border border-slate-700 transition flex items-center space-x-1 shrink-0" title="Set as primary active account"><i class="fa-regular fa-star text-[9px]"></i><span>Set Primary</span></button>`}
+                  ${tierBadgeHtml}
                   ${agyActiveCardBadge}
                   ${maxAccountCooldown > 0 ? `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Rate limit cooldown active: resets in ${formatCooldown(maxAccountCooldown)}"><i class="fa-solid fa-clock-rotate-left text-amber-400 text-[9px]"></i><span>Cooldown (${formatCooldown(maxAccountCooldown)})</span></span>` : ((!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold border border-red-500/30 shrink-0">Exhausted</span>' : '')}
                   ${!isEnabled ? '<span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700 shrink-0">Paused</span>' : ''}
@@ -3638,6 +3660,28 @@ ightarrow$ v1.0.3</p>
         agyActiveTableBadge = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 inline-flex items-center space-x-1" title="Active session in Standalone Web Agent"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse mr-1"></span>Standalone Active</span>';
       }
 
+      // Tier / Subscription Badge
+      const tid = acc.tier_id || (acc.tier_info ? acc.tier_info.id : (isApiKey ? 'api-key' : (isWeb ? 'gemini-web' : 'free-tier')));
+      let tierBadgeHtml = '';
+      if (tid === 'g1-ultra-tier') {
+        tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 font-semibold border border-fuchsia-500/30 inline-flex items-center gap-1 shadow-sm" title="Google AI Ultra Plan"><i class="fa-solid fa-gem text-fuchsia-400 text-[8px]"></i><span>AI Ultra</span></span>';
+      } else if (tid === 'g1-pro-tier') {
+        tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 inline-flex items-center gap-1 shadow-sm" title="Google AI Pro Plan"><i class="fa-solid fa-crown text-cyan-400 text-[8px]"></i><span>AI Pro</span></span>';
+      } else if (tid === 'standard-tier') {
+        tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30 inline-flex items-center gap-1 shadow-sm" title="GCP Enterprise Assistant"><i class="fa-solid fa-building text-blue-400 text-[8px]"></i><span>Enterprise</span></span>';
+      } else if (isApiKey) {
+        tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30 inline-flex items-center gap-1 shadow-sm" title="Google AI Studio PayG API Key"><i class="fa-solid fa-key text-amber-400 text-[8px]"></i><span>AI Studio</span></span>';
+      } else if (isWeb) {
+        tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-teal-500/15 text-teal-300 font-semibold border border-teal-500/30 inline-flex items-center gap-1 shadow-sm" title="Gemini Web Advanced Browser Session"><i class="fa-solid fa-globe text-teal-400 text-[8px]"></i><span>Web Pro</span></span>';
+      } else {
+        const hasG1 = Boolean(acc.has_g1_credits || (acc.tier_info && acc.tier_info.paidTier && acc.tier_info.paidTier.availableCredits && acc.tier_info.paidTier.availableCredits.some(c => c.creditType === 'GOOGLE_ONE_AI')));
+        if (hasG1) {
+          tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-medium border border-amber-500/25 inline-flex items-center gap-1 cursor-pointer" onclick="window.open(\'https://antigravity.google/g1-upgrade\', \'_blank\')" title="Google One AI detected! Click to link Google AI Pro on antigravity.google"><i class="fa-solid fa-arrow-up-right-from-square text-amber-400 text-[8px]"></i><span>Free Tier (G1 Ready)</span></span>';
+        } else {
+          tierBadgeHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 font-medium border border-slate-700 inline-flex items-center gap-1" title="Antigravity Free Tier"><i class="fa-solid fa-cube text-slate-500 text-[8px]"></i><span>Free Tier</span></span>';
+        }
+      }
+
       return `
         <tr class="hover:bg-slate-800/40 transition ${!isEnabled ? 'opacity-50' : ''} ${isBothActive || isCliActive ? 'bg-emerald-500/[0.03]' : (isStandaloneActive ? 'bg-cyan-500/[0.03]' : '')}">
           <td class="w-8 px-3 py-3 text-center">
@@ -3670,6 +3714,7 @@ ightarrow$ v1.0.3</p>
                 : (isApiKey
                   ? '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-key mr-1"></i> API Key</span>'
                   : '<span class="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"><i class="fa-brands fa-google mr-1"></i> OAuth</span>')}
+              ${tierBadgeHtml}
               ${maxAccountCooldown > 0 ? `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono"><i class="fa-solid fa-clock-rotate-left mr-1 text-[8px]"></i>Cooldown (${formatCooldown(maxAccountCooldown)})</span>` : ((!isApiKey && !isWeb && geminiIsExhausted && claudeIsExhausted) ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-mono">Exhausted</span>' : '')}
               ${!isEnabled ? '<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Paused</span>' : ''}
             </div>
@@ -3912,11 +3957,11 @@ ightarrow$ v1.0.3</p>
 
     const GEMINI_WEB_MODELS = [
       { id: 'gemini-4-argon', name: '4-argon [Flagship]' },
-      { id: 'gemini-4-argon-task', name: '4-argon (task) [Spark Agent]' },
+      { id: 'gemini-4-argon-web-task', name: '4-argon (web) [Agent]' },
       { id: 'gemini-4-argon-high', name: '4-argon (high) [Thinking]' },
       { id: 'gemini-3.8-flash-high', name: '3.8-flash (high) [Thinking]' },
       { id: 'gemini-3.8-flash', name: '3.8-flash [Standard]' },
-      { id: 'gemini-3.8-flash-task', name: '3.8-flash (task) [Spark Agent]' },
+      { id: 'gemini-3.8-flash-web-task', name: '3.8-flash (web) [Agent]' },
       { id: 'gemini-3.1-pro-high', name: '3.1-pro (high) [Thinking]' },
       { id: 'gemini-3.1-pro', name: '3.1-pro [Standard]' },
       { id: 'gemini-3.5-flash-lite-high', name: '3.5-flash-lite (high) [Thinking]' },
@@ -3932,6 +3977,10 @@ ightarrow$ v1.0.3</p>
     ];
 
     const ANTIGRAVITY_MODELS = [
+      { id: 'gemini-4-argon', name: 'gemini-4-argon (Flagship)' },
+      { id: 'gemini-4-argon-high', name: 'gemini-4-argon-high (Thinking High)' },
+      { id: 'gemini-4-argon-medium', name: 'gemini-4-argon-medium' },
+      { id: 'gemini-4-argon-low', name: 'gemini-4-argon-low' },
       { id: 'gemini-3.8-flash-high', name: 'gemini-3.8-flash-high (Thinking High)' },
       { id: 'gemini-3.8-flash-medium', name: 'gemini-3.8-flash-medium' },
       { id: 'gemini-3.8-flash-low', name: 'gemini-3.8-flash-low' },

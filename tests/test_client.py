@@ -231,6 +231,29 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_v["arguments"]["AbsolutePath"], "README.md")
         self.assertIn("toolAction", call_v["arguments"])
 
+        # 5. Bash regex escapes repair and trailing json keyword cleanup (real-world user issue)
+        raw_output = (
+            "Investigating Current Context\n\n"
+            "I intend to use the run_command tool to get system information.\n\n"
+            "json\n"
+            "{\n"
+            '  "name": "run_command",\n'
+            '  "arguments": {\n'
+            '    "CommandLine": "uname -a && cat /etc/os-release && lscpu | grep -E \'Model name|CPU\\(s\\)|Thread\' && free -h && df -h /",\n'
+            '    "Cwd": "/home/qumhab",\n'
+            '    "WaitMsBeforeAsync": 5000,\n'
+            '    "toolAction": "Checking system information",\n'
+            '    "toolSummary": "System information analysis"\n'
+            "  }\n"
+            "}"
+        )
+        preamble_cmd, call_cmd = CloudCodeClient._extract_gemini_web_tool_call(raw_output, declared_antigravity)
+        self.assertIsNotNone(call_cmd)
+        self.assertEqual(call_cmd["name"], "run_command")
+        self.assertIn("Model name|CPU\\(s\\)|Thread", call_cmd["arguments"]["CommandLine"])
+        self.assertIn("Investigating Current Context", preamble_cmd)
+        self.assertNotIn("json", preamble_cmd.lower().strip()[-10:])
+
     def test_format_gemini_web_prompt_multi_turn(self):
         payload = {
             "tools": [{"functionDeclarations": [{"name": "Write", "description": "Write file"}]}],
@@ -541,11 +564,33 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sent_payloads[0]["model"], "claude-sonnet-4-6")
             self.assertEqual(sent_payloads[1]["model"], "claude-sonnet-5-5-high")
 
-    async def test_post_sse_stream_argon_raises_without_gemini_web(self):
+    async def test_post_sse_stream_argon_auto_fallback_on_oauth(self):
         """Tests that when an Argon model is requested on Antigravity OAuth accounts (no gemini_web session),
-        a RuntimeError is raised with a clear message instead of silently routing to gemini-3.8-flash-high."""
+        it automatically falls back to gemini-3.8-flash-high instead of failing."""
+        sent_payloads = []
+
+        async def fake_stream_lines():
+            yield 'data: {"response": {"candidates": [{"content": {"parts": [{"text": "Hello fallback"}]}}]}}'
+
+        mock_200_resp = MagicMock()
+        mock_200_resp.status_code = 200
+        mock_200_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_200_resp.aiter_lines = fake_stream_lines
+
+        mock_200_ctx = MagicMock()
+        mock_200_ctx.__aenter__ = AsyncMock(return_value=mock_200_resp)
+        mock_200_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        def stream_side_effect(method, url, json=None, **kwargs):
+            sent_payloads.append(dict(json or {}))
+            return mock_200_ctx
+
+        mock_http_client = MagicMock()
+        mock_http_client.stream = MagicMock(side_effect=stream_side_effect)
+
         with patch.object(self.acc, "initialize_project", AsyncMock(return_value="test-proj")), \
-             patch.object(self.acc, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer test"})):
+             patch.object(self.acc, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer test"})), \
+             patch.object(self.acc, "get_http_client", AsyncMock(return_value=mock_http_client)):
 
             gen = self.client._post_sse_stream_with_failover(
                 endpoint="v1internal:streamGenerateContent?alt=sse",
@@ -555,10 +600,13 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
                 },
                 model_name="anthropic.gemini-4-argon-high",
             )
-            with self.assertRaises(RuntimeError) as ctx:
-                async for _ in gen:
-                    pass
-            self.assertIn("Gemini Web session", str(ctx.exception))
+            chunks = []
+            async for chunk in gen:
+                chunks.append(chunk)
+
+            self.assertEqual(len(chunks), 1)
+            self.assertEqual(len(sent_payloads), 1)
+            self.assertEqual(sent_payloads[0]["model"], "gemini-3.8-flash-high")
 
 
 if __name__ == "__main__":
