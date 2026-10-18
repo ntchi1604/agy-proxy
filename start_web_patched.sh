@@ -166,7 +166,7 @@ echo -e "📦 Web bundle directory:   ${BOLD}${BUNDLE_DIR}${NC}"
 
 # Check if extraction / patching is required (auto-repatch if fix is missing)
 NEEDS_EXTRACT=0
-if [ "$FORCE_EXTRACT" -eq 1 ] || [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/main.js" ] || [ ! -f "$BUNDLE_DIR/index.html" ] || [ ! -f "$BUNDLE_DIR/.patched" ] || ! grep -q 'restrictToCorpDomain:!1' "$BUNDLE_DIR/main.js" 2>/dev/null || ! grep -q 'agy.selectedModelLabel' "$BUNDLE_DIR/main.js" 2>/dev/null; then
+if [ "$FORCE_EXTRACT" -eq 1 ] || [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/main.js" ] || [ ! -f "$BUNDLE_DIR/index.html" ] || [ ! -f "$BUNDLE_DIR/.patched" ] || ! grep -q 'restrictToCorpDomain:!1' "$BUNDLE_DIR/main.js" 2>/dev/null || ! grep -q 'MODEL_ENUM_MAP' "$BUNDLE_DIR/main.js" 2>/dev/null || ! grep -q 'agy.selectedModelLabel' "$BUNDLE_DIR/main.js" 2>/dev/null; then
     NEEDS_EXTRACT=1
 fi
 
