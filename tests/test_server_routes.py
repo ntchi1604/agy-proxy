@@ -1202,7 +1202,7 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(posted_bodies), 1)
         self.assertEqual(posted_bodies[0]["project"], "project-alpha")
-        self.assertEqual(posted_bodies[0]["request"]["project"], "project-alpha")
+        self.assertNotIn("project", posted_bodies[0]["request"])
 
     async def test_cloudcode_passthrough_generation_error_returns_503(self):
         """Tests that when generation fails across all accounts, it returns 503 instead of 200 empty dict."""
@@ -1228,6 +1228,120 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.status_code, 503)
         self.assertEqual(resp.json()["error"]["code"], 503)
         self.assertEqual(resp.json()["error"]["status"], "UNAVAILABLE")
+
+    async def test_cloudcode_passthrough_wraps_top_level_contents_and_strips_from_root(self):
+        """Tests that top-level contents and tools are moved into 'request' and stripped from root to avoid CloudCode 400."""
+        acc1 = AccountSession(
+            account_id="acc_wrap_test",
+            email="wrap_test@gmail.com",
+            project_id="test-project-123",
+            refresh_token="rf_wrap",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_wrap_test"] = acc1
+
+        posted_bodies = []
+        posted_urls = []
+
+        class InspectClient:
+            async def post(self, url, **kwargs):
+                posted_urls.append(url)
+                posted_bodies.append(kwargs.get("json"))
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"response": {"text": "wrapped successfully"}}',
+                    content=b'{"response": {"text": "wrapped successfully"}}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"response": {"text": "wrapped successfully"}},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=InspectClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_wrap"})
+
+        # Client sends Gemini-style top-level contents and tools without request wrapper
+        client_payload = {
+            "model": "gemini-3.8-flash-high",
+            "contents": [
+                {"role": "user", "parts": [{"text": "Hello without wrapper"}]}
+            ],
+            "tools": [
+                {"functionDeclarations": [{"name": "read_file", "description": "Read file"}]}
+            ],
+            "generationConfig": {"temperature": 0.2},
+        }
+
+        resp = await self.client.post("/v1internal:streamGenerateContent", json=client_payload)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(posted_bodies), 1)
+
+        upstream_body = posted_bodies[0]
+        # Top-level 'contents' and 'tools' MUST be popped from root
+        self.assertNotIn("contents", upstream_body)
+        self.assertNotIn("tools", upstream_body)
+        self.assertNotIn("generationConfig", upstream_body)
+
+        # Must be moved inside 'request'
+        self.assertIn("request", upstream_body)
+        self.assertIn("contents", upstream_body["request"])
+        self.assertEqual(upstream_body["request"]["contents"][0]["role"], "user")
+        self.assertEqual(upstream_body["request"]["contents"][0]["parts"][0]["text"], "Hello without wrapper")
+        self.assertIn("tools", upstream_body["request"])
+        self.assertEqual(upstream_body["request"]["tools"][0]["functionDeclarations"][0]["name"], "read_file")
+        self.assertIn("generationConfig", upstream_body["request"])
+        self.assertEqual(upstream_body["request"]["generationConfig"]["temperature"], 0.2)
+
+        # Model and project must be properly aligned
+        self.assertEqual(upstream_body["model"], "gemini-3.8-flash-high")
+        self.assertEqual(upstream_body["request"]["model"], "gemini-3.8-flash-high")
+        self.assertEqual(upstream_body["project"], "test-project-123")
+        self.assertNotIn("project", upstream_body["request"])
+
+    async def test_cloudcode_passthrough_normalizes_slash_colon_actions(self):
+        """Tests that slash-path actions like /v1internal/loadCodeAssist and /v1internal/models/...:streamGenerateContent are normalized."""
+        acc1 = AccountSession(
+            account_id="acc_slash_norm",
+            email="slash_norm@gmail.com",
+            project_id="test-proj-norm",
+            refresh_token="rf_norm",
+            is_primary=True,
+        )
+        self.pool.accounts["acc_slash_norm"] = acc1
+
+        posted_urls = []
+        posted_bodies = []
+
+        class InspectClient:
+            async def post(self, url, **kwargs):
+                posted_urls.append(url)
+                posted_bodies.append(kwargs.get("json"))
+                return unittest.mock.Mock(
+                    status_code=200,
+                    text='{"ok": true}',
+                    content=b'{"ok": true}',
+                    headers={"content-type": "application/json"},
+                    json=lambda: {"ok": True},
+                )
+
+        acc1.get_http_client = unittest.mock.AsyncMock(return_value=InspectClient())
+        acc1.get_auth_headers = unittest.mock.AsyncMock(return_value={"Authorization": "Bearer tok_norm"})
+
+        # 1. Test /v1internal/loadCodeAssist gets normalized to /v1internal:loadCodeAssist
+        resp1 = await self.client.post("/v1internal/loadCodeAssist", json={"metadata": {"ideType": "ANTIGRAVITY"}})
+        self.assertEqual(resp1.status_code, 200)
+        self.assertEqual(posted_urls[0], "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")
+
+        # 2. Test /v1internal/models/gemini-3.8-flash-high:streamGenerateContent
+        resp2 = await self.client.post(
+            "/v1internal/models/gemini-3.8-flash-high:streamGenerateContent",
+            json={"contents": [{"role": "user", "parts": [{"text": "test slash model"}]}]},
+        )
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(posted_urls[1], "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        self.assertEqual(posted_bodies[1]["model"], "gemini-3.8-flash-high")
+        self.assertEqual(posted_bodies[1]["request"]["model"], "gemini-3.8-flash-high")
+        self.assertNotIn("contents", posted_bodies[1])
+        self.assertIn("contents", posted_bodies[1]["request"])
+
 
     async def test_export_and_import_accounts(self):
         oa = AccountSession(

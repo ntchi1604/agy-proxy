@@ -645,12 +645,12 @@ def create_app(
             return FileResponse(logo_path, media_type="image/png")
         raise HTTPException(status_code=404, detail="Logo not found")
 
-    @app.api_route("/api/hello", methods=["GET", "HEAD"])
-    @app.api_route("/hello", methods=["GET", "HEAD"])
-    @app.api_route("/v1/hello", methods=["GET", "HEAD"])
-    @app.api_route("/v1/api/hello", methods=["GET", "HEAD"])
-    @app.api_route("/v1/oauth/hello", methods=["GET", "HEAD"])
-    @app.api_route("/oauth/hello", methods=["GET", "HEAD"])
+    @app.api_route("/api/hello", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/hello", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/v1/hello", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/v1/api/hello", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/v1/oauth/hello", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/oauth/hello", methods=["GET", "HEAD"], include_in_schema=False)
     async def claude_code_hello():
         return {"message": "hello"}
 
@@ -719,13 +719,13 @@ def create_app(
     # OTEL_EXPORTER_OTLP_ENDPOINT at the proxy we absorb them here and return
     # 200 so the client never retries. Nothing is forwarded externally.
     # -------------------------------------------------------------------------
-    @app.api_route("/log", methods=["POST", "OPTIONS"])
-    @app.api_route("/api/client/metrics", methods=["POST", "OPTIONS"])
-    @app.api_route("/otlp/v1/metrics", methods=["POST", "OPTIONS"])
-    @app.api_route("/otlp/v1/traces", methods=["POST", "OPTIONS"])
-    @app.api_route("/otlp/v1/logs", methods=["POST", "OPTIONS"])
-    @app.api_route("/v1/traces", methods=["POST", "OPTIONS"])
-    @app.api_route("/v1/logs", methods=["POST", "OPTIONS"])
+    @app.api_route("/log", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/api/client/metrics", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/otlp/v1/metrics", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/otlp/v1/traces", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/otlp/v1/logs", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/v1/traces", methods=["POST", "OPTIONS"], include_in_schema=False)
+    @app.api_route("/v1/logs", methods=["POST", "OPTIONS"], include_in_schema=False)
     async def otlp_sink(request: Request):
         """Silent OTLP/OpenTelemetry sink — absorbs telemetry without forwarding."""
         return JSONResponse({"success": True}, status_code=200)
@@ -805,7 +805,7 @@ def create_app(
 
         return {"input_tokens": final_tokens}
 
-    @app.api_route("/api/fetch-url", methods=["GET", "POST"])
+    @app.api_route("/api/fetch-url", methods=["GET", "POST"], include_in_schema=False)
     async def fetch_url_endpoint(request: Request):
         """Fetches web page content using Google's native crawler (Trawler / Googlebot)."""
         verify_api_key(
@@ -2482,8 +2482,8 @@ def create_app(
     # Internal CloudCode Compatibility Endpoints
     # -------------------------------------------------------------------------
 
-    @app.api_route("/v1internal:{action}", methods=["GET", "POST", "PUT", "DELETE"])
-    @app.api_route("/v1internal/{action_path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+    @app.api_route("/v1internal:{action}", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
+    @app.api_route("/v1internal/{action_path:path}", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False)
     async def cloudcode_internal_passthrough(
         request: Request,
         action: str | None = None,
@@ -2504,7 +2504,10 @@ def create_app(
                 except Exception:
                     body = None
         # --- Route to proper account and track usage ---
-        is_generation = action in ("streamGenerateContent", "generateContent") or action_path in ("streamGenerateContent", "generateContent")
+        is_generation = (
+            action in ("streamGenerateContent", "generateContent")
+            or (bool(action_path) and ("streamGenerateContent" in action_path or "generateContent" in action_path))
+        )
         is_count_tokens = action in ("countTokens",) or (bool(action_path) and "countTokens" in action_path)
 
         def _record_cloudcode_traffic(
@@ -2589,6 +2592,11 @@ def create_app(
                         elif r_lower in ("model", "assistant"):
                             item["role"] = "model"
 
+        def _apply_client_user_agent(headers_dict: dict) -> None:
+            req_ua = request.headers.get("user-agent", "")
+            if req_ua and any(k in req_ua.lower() for k in ("antigravity", "cloudcode", "aidev_client")):
+                headers_dict["User-Agent"] = req_ua
+
         from agy_proxy.models import (
             normalize_model_name,
             is_argon_model,
@@ -2606,6 +2614,10 @@ def create_app(
                     body["request"]["model"] = req_model
                 _sanitize_roles(body["request"].get("contents", []))
             _sanitize_roles(body.get("contents", []))
+        if is_generation and req_model == DEFAULT_MODEL and action_path:
+            m_path = re.search(r'models/([^/:]+)', action_path)
+            if m_path:
+                req_model = normalize_model_name(m_path.group(1))
 
         # 2. Identify target account from Authorization header or explicit account header if present
         target_account = None
@@ -2699,10 +2711,37 @@ def create_app(
         timeout_sec = 180.0 if is_generation else 8.0
         query_params = dict(request.query_params)
         from agy_proxy.auth import CLOUDCODE_BASE_URL
+        COLON_ACTIONS = {
+            "loadCodeAssist",
+            "onboardUser",
+            "fetchUserInfo",
+            "retrieveUserQuotaSummary",
+            "fetchAvailableModels",
+            "listExperiments",
+            "streamGenerateContent",
+            "generateContent",
+            "countTokens",
+            "recordCodeAssistMetrics",
+            "writeTrajectoryAcls",
+            "fetchAdminControls",
+            "rewriteUri",
+            "fetchFromTrawlerCache",
+        }
         if action:
             target_url = f"{CLOUDCODE_BASE_URL}/v1internal:{action}"
+        elif action_path:
+            clean_ap = action_path.split("?")[0].strip("/")
+            if "streamGenerateContent" in clean_ap:
+                target_url = f"{CLOUDCODE_BASE_URL}/v1internal:streamGenerateContent"
+            elif "generateContent" in clean_ap:
+                target_url = f"{CLOUDCODE_BASE_URL}/v1internal:generateContent"
+            elif clean_ap in COLON_ACTIONS or any(clean_ap.endswith(f":{ca}") or clean_ap.endswith(f"/{ca}") for ca in COLON_ACTIONS):
+                matched_act = clean_ap.split(":")[-1].split("/")[-1]
+                target_url = f"{CLOUDCODE_BASE_URL}/v1internal:{matched_act}"
+            else:
+                target_url = f"{CLOUDCODE_BASE_URL}/v1internal/{action_path}"
         else:
-            target_url = f"{CLOUDCODE_BASE_URL}/v1internal/{action_path}"
+            target_url = f"{CLOUDCODE_BASE_URL}/v1internal"
 
         last_error = ""
 
@@ -2719,10 +2758,12 @@ def create_app(
             candidate_body = copy.deepcopy(body) if isinstance(body, dict) else body
             if isinstance(candidate_body, dict):
                 acc_proj = getattr(acc, "project_id", None) or "aicode-consumers"
-                if "project" in candidate_body:
+                if "project" in candidate_body or is_generation:
                     candidate_body["project"] = acc_proj
                 if "request" in candidate_body and isinstance(candidate_body["request"], dict):
-                    if "project" in candidate_body["request"]:
+                    if is_generation:
+                        candidate_body["request"].pop("project", None)
+                    elif "project" in candidate_body["request"]:
                         candidate_body["request"]["project"] = acc_proj
 
             # ── Gemini Web browser session handling for generation ────────────────
@@ -2984,7 +3025,7 @@ def create_app(
                         }
                     })
 
-            # ── Non-gemini_web accounts: normalize web alias and fallback Argon if needed ──
+            # ── Non-gemini_web accounts: normalize web alias, wrap request, and fallback Argon if needed ──
             if getattr(acc, "auth_method", "") != "gemini_web":
                 target_m = req_model
                 if "-web" in target_m or "_web" in target_m:
@@ -3003,15 +3044,48 @@ def create_app(
                     if not has_argon:
                         fallback_m = get_argon_fallback_model(target_m)
                         logger.info("[%s] Account does not have Argon access. Auto-mapping %s -> %s", acc_label, target_m, fallback_m)
+                        target_m = fallback_m
                         if isinstance(candidate_body, dict):
                             candidate_body["model"] = fallback_m
                             if "request" in candidate_body and isinstance(candidate_body["request"], dict):
                                 candidate_body["request"]["model"] = fallback_m
 
+                # Ensure generation payload strictly adheres to CloudCode StreamGenerateContentRequest schema
+                if is_generation and isinstance(candidate_body, dict):
+                    if "request" not in candidate_body or not isinstance(candidate_body["request"], dict):
+                        candidate_body["request"] = {}
+
+                    # Pop top-level contents so CloudCode does not reject with 400 (Unknown name "contents": Cannot find field.)
+                    if "contents" in candidate_body:
+                        top_c = candidate_body.pop("contents")
+                        if "contents" not in candidate_body["request"]:
+                            candidate_body["request"]["contents"] = top_c
+
+                    if "contents" in candidate_body["request"]:
+                        _sanitize_roles(candidate_body["request"]["contents"])
+                        try:
+                            from agy_proxy.converters.common import sanitize_gemini_contents_thought_signatures
+                            candidate_body["request"]["contents"] = sanitize_gemini_contents_thought_signatures(
+                                candidate_body["request"]["contents"]
+                            )
+                        except Exception:
+                            pass
+
+                    for inner_k in ("tools", "toolConfig", "generationConfig", "systemInstruction", "safetySettings"):
+                        if inner_k in candidate_body:
+                            val = candidate_body.pop(inner_k)
+                            if inner_k not in candidate_body["request"]:
+                                candidate_body["request"][inner_k] = val
+
+                    candidate_body["model"] = target_m
+                    candidate_body["request"]["model"] = target_m
+                    acc_proj = getattr(acc, "project_id", None) or "aicode-consumers"
+                    candidate_body["project"] = acc_proj
+                    candidate_body["request"].pop("project", None)
+
             try:
                 headers = await acc.get_auth_headers()
-                if "user-agent" in request.headers:
-                    headers["User-Agent"] = request.headers["user-agent"]
+                _apply_client_user_agent(headers)
 
                 c = await acc.get_http_client()
 
@@ -3108,11 +3182,13 @@ def create_app(
                                     alt_proj = getattr(alt_acc, "project_id", None) or "aicode-consumers"
                                     alt_body["project"] = alt_proj
                                     if "request" in alt_body and isinstance(alt_body["request"], dict):
-                                        alt_body["request"]["project"] = alt_proj
+                                        if is_generation:
+                                            alt_body["request"].pop("project", None)
+                                        elif "project" in alt_body["request"]:
+                                            alt_body["request"]["project"] = alt_proj
                                 try:
                                     alt_headers = await alt_acc.get_auth_headers()
-                                    if "user-agent" in request.headers:
-                                        alt_headers["User-Agent"] = request.headers["user-agent"]
+                                    _apply_client_user_agent(alt_headers)
                                     alt_c = await alt_acc.get_http_client()
                                     alt_resp = await alt_c.post(target_url, headers=alt_headers, json=alt_body, params=query_params, timeout=timeout_sec)
                                     if alt_resp.status_code == 200:
@@ -3141,8 +3217,7 @@ def create_app(
                                     up_body["request"]["model"] = upgrade_model
                             try:
                                 up_headers = await acc.get_auth_headers()
-                                if "user-agent" in request.headers:
-                                    up_headers["User-Agent"] = request.headers["user-agent"]
+                                _apply_client_user_agent(up_headers)
                                 up_c = await acc.get_http_client()
                                 up_resp = await up_c.post(target_url, headers=up_headers, json=up_body, params=query_params, timeout=timeout_sec)
                                 if up_resp.status_code == 200:
@@ -3152,8 +3227,8 @@ def create_app(
                             except Exception as up_err:
                                 logger.debug("[%s] Upgrade request error: %s", acc_label, up_err)
 
-                if resp.status_code in (400, 404, 500, 502, 503, 504) and is_generation and not is_last:
-                    is_model_err = (resp.status_code == 404) or (
+                if resp.status_code in (400, 403, 404, 500, 502, 503, 504) and is_generation and not is_last:
+                    is_model_err = (resp.status_code in (403, 404)) or (
                         resp.status_code == 400 and any(kw in err_lower for kw in ("not supported", "unknown model", "invalid model", "not found", "model", "available"))
                     )
                     if is_model_err:
@@ -3231,11 +3306,13 @@ def create_app(
                                 fb_proj = getattr(fb_acc, "project_id", None) or "aicode-consumers"
                                 fb_body["project"] = fb_proj
                                 if "request" in fb_body and isinstance(fb_body["request"], dict):
-                                    fb_body["request"]["project"] = fb_proj
+                                    if is_generation:
+                                        fb_body["request"].pop("project", None)
+                                    elif "project" in fb_body["request"]:
+                                        fb_body["request"]["project"] = fb_proj
                             try:
                                 fb_headers = await fb_acc.get_auth_headers()
-                                if "user-agent" in request.headers:
-                                    fb_headers["User-Agent"] = request.headers["user-agent"]
+                                _apply_client_user_agent(fb_headers)
                                 fb_c = await fb_acc.get_http_client()
                                 fb_resp = await fb_c.post(target_url, headers=fb_headers, json=fb_body, params=query_params, timeout=timeout_sec)
                                 if fb_resp.status_code == 200:
