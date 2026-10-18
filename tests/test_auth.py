@@ -1033,6 +1033,55 @@ class TestGeminiWebSession(unittest.TestCase):
         d = gw.to_dict()
         self.assertIn("gemini-4-argon", d["available_models"])
 
+    def test_gemini_web_fetch_at_token_extraction(self):
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        gw = GeminiWebSession(
+            account_id="gw_test_at",
+            cookies={"__Secure-1PSID": "test_psid"},
+        )
+
+        # Test case 1: New thykhd format with AFWLbD token
+        html_thykhd = '<html><script>WIZ_global_data = {"svJlae":"Bard","thykhd":"AFWLbD_test_csrf_token_123","FdrFJe":"-1234567","cfb2h":"boq_gemini-web_20261016"};</script></html>'
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html_thykhd
+        mock_resp.cookies = MagicMock()
+        mock_resp.cookies.items.return_value = []
+        mock_resp.headers = MagicMock()
+        mock_resp.headers.get_list.return_value = []
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch.object(gw, "get_http_client", new_callable=AsyncMock) as mock_get_client:
+            mock_get_client.return_value = mock_client
+            token = asyncio.run(gw._fetch_at_token())
+            self.assertEqual(token, "AFWLbD_test_csrf_token_123")
+            self.assertEqual(gw._f_sid, "-1234567")
+            self.assertEqual(gw._bl_token, "boq_gemini-web_20261016")
+
+        # Test case 2: Legacy SNlM0e format
+        gw._at_token = None
+        html_snlm0e = '<html><script>WIZ_global_data = {"SNlM0e":"legacy_token_abc","FdrFJe":"98765","cfb2h":"boq_gemini-web_legacy"};</script></html>'
+        mock_resp2 = MagicMock()
+        mock_resp2.status_code = 200
+        mock_resp2.text = html_snlm0e
+        mock_resp2.cookies = MagicMock()
+        mock_resp2.cookies.items.return_value = []
+        mock_resp2.headers = MagicMock()
+        mock_resp2.headers.get_list.return_value = []
+        mock_client2 = AsyncMock()
+        mock_client2.get = AsyncMock(return_value=mock_resp2)
+
+        with patch.object(gw, "get_http_client", new_callable=AsyncMock) as mock_get_client:
+            mock_get_client.return_value = mock_client2
+            token = asyncio.run(gw._fetch_at_token())
+            self.assertEqual(token, "legacy_token_abc")
+            self.assertEqual(gw._f_sid, "98765")
+            self.assertEqual(gw._bl_token, "boq_gemini-web_legacy")
+
     def test_gemini_web_multi_turn_continuation_protocol(self):
         gw = GeminiWebSession(
             account_id="gw_test_continuation",

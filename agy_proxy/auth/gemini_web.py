@@ -650,11 +650,23 @@ class GeminiWebSession(AccountSession):
                 if gemini_tab and gemini_tab.get("webSocketDebuggerUrl"):
                     tab_ws_url = gemini_tab["webSocketDebuggerUrl"]
                     async with websockets.connect(tab_ws_url, ping_interval=None) as tab_ws:
+                        eval_expr = (
+                            "(() => {"
+                            "  const w = window.WIZ_global_data || {};"
+                            "  let at = w.SNlM0e || w.thykhd;"
+                            "  if (!at) {"
+                            "    for (const k in w) {"
+                            "      if (typeof w[k] === 'string' && w[k].startsWith('AFWLbD')) { at = w[k]; break; }"
+                            "    }"
+                            "  }"
+                            "  return JSON.stringify({at: at || null, sid: w.FdrFJe || null, bl: w.cfb2h || null});"
+                            "})()"
+                        )
                         eval_msg = json.dumps({
                             "id": 2,
                             "method": "Runtime.evaluate",
                             "params": {
-                                "expression": "JSON.stringify({at: window.WIZ_global_data?.SNlM0e, sid: window.WIZ_global_data?.FdrFJe, bl: window.WIZ_global_data?.cfb2h})"
+                                "expression": eval_expr
                             }
                         })
                         await tab_ws.send(eval_msg)
@@ -787,12 +799,25 @@ class GeminiWebSession(AccountSession):
                 else:
                     return None
             html = resp.text
-            # Extract AT token: "SNlM0e":"<token>"
-            m = re.search(r'"SNlM0e"\s*:\s*"([^"]+)"', html)
-            if m:
-                token = m.group(1)
-                self._at_token = token
-                logger.debug("[GeminiWeb] AT token extracted (%d chars)", len(token))
+            # Extract AT token: "SNlM0e":"<token>", "thykhd":"<token>", or any CSRF token starting with AFWLbD
+            m = re.search(r'"(?:SNlM0e|thykhd)"\s*:\s*"([^"]+)"', html)
+            if not m:
+                m = re.search(r'"[a-zA-Z0-9_]+"\s*:\s*"(AFWLbD[^"]+)"', html)
+            if not m:
+                m_wiz = re.search(r'WIZ_global_data\s*=\s*(\{.*?\});', html, re.DOTALL)
+                if m_wiz:
+                    try:
+                        wiz = json.loads(m_wiz.group(1))
+                        for k, v in wiz.items():
+                            if isinstance(v, str) and (v.startswith("AFWLbD") or k in ("SNlM0e", "thykhd")):
+                                self._at_token = v
+                                break
+                    except Exception:
+                        pass
+            if m and not self._at_token:
+                self._at_token = m.group(1)
+            if self._at_token:
+                logger.debug("[GeminiWeb] AT token extracted (%d chars)", len(self._at_token))
 
             # Extract sid: "FdrFJe":"..." or "FdrFJe":-12345
             m_sid = re.search(r'"FdrFJe"\s*:\s*"?(-?\d+)"?', html)
@@ -810,9 +835,9 @@ class GeminiWebSession(AccountSession):
                 return self._at_token
 
             if self.cdp_port:
-                logger.debug("[GeminiWeb] AT token (SNlM0e) not in /app HTML — will extract fresh token via browser CDP")
+                logger.debug("[GeminiWeb] AT token not in /app HTML — will extract fresh token via browser CDP")
             else:
-                logger.warning("[GeminiWeb] AT token (SNlM0e) not found in /app response — cookies may be stale")
+                logger.warning("[GeminiWeb] AT token not found in /app response — cookies may be stale")
             return None
         except Exception as e:
             logger.warning("[GeminiWeb] Error fetching AT token: %s", e)
@@ -1023,6 +1048,17 @@ class GeminiWebSession(AccountSession):
 
         # Retrieve or initialize conversation state for this session
         sess_ctx = self.get_session_context(session_id)
+        norm_req_model = (model or "").lower().strip()
+        last_model = sess_ctx.get("model")
+        if last_model and norm_req_model and last_model != norm_req_model:
+            logger.info("[GeminiWeb] Model changed in session %s (%s -> %s), starting fresh conversation", session_id, last_model, norm_req_model)
+            sess_ctx["conv_id"] = None
+            sess_ctx["resp_id"] = None
+            sess_ctx["rc_id"] = None
+            sess_ctx["continuation_token"] = None
+            sess_ctx["turn_index"] = 0
+        sess_ctx["model"] = norm_req_model
+
         conv_id = sess_ctx.get("conv_id")
         resp_id = sess_ctx.get("resp_id")
         rc_id = sess_ctx.get("rc_id")

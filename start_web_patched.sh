@@ -288,6 +288,8 @@ if '_agyEnhanced' not in js or '_sep_ordered_v4' not in js or 'agy.selectedModel
 "gemini-3.8-flash-web-high":1505,"gemini-3.8-flash-web-medium":1506,"gemini-3.8-flash-web-low":1507,"gemini-3.8-flash-web-task":1508,
 "gemini-3.1-pro-web-high":1509,"gemini-3.1-pro-web-medium":1510,"gemini-3.1-pro-web-low":1511,
 "gemini-3.5-flash-lite-web-high":1512,"gemini-3.5-flash-lite-web-medium":1513,"gemini-3.5-flash-lite-web-low":1514,
+"claude-sonnet-5-5-high":1515,"claude-sonnet-5-5-medium":1516,"claude-sonnet-5-5-low":1517,
+"claude-opus-5-5-high":1518,"claude-opus-5-5-medium":1519,"claude-opus-5-5-low":1520,
 "gemini-3.8-flash-tiered":1521,"gemini-3.8-flash-deepagent":1522,
 "gemini-3.7-flash-high":1315,"gemini-3.7-flash-medium":1316,"gemini-3.7-flash-low":1317,"gemini-3.7-flash-tiered":1523,
 "gemini-3.6-flash-high":1524,"gemini-3.6-flash-medium":1525,"gemini-3.6-flash-low":1526,

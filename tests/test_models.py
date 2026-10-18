@@ -243,6 +243,33 @@ class TestModelNormalization(unittest.TestCase):
         self.assertEqual(get_claude_5_5_upgrade_model("claude-opus-4-6-thinking"), "claude-opus-5-5-high")
         self.assertEqual(get_claude_5_5_upgrade_model("claude-3-opus"), "claude-opus-5-5-high")
 
+    def test_cloudcode_placeholders_and_reverse_map(self):
+        from agy_proxy.models import REVERSE_PLACEHOLDER_MAP, CLOUDCODE_PLACEHOLDER_MAP
+
+        # Placeholder string mapping
+        self.assertEqual(normalize_model_name("MODEL_PLACEHOLDER_M501"), "gemini-4-argon-web-high")
+        self.assertEqual(normalize_model_name("MODEL_PLACEHOLDER_M505"), "gemini-3.8-flash-web-high")
+        self.assertEqual(normalize_model_name("MODEL_PLACEHOLDER_M515"), "claude-sonnet-5-5-high")
+        self.assertEqual(normalize_model_name("MODEL_PLACEHOLDER_M521"), "gemini-3.8-flash-tiered")
+        self.assertEqual(normalize_model_name("MODEL_PLACEHOLDER_M522"), "gemini-3.8-flash-deepagent")
+
+        # Numeric enum mapping (1000 + N)
+        self.assertEqual(normalize_model_name(1501), "gemini-4-argon-web-high")
+        self.assertEqual(normalize_model_name("1501"), "gemini-4-argon-web-high")
+        self.assertEqual(normalize_model_name(1505), "gemini-3.8-flash-web-high")
+        self.assertEqual(normalize_model_name("1505"), "gemini-3.8-flash-web-high")
+        self.assertEqual(normalize_model_name(1515), "claude-sonnet-5-5-high")
+
+        # is_gemini_web_model support
+        self.assertTrue(is_gemini_web_model("gemini-4-argon-web-high"))
+        self.assertTrue(is_gemini_web_model("gemini-3.8-flash-web-high"))
+        self.assertTrue(is_gemini_web_model("MODEL_PLACEHOLDER_M501"))
+        self.assertTrue(is_gemini_web_model("MODEL_PLACEHOLDER_M505"))
+        self.assertTrue(is_gemini_web_model(1501))
+        self.assertTrue(is_gemini_web_model(1505))
+        self.assertFalse(is_gemini_web_model("MODEL_PLACEHOLDER_M515"))
+        self.assertFalse(is_gemini_web_model("MODEL_PLACEHOLDER_M318"))
+
     def test_deepagent_model_preset(self):
         from agy_proxy.models import is_deepagent_model
         from agy_proxy.converters.anthropic import anthropic_to_cloudcode_payload

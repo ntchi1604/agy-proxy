@@ -449,6 +449,18 @@ CLOUDCODE_PLACEHOLDER_MAP: dict[str, str] = {
     "gemini-3.1-flash-image": "MODEL_PLACEHOLDER_M548",
 }
 
+REVERSE_PLACEHOLDER_MAP: dict[str, str] = {
+    v.lower(): k for k, v in CLOUDCODE_PLACEHOLDER_MAP.items()
+}
+for _m, _p in CLOUDCODE_PLACEHOLDER_MAP.items():
+    if _p.startswith("MODEL_PLACEHOLDER_M"):
+        try:
+            _num = int(_p.split("MODEL_PLACEHOLDER_M")[1])
+            _enum_val = 1000 + _num
+            REVERSE_PLACEHOLDER_MAP[str(_enum_val)] = _m
+        except Exception:
+            pass
+
 EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     # Gemini 4 Argon (CloudCode)
     "gemini-4-argon": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
@@ -656,13 +668,18 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
 }
 
 
-def normalize_model_name(model_name: str | None) -> str:
-    """Normalizes any requested model name to an Antigravity backend model identifier."""
-    if not model_name:
+def normalize_model_name(model_name: Any) -> str:
+    """Normalizes any requested model name, placeholder, or enum to an Antigravity backend model identifier."""
+    if model_name is None:
         return DEFAULT_MODEL
 
     import re
-    cleaned = model_name.strip().lower()
+    cleaned = str(model_name).strip().lower()
+    if not cleaned:
+        return DEFAULT_MODEL
+
+    if cleaned in REVERSE_PLACEHOLDER_MAP:
+        return REVERSE_PLACEHOLDER_MAP[cleaned]
 
     # Remove provider prefixes (e.g. anthropic/gemini-3.7-flash-high or anthropic.gemini-3.7-flash-high)
     cleaned = re.sub(r"^(anthropic|openai|google|models)[./]", "", cleaned).strip()
@@ -670,6 +687,9 @@ def normalize_model_name(model_name: str | None) -> str:
     # Remove context annotations like [1m], (1m context), [thinking], etc.
     cleaned = re.sub(r"\[.*?\]", "", cleaned).strip()
     cleaned = re.sub(r"\(.*?\)", "", cleaned).strip()
+
+    if cleaned in REVERSE_PLACEHOLDER_MAP:
+        return REVERSE_PLACEHOLDER_MAP[cleaned]
 
     if cleaned in VALID_CLOUDCODE_MODELS:
         return cleaned
