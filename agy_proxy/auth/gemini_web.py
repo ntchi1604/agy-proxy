@@ -12,6 +12,7 @@ import re
 import time
 import urllib.request as _urllib_req
 import uuid
+from pathlib import Path
 from typing import Any
 from collections.abc import AsyncGenerator
 
@@ -467,6 +468,83 @@ class GeminiWebSession(AccountSession):
         }
         self.quota_summary: dict[str, Any] = {}
         self.tier_info: dict[str, Any] = {"name": "Gemini Web (Browser)"}
+        self._botguard_tokens: dict[str, str] = {}
+        self._load_botguard_tokens()
+
+    def _load_botguard_tokens(self) -> None:
+        """Loads Botguard tokens from local botguard_tokens.json or traffic captures."""
+        # 1. From package dir
+        pkg_tokens_path = Path(__file__).parent / "botguard_tokens.json"
+        if pkg_tokens_path.exists():
+            try:
+                with open(pkg_tokens_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        self._botguard_tokens.update(data.get("models", {}))
+            except Exception as e:
+                logger.debug("Failed loading %s: %s", pkg_tokens_path, e)
+        # 2. From ~/.config/agy-proxy/botguard_tokens.json
+        cfg_tokens_path = Path.home() / ".config" / "agy-proxy" / "botguard_tokens.json"
+        if cfg_tokens_path.exists():
+            try:
+                with open(cfg_tokens_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        self._botguard_tokens.update(data.get("models", data))
+            except Exception as e:
+                logger.debug("Failed loading %s: %s", cfg_tokens_path, e)
+        # 3. From /home/qumhab/tmp_gemini/trafic if available
+        traffic_dir = Path("/home/qumhab/tmp_gemini/trafic")
+        if traffic_dir.is_dir() and not self._botguard_tokens.get("gemini-4-argon-high"):
+            try:
+                from urllib.parse import parse_qs
+                for p in traffic_dir.glob("*Argon*.har"):
+                    with open(p, "r", encoding="utf-8") as f:
+                        har = json.load(f)
+                    for entry in har.get("log", {}).get("entries", []):
+                        if "StreamGenerate" in entry.get("request", {}).get("url", ""):
+                            qs = parse_qs(entry["request"].get("postData", {}).get("text", ""))
+                            if "f.req" in qs:
+                                f_req = json.loads(qs["f.req"][0])
+                                inner3 = json.loads(f_req[1])[3]
+                                if inner3:
+                                    if "high" in p.name.lower():
+                                        self._botguard_tokens["gemini-4-argon-high"] = inner3
+                                    elif "medium" in p.name.lower():
+                                        self._botguard_tokens["gemini-4-argon-medium"] = inner3
+                                    elif "low" in p.name.lower():
+                                        self._botguard_tokens["gemini-4-argon-low"] = inner3
+                                    elif "spark" in p.name.lower():
+                                        self._botguard_tokens["gemini-4-argon-task"] = inner3
+                                    self._botguard_tokens.setdefault("default", inner3)
+                                    break
+            except Exception as e:
+                logger.debug("Failed loading tokens from traffic dir: %s", e)
+
+    def get_botguard_token(self, model: str | None = None) -> str | None:
+        """Retrieves a client integrity / Botguard token for inner[3]."""
+        if not self._botguard_tokens:
+            self._load_botguard_tokens()
+        default_tok = self._botguard_tokens.get("gemini-4-argon-high") or self._botguard_tokens.get("default")
+        if not model:
+            return default_tok
+        m = model.lower().strip()
+        # For Argon models, high token is verified to work across all modes
+        if "argon" in m or "gemini-4" in m:
+            return self._botguard_tokens.get("gemini-4-argon-high") or default_tok
+        if m in self._botguard_tokens and self._botguard_tokens[m]:
+            return self._botguard_tokens[m]
+        if "3.8" in m or "flash" in m:
+            if "high" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-high")
+            if "medium" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-medium")
+            if "low" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-low")
+            return self._botguard_tokens.get("gemini-3.8-flash-high")
+        if "pro" in m:
+            return self._botguard_tokens.get("gemini-3.1-pro-high")
+        return self._botguard_tokens.get("default")
 
     def get_session_context(self, session_id: str | None = None) -> dict[str, Any]:
         """Gets or initializes the conversation state for a specific session_id."""
@@ -897,8 +975,15 @@ class GeminiWebSession(AccountSession):
         return self.available_models
 
     def is_model_supported(self, model_name: str) -> bool:
-        """GeminiWeb only supports Gemini models, not Claude/3P."""
-        return not is_3p_model(model_name)
+        """
+        GeminiWeb only supports explicit Gemini Web models (*-web) and Gemini 4 Argon.
+        Standard CloudCode models (gemini-3.8-flash-high, gemini-2.5-pro, etc.) MUST NOT
+        be handled by browser sessions to prevent crosstalk, session hijacking, or 404s.
+        """
+        if not model_name:
+            return False
+        from agy_proxy.models import is_gemini_web_model, is_argon_model
+        return is_gemini_web_model(model_name) or is_argon_model(model_name)
 
     def get_quota_details(self) -> dict[str, Any]:
         is_gemini_limited = self.is_rate_limited("gemini")
@@ -955,10 +1040,12 @@ class GeminiWebSession(AccountSession):
         continuation_token: str | None = None,
         turn_index: int = 0,
         image_parts: list[dict[str, Any]] | None = None,
+        model_name: str | None = None,
     ) -> dict[str, str]:
         """
         Builds the URL-encoded form body for StreamGenerate matching real Google Web client.
-        Constructs the exact 99-element inner list including turn index and model configuration.
+        Constructs the exact 99-element inner list including turn index, model configuration,
+        and Botguard / client integrity token in inner[3].
         """
         # Fall back to instance attributes if not explicitly passed
         active_conv_id = conv_id if conv_id is not None else self._conv_id
@@ -982,7 +1069,8 @@ class GeminiWebSession(AccountSession):
 
         inner[1] = ["en"]
         inner[2] = None
-        inner[3] = None
+        # Botguard / client integrity token for inner[3] (required by Google for Argon / Web models)
+        inner[3] = self.get_botguard_token(model_name)
         inner[4] = uuid.uuid4().hex
         inner[6] = [1]
         inner[7] = 1
@@ -1107,6 +1195,7 @@ class GeminiWebSession(AccountSession):
                 continuation_token=continuation_token,
                 turn_index=turn_index,
                 image_parts=image_parts,
+                model_name=model,
             )
 
             req_id = self._next_req_id()

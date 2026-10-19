@@ -594,7 +594,7 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
             "model": "gemini-4-argon",
             "request": {
                 "contents": [
-                    {"role": "user", "parts": [{"text": "що за пк?"}]}
+                    {"role": "user", "parts": [{"text": "what pc is this?"}]}
                 ],
                 "tools": [
                     {

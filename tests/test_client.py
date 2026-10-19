@@ -272,7 +272,7 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         payload = {
             "tools": [{"functionDeclarations": [{"name": "Bash", "description": "Run bash"}]}],
             "contents": [
-                {"role": "user", "parts": [{"text": "що є Pictures/ в цьому каиталогі?"}]},
+                {"role": "user", "parts": [{"text": "what is in Pictures/ in this directory?"}]},
                 {"role": "model", "parts": [{"functionCall": {"name": "Bash", "args": {"command": "ls Pictures"}}}]},
                 {
                     "role": "user",
@@ -286,7 +286,7 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         cont_prompt = CloudCodeClient._format_gemini_web_prompt(payload, is_continuation=True)
         self.assertNotIn("<total_tokens>", cont_prompt)
         self.assertIn("[Tool Result for Bash: photo.png]", cont_prompt)
-        self.assertIn('The user asked: "що є Pictures/ в цьому каиталогі?".', cont_prompt)
+        self.assertIn('The user asked: "what is in Pictures/ in this directory?".', cont_prompt)
         self.assertIn("Using the tool execution output above", cont_prompt)
 
     async def test_gemini_web_agent_end_to_end_streaming_tool_call(self):

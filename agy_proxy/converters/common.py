@@ -306,14 +306,23 @@ def sanitize_gemini_schema(schema: Any) -> Any:
     return sanitized
 
 
-def ensure_tool_pairing_integrity(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def ensure_tool_pairing_integrity(
+    contents: list[dict[str, Any]],
+    model: str | None = None,
+) -> list[dict[str, Any]]:
     """
     Enforces strict 1:1 pairing between model functionCalls and user functionResponses.
     Prevents orphaned functionCall or functionResponse turns from breaking upstream
     CloudCode -> Anthropic translation (e.g. at messages.2).
+    Also sanitizes thinking blocks and thought signatures for Anthropic Claude models.
     """
     if not isinstance(contents, list) or not contents:
         return contents
+
+    is_claude = False
+    if model:
+        m_lower = str(model).lower()
+        is_claude = any(k in m_lower for k in ("claude", "sonnet", "opus"))
 
     sanitized_contents: list[dict[str, Any]] = []
     pending_calls: dict[str, str] = {}  # id -> name
@@ -332,20 +341,61 @@ def ensure_tool_pairing_integrity(contents: list[dict[str, Any]]) -> list[dict[s
             new_parts = []
             turn_calls: dict[str, str] = {}
             for p in parts:
-                if isinstance(p, dict) and "functionCall" in p:
+                if not isinstance(p, dict):
+                    new_parts.append(p)
+                    continue
+
+                if is_claude:
+                    # Anthropic Claude requires valid cryptographic signatures for thinking blocks in history.
+                    # Fabricated or Gemini thought blocks cause Error 400: "Invalid `signature` in `thinking` block".
+                    is_thought = (
+                        p.get("thought") is True
+                        or p.get("type") in ("thinking", "thought")
+                        or "thought" in p
+                        or "thoughtSignature" in p
+                        or "thought_signature" in p
+                    )
+                    if is_thought:
+                        if "functionCall" in p:
+                            p.pop("thought", None)
+                            p.pop("thoughtSignature", None)
+                            p.pop("thought_signature", None)
+                            p.pop("type", None)
+                        elif p.get("text") and not p.get("thoughtSignature") and not p.get("thought_signature") and p.get("thought") is not True:
+                            p.pop("thought", None)
+                            new_parts.append(p)
+                            continue
+                        else:
+                            continue
+
+                if "functionCall" in p:
                     fc = p["functionCall"]
                     if isinstance(fc, dict):
                         fc_id = fc.get("id") or f"call_{uuid.uuid4().hex[:8]}"
                         fc["id"] = fc_id
                         fc_name = fc.get("name", "tool")
                         turn_calls[fc_id] = fc_name
-                        if not p.get("thoughtSignature") and not p.get("thought_signature"):
+                        if is_claude:
+                            # Claude rejects dummy Gemini thoughtSignatures
+                            p.pop("thoughtSignature", None)
+                            p.pop("thought_signature", None)
+                            p.pop("thought", None)
+                            fc.pop("thoughtSignature", None)
+                            fc.pop("thought_signature", None)
+                            fc.pop("thought", None)
+                        elif not p.get("thoughtSignature") and not p.get("thought_signature"):
                             p["thoughtSignature"] = (
                                 fc.get("thoughtSignature")
                                 or get_thought_signature(call_id=fc_id, func_name=fc_name, args_obj=fc.get("args"))
                                 or DEFAULT_THOUGHT_SIGNATURE
                             )
                 new_parts.append(p)
+
+            # Ensure model turn is never empty after stripping thoughts
+            if not new_parts and parts:
+                first_text = next((p.get("text") for p in parts if isinstance(p, dict) and p.get("text")), "Done.")
+                new_parts.append({"text": first_text})
+
             pending_calls = turn_calls
             sanitized_contents.append({"role": "model", "parts": new_parts})
 
@@ -420,6 +470,8 @@ def ensure_tool_pairing_integrity(contents: list[dict[str, Any]]) -> list[dict[s
         else:
             sanitized_contents.append(turn)
 
+    if is_claude:
+        return sanitized_contents
     return sanitize_gemini_contents_thought_signatures(sanitized_contents)
 
 

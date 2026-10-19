@@ -18,6 +18,7 @@ ENV/
 .env.*
 accounts.json
 antigravity-oauth-token
+*botguard_tokens.json
 *.log
 
 # Testing & Coverage

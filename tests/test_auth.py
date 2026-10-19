@@ -1370,14 +1370,14 @@ class TestGeminiWebSession(unittest.TestCase):
         self.assertNotIn("Conversation History", res_cont)
         self.assertIn("[TOOL ERROR for Edit:", res_cont)
 
-    def test_gemini_web_incremental_utf8_cyrillic(self):
+    def test_gemini_web_incremental_utf8_multibyte(self):
         import codecs
-        cyrillic_text = "Привіт, це тестовий український файл!"
-        raw_bytes = cyrillic_text.encode("utf-8")
+        multibyte_text = "Hällö, this is a test ünicode string with multibyte characters: 🚀 世界!"
+        raw_bytes = multibyte_text.encode("utf-8")
 
-        # Split across an odd byte boundary in the middle of a 2-byte Ukrainian character
-        chunk1 = raw_bytes[:5]
-        chunk2 = raw_bytes[5:]
+        # Split across an odd byte boundary in the middle of a 2-byte character
+        chunk1 = raw_bytes[:2]
+        chunk2 = raw_bytes[2:]
 
         # Standard decode with errors='replace' corrupts character:
         bad_text = chunk1.decode("utf-8", errors="replace") + chunk2.decode("utf-8", errors="replace")
@@ -1386,7 +1386,7 @@ class TestGeminiWebSession(unittest.TestCase):
         # Incremental decoder reconstructs correctly across chunk boundaries:
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         good_text = decoder.decode(chunk1, final=False) + decoder.decode(chunk2, final=True)
-        self.assertEqual(good_text, cyrillic_text)
+        self.assertEqual(good_text, multibyte_text)
         self.assertNotIn("\ufffd", good_text)
 
     def test_gemini_web_persistence_in_pool(self):

@@ -341,11 +341,10 @@ class AntigravityOAuthSession(AccountSession):
 
         # 4. If model is a Claude 4.6 variant
         if is_claude_4_6_model(norm):
-            # Accounts with Claude 5.5 NO LONGER support Claude 4.6!
+            if avail and (norm in avail or any(is_claude_4_6_model(m) for m in avail.keys())):
+                return True
             if has_5_5:
                 return False
-            if avail:
-                return norm in avail or any(is_claude_4_6_model(m) for m in avail.keys())
             return True
 
         # 5. Gemini 4 Argon models: only supported if explicitly available and enabled in CloudCode

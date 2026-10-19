@@ -994,25 +994,7 @@ class CloudCodeClient:
                         except Exception:
                             pass
                         err_lower = err_text.lower()
-                        is_claude_deprecated = (
-                            "no longer available" in err_lower
-                            or ("4.6" in err_lower and "5.5" in err_lower)
-                            or "switch to claude" in err_lower
-                        )
-                        if is_claude_deprecated:
-                            if not hasattr(acc, "unsupported_models"):
-                                acc.unsupported_models = set()
-                            acc.unsupported_models.add("claude-sonnet-4-6")
-                            acc.unsupported_models.add("claude-opus-4-6-thinking")
-                            norm_m = normalize_model_name(model_name)
-                            acc.unsupported_models.add(norm_m)
-                            if getattr(acc, "available_models", None):
-                                acc.available_models.pop("claude-sonnet-4-6", None)
-                                acc.available_models.pop("claude-opus-4-6-thinking", None)
-                                acc.available_models.pop(norm_m, None)
-                            acc.supports_claude_5_5 = True
-                            logger.warning("[%s] ⚠️ Account does not support Claude 4.6 (%s). Marked as Claude 5.5-only. Failing over...", acc.email, err_text[:200])
-                            break
+
 
                         is_model_err = (e.response.status_code == 404) or (
                             e.response.status_code == 400 and any(kw in err_lower for kw in ("not supported", "unknown model", "invalid model", "not found", "model", "available"))
@@ -1063,13 +1045,7 @@ class CloudCodeClient:
                         err_text = e.response.text
                     except Exception:
                         pass
-                    err_lower = err_text.lower()
-                    is_claude_deprecated = (
-                        "no longer available" in err_lower
-                        or ("4.6" in err_lower and "5.5" in err_lower)
-                        or "switch to claude" in err_lower
-                    )
-                    if is_claude_deprecated or e.response.status_code not in (400, 422):
+                    if e.response.status_code not in (400, 422):
                         logger.warning("[%s] Account error [%d]. Failing over to next account in pool...", acc.email, e.response.status_code)
                         break
                     raise
@@ -1138,50 +1114,42 @@ class CloudCodeClient:
                     logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
                     return
 
-            from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
-            if is_claude_4_6_model(model_name):
-                last_err_str = str(last_error).lower()
-                is_upgradeable = (
-                    "no longer available" in last_err_str
-                    or "switch to claude" in last_err_str
-                    or ("4.6" in last_err_str and "5.5" in last_err_str)
-                    or "not found" in last_err_str
+            status_code = getattr(getattr(last_error, "response", None), "status_code", None)
+            err_str = str(last_error).lower()
+            if status_code in (503, 429) and ("capacity" in err_str or "pro" in str(model_name).lower()):
+                fallback_m = "gemini-3.8-flash-high"
+                logger.warning(
+                    "[Model Fallback] ⚠️ All accounts reported 503 capacity exhausted for %s. 🔄 Auto-falling back to %s to prevent failure!",
+                    model_name,
+                    fallback_m,
                 )
-                if is_upgradeable:
-                    upgrade_m = get_claude_5_5_upgrade_model(model_name)
-                    logger.warning(
-                        "[Model Upgrade] ⚠️ Claude 4.6 (%s) is unavailable across accounts. 🔄 Auto-upgrading to Claude 5.5 (%s) so generation continues without error!",
-                        model_name,
-                        upgrade_m,
-                    )
-                    logger.info("[Model Upgrade] %s active (Antigravity CloudCode - Upgraded from %s)", upgrade_m, model_name)
 
-                    def up_payload_builder(proj: str):
-                        base = payload_builder_fn(proj)
-                        if isinstance(base, dict):
-                            p_copy = copy.deepcopy(base)
-                            p_copy["model"] = upgrade_m
-                            if "request" in p_copy and isinstance(p_copy["request"], dict):
-                                p_copy["request"]["model"] = upgrade_m
-                            return p_copy
-                        return base
+                def cap_fb_payload_builder(proj: str):
+                    base = payload_builder_fn(proj)
+                    if isinstance(base, dict):
+                        p_copy = copy.deepcopy(base)
+                        p_copy["model"] = fallback_m
+                        if "request" in p_copy and isinstance(p_copy["request"], dict):
+                            p_copy["request"]["model"] = fallback_m
+                        return p_copy
+                    return base
 
-                    async for chunk in self._post_sse_stream_with_failover(
-                        endpoint,
-                        up_payload_builder,
-                        model_name=upgrade_m,
-                        timeout=timeout,
-                        session_key=session_key,
-                        specific_account_id=specific_account_id,
-                        client_path=client_path,
-                        is_streaming=is_streaming,
-                        is_subcall=True,
-                    ):
-                        yield chunk
-                    if not is_subcall:
-                        recorded = True
-                    logger.info("[Model Upgrade] ✅ Upgraded request to %s succeeded seamlessly!", upgrade_m)
-                    return
+                async for chunk in self._post_sse_stream_with_failover(
+                    endpoint,
+                    cap_fb_payload_builder,
+                    model_name=fallback_m,
+                    timeout=timeout,
+                    session_key=session_key,
+                    specific_account_id=specific_account_id,
+                    client_path=client_path,
+                    is_streaming=is_streaming,
+                    is_subcall=True,
+                ):
+                    yield chunk
+                if not is_subcall:
+                    recorded = True
+                logger.info("[Model Fallback] ✅ Capacity fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
+                return
 
             from agy_proxy.models import is_argon_model, get_argon_fallback_model
             if is_argon_model(model_name):

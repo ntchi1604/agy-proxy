@@ -8,51 +8,51 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==============================================================================
-# СТРУКТУРА ТА КЛАСИФІКАЦІЯ МОДЕЛЕЙ AGY-PROXY
+# AGY-PROXY MODEL ARCHITECTURE & CLASSIFICATION
 # ==============================================================================
 #
-# Щоб уникнути будь-якої плутанини та не вводити користувачів в оману,
-# всі моделі в системі чітко поділяються на 4 окремі категорії:
+# To avoid any ambiguity or confusion, all models supported by agy-proxy
+# are categorized into 4 distinct groups:
 #
-# 1. НАТИВНІ МОДЕЛІ ANTIGRAVITY (CLOUDCODE API / GOOGLE API):
-#    - Справжні моделі Google CloudCode та Antigravity Language Server:
-#      * gemini-3.8-flash-* (High / Medium / Low / Tiered / Task) — офіційний робочий флагман
+# 1. NATIVE ANTIGRAVITY MODELS (CLOUDCODE API / GOOGLE API):
+#    - Authentic Google CloudCode and Antigravity Language Server models:
+#      * gemini-3.8-flash-* (High / Medium / Low / Tiered / Task) - official primary flagship
 #      * gemini-3.7-flash-*, gemini-3.6-flash-*, gemini-3.5-flash-*, gemini-3.1-pro-*
-#      * claude-sonnet-4-6, claude-opus-4-6-thinking (офіційні 3P моделі Anthropic в Antigravity)
-#      * gpt-oss-120b-medium (відкрита модель Google CloudCode)
-#      * gemini-3.8-flash-deepagent (автономний пресет рою агентів із 64k thinking)
+#      * claude-sonnet-4-6, claude-opus-4-6-thinking (official 3P Anthropic models in Antigravity)
+#      * gpt-oss-120b-medium (open-weights Google CloudCode model)
+#      * gemini-3.8-flash-deepagent (autonomous agent swarm preset with 64k thinking budget)
 #
-# 2. МОДЕЛІ GEMINI WEB (ВЕБ-ІНТЕРФЕЙС / БРАУЗЕР):
-#    - Усі моделі з суфіксом `-web-*` (наприклад, `gemini-4-argon-web-*`, `gemini-3.8-flash-web-*`).
-#    - Вони НЕ надсилаються до CloudCode API. Запити до них виконуються через
-#      веб-автоматизацію сесії gemini.google.com у браузері користувача.
-#    - Gemini 4 Argon наразі доступний ВИКЛЮЧНО через веб-інтерфейс (як gemini-4-argon-web-*).
+# 2. GEMINI WEB MODELS (BROWSER AUTOMATION):
+#    - All models with `-web-*` suffix (e.g., `gemini-4-argon-web-*`, `gemini-3.8-flash-web-*`).
+#    - These requests are NOT sent to CloudCode API; they execute via browser session
+#      automation against gemini.google.com.
+#    - Gemini 4 Argon is currently available EXCLUSIVELY via web session (as gemini-4-argon-web-*).
 #
-# 3. АЛІАСИ СУМІСНОСТІ (COMPATIBILITY ALIASES):
-#    - Аліаси потрібні виключно для зовнішніх клієнтів (Cursor, Cline, Aider, Claude Code, OpenAI SDK),
-#      які очікують стандартні імена моделей:
-#      * OpenAI: `gpt-4o`, `gpt-4`, `o1`, `o3-mini`, `gpt-6-astra` -> мапляться на `gemini-3.8-flash-high`
-#      * DeepSeek: `deepseek-r1`, `deepseek-v3` -> мапляться на `gemini-3.8-flash-high`
-#      * Claude: `claude-3-5-sonnet`, `claude-3-7-sonnet` -> мапляться на `claude-sonnet-4-6`
-#    - УВАГА: Це НЕ окремі фізичні моделі OpenAI/DeepSeek, а прозорі аліаси сумісності,
-#      які надсилають запит до найпотужнішої доступної нативної моделі Antigravity.
+# 3. COMPATIBILITY ALIASES:
+#    - Provided for external client tools (Cursor, Cline, Aider, Claude Code, OpenAI SDK)
+#      that expect industry-standard model identifiers:
+#      * OpenAI: `gpt-4o`, `gpt-4`, `o1`, `o3-mini`, `gpt-6-astra` -> mapped to `gemini-3.8-flash-high`
+#      * DeepSeek: `deepseek-r1`, `deepseek-v3` -> mapped to `gemini-3.8-flash-high`
+#      * Claude: `claude-3-5-sonnet`, `claude-3-7-sonnet` -> mapped to `claude-sonnet-4-6`
+#    - NOTE: These are transparent compatibility aliases routing to the strongest available
+#      native Antigravity model.
 #
-# 4. ФОЛБЕК-МЕХАНІЗМИ ТА НЕВИПУЩЕНІ МОДЕЛІ:
+# 4. FALLBACK MECHANISMS & PLACEHOLDER MODELS:
 #    - Claude 5.5 (`claude-sonnet-5-5-*`, `claude-opus-5-5-*`):
-#      Оскільки Anthropic ще не випустила Claude 5.5 в API, ці аліаси автоматично
-#      й безпечно виконують фолбек на доступний `claude-sonnet-4-6` / `claude-opus-4-6-thinking`.
-#    - Gemini 4 Argon CloudCode API (`gemini-4-argon-*` без `-web-`):
-#      У CloudCode API модель Argon наразі має статус Unavailable (Google ще не запустила її в API).
-#      Тому запити до API-версії gemini-4-argon фолбечаться на `gemini-3.8-flash-high`.
-#      Якщо потрібен саме справжній Argon — слід обирати `gemini-4-argon-web-*` із розділу Web!
+#      As Anthropic has not released Claude 5.5 in the CloudCode API, these aliases
+#      safely fall back to `claude-sonnet-4-6` / `claude-opus-4-6-thinking`.
+#    - Gemini 4 Argon CloudCode API (`gemini-4-argon-*` without `-web-`):
+#      In CloudCode API, Argon is currently unavailable on Google backend.
+#      Therefore, API-level requests gracefully fall back to `gemini-3.8-flash-high`.
+#      To use genuine Argon, select `gemini-4-argon-web-*` from the Web models section.
 # ==============================================================================
 
 DEFAULT_MODEL = "gemini-3.8-flash-high"
 
 MODEL_ALIASES: dict[str, str] = {
     # --------------------------------------------------------------------------
-    # 1. Gemini 4 Argon (API-аліаси: якщо надходять без -web, фолбечаться на 3.8 Flash,
-    #    оскільки Google CloudCode API ще не відкрив доступ до Argon)
+    # 1. Gemini 4 Argon (API aliases: non-web variants fall back to 3.8 Flash
+    #    until Google CloudCode backend enables API access to Argon)
     # --------------------------------------------------------------------------
     "gemini-4-argon": "gemini-4-argon",
     "gemini-4-argon-high": "gemini-4-argon-high",
@@ -99,16 +99,17 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-flash-thinking": "gemini-3.8-flash-high",
     "gemini-pro": "gemini-3.1-pro-low",
 
-    # Legacy & Specific Gemini Models
-    "gemini-3.7-flash": "gemini-3.7-flash-high",
-    "gemini-3.7-flash-high": "gemini-3.7-flash-high",
-    "gemini-3.7-flash-medium": "gemini-3.7-flash-medium",
-    "gemini-3.7-flash-low": "gemini-3.7-flash-low",
-    "gemini-3.7-flash-tiered": "gemini-3.7-flash-tiered",
-    "gemini-3.6-flash": "gemini-3.6-flash-tiered",
-    "gemini-3.6-flash-high": "gemini-3.6-flash-high",
-    "gemini-3.6-flash-medium": "gemini-3.6-flash-medium",
-    "gemini-3.6-flash-low": "gemini-3.6-flash-low",
+    # Legacy & Specific Gemini Models (Mapped to authentic CloudCode endpoints)
+    "gemini-3.7-flash": "gemini-3.8-flash-high",
+    "gemini-3.7-flash-high": "gemini-3.8-flash-high",
+    "gemini-3.7-flash-medium": "gemini-3.8-flash-medium",
+    "gemini-3.7-flash-low": "gemini-3.8-flash-low",
+    "gemini-3.7-flash-tiered": "gemini-3.8-flash-tiered",
+    "gemini-3.6-flash": "gemini-3.8-flash-tiered",
+    "gemini-3.6-flash-high": "gemini-3.8-flash-high",
+    "gemini-3.6-flash-medium": "gemini-3.8-flash-medium",
+    "gemini-3.6-flash-low": "gemini-3.8-flash-low",
+    "gemini-3.6-flash-tiered": "gemini-3.8-flash-tiered",
     "gemini-3.5-flash": "gemini-3.5-flash-low",
     "gemini-3.5-flash-high": "gemini-3-flash-agent",
     "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
@@ -117,26 +118,26 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
     "gemini-3-5-flash-lite": "gemini-3.5-flash-lite",
     "gemini-3.5-lite": "gemini-3.5-flash-lite",
-    "gemini-3.5-flash-lite-high": "gemini-3.5-flash-lite-high",
-    "gemini-3.5-flash-lite-medium": "gemini-3.5-flash-lite-medium",
-    "gemini-3.5-flash-lite-low": "gemini-3.5-flash-lite-low",
+    "gemini-3.5-flash-lite-high": "gemini-3.5-flash-lite",
+    "gemini-3.5-flash-lite-medium": "gemini-3.5-flash-lite",
+    "gemini-3.5-flash-lite-low": "gemini-3.5-flash-lite",
     "gemini-3-flash": "gemini-3-flash",
     "gemini-3-flash-agent": "gemini-3-flash-agent",
     "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
     "gemini-3.1-flash-image": "gemini-3.1-flash-image",
-    "gemini-3.1-pro": "gemini-3.1-pro-low",
-    "gemini-3.1-pro-high": "gemini-3.1-pro-high",
-    "gemini-3.1-pro-medium": "gemini-3.1-pro-medium",
-    "gemini-3.1-pro-low": "gemini-3.1-pro-low",
-    "gemini-pro-agent": "gemini-pro-agent",
+    "gemini-3.1-pro": "gemini-2.5-pro",
+    "gemini-3.1-pro-high": "gemini-2.5-pro",
+    "gemini-3.1-pro-medium": "gemini-2.5-pro",
+    "gemini-3.1-pro-low": "gemini-2.5-pro",
+    "gemini-pro-agent": "gemini-2.5-pro",
     "gemini-2.5-pro": "gemini-2.5-pro",
     "gemini-2.5-flash": "gemini-2.5-flash",
     "gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
     "gemini-2.5-flash-thinking": "gemini-2.5-flash-thinking",
 
     # --------------------------------------------------------------------------
-    # 2. МОДЕЛІ GEMINI WEB (Маршрутизуються ВИКЛЮЧНО через веб-сесію gemini.google.com)
-    #    Ці моделі працюють через браузер і не використовують CloudCode API.
+    # 2. GEMINI WEB MODELS (Routed EXCLUSIVELY via gemini.google.com web session)
+    #    These models execute in browser automation and do not use CloudCode API.
     # --------------------------------------------------------------------------
     "gemini-4-argon-web": "gemini-4-argon-web-high",
     "gemini-4-argon-web-high": "gemini-4-argon-web-high",
@@ -160,7 +161,7 @@ MODEL_ALIASES: dict[str, str] = {
     "gemini-3.5-flash-lite-web-low": "gemini-3.5-flash-lite-web-low",
 
     # --------------------------------------------------------------------------
-    # 3. ОФІЦІЙНІ 3P МОДЕЛІ CLAUDE В ANTIGRAVITY (Підтримуються нативно в API)
+    # 3. OFFICIAL 3P CLAUDE MODELS IN ANTIGRAVITY (Supported natively in API)
     # --------------------------------------------------------------------------
     "claude": "claude-sonnet-4-6",
     "claude-sonnet-4-6": "claude-sonnet-4-6",
@@ -199,7 +200,7 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-3.5-haiku": "gemini-3.1-flash-lite",
     "claude-3-5-haiku-20241022": "gemini-3.1-flash-lite",
     "claude-3.5-haiku-20241022": "gemini-3.1-flash-lite",
-    "claude-3-5-haiku-latest": "gemini-3.1-flash-lite",
+    "claude-3.5-haiku-latest": "gemini-3.1-flash-lite",
     "claude-3.5-haiku-latest": "gemini-3.1-flash-lite",
     "claude-3-haiku": "gemini-3.1-flash-lite",
     "claude-3-haiku-20240307": "gemini-3.1-flash-lite",
@@ -208,9 +209,8 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-haiku": "gemini-3.1-flash-lite",
 
     # --------------------------------------------------------------------------
-    # 4. ЕКСПЕРИМЕНТАЛЬНІ АЛІАСИ CLAUDE 5.5
-    #    (Оскільки Anthropic ще не запустила 5.5 в API, ці аліаси прозоро й
-    #     безпечно виконують фолбек на доступний Sonnet 4.6 / Opus 4.6 Thinking)
+    # 4. EXPERIMENTAL CLAUDE 5.5 ALIASES
+    #    (Gracefully and safely fall back to available Sonnet 4.6 / Opus 4.6 Thinking)
     # --------------------------------------------------------------------------
     "claude-5-5": "claude-sonnet-5-5-high",
     "claude-5.5": "claude-sonnet-5-5-high",
@@ -240,9 +240,8 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-5.5-opus": "claude-opus-5-5-high",
 
     # --------------------------------------------------------------------------
-    # 5. СУМІСНІСТЬ З OPENAI CODEX CLI ТА СТАНДАРТНИМИ OPENAI МОДЕЛЯМИ
-    #    (Ці аліаси існують виключно для сумісності з клієнтами типу Cursor/Cline;
-    #     вони мапляться на нативний працездатний флагман Gemini 3.8 Flash)
+    # 5. OPENAI CODEX CLI AND STANDARD OPENAI MODEL COMPATIBILITY
+    #    (Compatibility aliases mapping standard IDs to Gemini 3.8 Flash)
     # --------------------------------------------------------------------------
     "gpt-6-astra": "gemini-3.8-flash-high",
     "gpt-6": "gemini-3.8-flash-high",
@@ -294,13 +293,13 @@ MODEL_ALIASES: dict[str, str] = {
     "gpt-oss-120b-medium": "gpt-oss-120b-medium",
 
     # --------------------------------------------------------------------------
-    # 6. СУМІСНІСТЬ З DEEPSEEK (Аліаси мапляться на Gemini 3.8 Flash High)
+    # 6. DEEPSEEK COMPATIBILITY (Aliases mapped to Gemini 3.8 Flash High)
     # --------------------------------------------------------------------------
     "deepseek-r1": "gemini-3.8-flash-high",
     "deepseek-v3": "gemini-3.8-flash-high",
 
     # --------------------------------------------------------------------------
-    # 7. DEEPAGENT SWARM PRESETS (Автономний пресет рою агентів із 64k thinking)
+    # 7. DEEPAGENT SWARM PRESETS (Autonomous agent swarm preset with 64k thinking)
     # --------------------------------------------------------------------------
     "deepagent": "gemini-3.8-flash-deepagent",
     "deep-agent": "gemini-3.8-flash-deepagent",
@@ -323,27 +322,10 @@ VALID_CLOUDCODE_MODELS = {
     "gemini-3.8-flash-tiered",
     "gemini-3.8-flash-task",
     "gemini-3.8-flash-deepagent",
-    # Gemini 3.7
-    "gemini-3.7-flash-high",
-    "gemini-3.7-flash-medium",
-    "gemini-3.7-flash-low",
-    "gemini-3.7-flash-tiered",
-    # Gemini 3.6
-    "gemini-3.6-flash-high",
-    "gemini-3.6-flash-medium",
-    "gemini-3.6-flash-low",
-    "gemini-3.6-flash-tiered",
     # Gemini 3.5 & earlier
     "gemini-3.5-flash-low",
     "gemini-3.5-flash-extra-low",
     "gemini-3.5-flash-lite",
-    "gemini-3.5-flash-lite-high",
-    "gemini-3.5-flash-lite-medium",
-    "gemini-3.5-flash-lite-low",
-    "gemini-pro-agent",
-    "gemini-3.1-pro-high",
-    "gemini-3.1-pro-medium",
-    "gemini-3.1-pro-low",
     "gemini-3.1-flash-lite",
     "gemini-3.1-flash-image",
     "gemini-3-flash",
@@ -461,6 +443,56 @@ for _m, _p in CLOUDCODE_PLACEHOLDER_MAP.items():
         except Exception:
             pass
 
+# Direct Protobuf enum numbers and Model enum strings used by Language Server
+REVERSE_PLACEHOLDER_MAP.update({
+    # Proto enum values as strings
+    "246": "gemini-2.5-pro",
+    "312": "gemini-2.5-flash",
+    "313": "gemini-2.5-flash-thinking",
+    "329": "gemini-2.5-flash-thinking",
+    "330": "gemini-2.5-flash-lite",
+    "342": "gpt-oss-120b-medium",
+    "281": "claude-sonnet-4-6",
+    "282": "claude-sonnet-4-6",
+    "290": "claude-opus-4-6-thinking",
+    "291": "claude-opus-4-6-thinking",
+    "333": "claude-sonnet-4-6",
+    "334": "claude-sonnet-4-6",
+    "340": "claude-sonnet-4-6",
+    "341": "claude-sonnet-4-6",
+    "1018": "gemini-3-flash",
+    "1020": "gemini-3.5-flash-low",
+    "1021": "gemini-3.1-flash-image",
+    "1026": "claude-opus-4-6-thinking",
+    "1035": "claude-sonnet-4-6",
+    "1050": "gemini-3.1-flash-lite",
+    "1084": "gemini-3-flash-agent",
+    "1187": "gemini-3.5-flash-extra-low",
+    "1198": "gemini-3.5-flash-lite",
+    "1315": "gemini-3.7-flash-high",
+    "1316": "gemini-3.7-flash-medium",
+    "1317": "gemini-3.7-flash-low",
+    "1318": "gemini-3.8-flash-high",
+    "1319": "gemini-3.8-flash-medium",
+    "1320": "gemini-3.8-flash-low",
+    "1322": "gemini-3.8-flash-tiered",
+    "1421": "gemini-4-argon",
+    # Protobuf enum string representations from language_server
+    "model_google_gemini_2_5_pro": "gemini-2.5-pro",
+    "model_google_gemini_2_5_flash": "gemini-2.5-flash",
+    "model_google_gemini_2_5_flash_lite": "gemini-2.5-flash-lite",
+    "model_google_gemini_2_5_flash_thinking": "gemini-2.5-flash-thinking",
+    "model_openai_gpt_oss_120b_medium": "gpt-oss-120b-medium",
+    "model_claude_4_sonnet": "claude-sonnet-4-6",
+    "model_claude_4_sonnet_thinking": "claude-sonnet-4-6",
+    "model_claude_4_opus": "claude-opus-4-6-thinking",
+    "model_claude_4_opus_thinking": "claude-opus-4-6-thinking",
+    "model_claude_4_5_sonnet": "claude-sonnet-4-6",
+    "model_claude_4_5_sonnet_thinking": "claude-sonnet-4-6",
+    "model_claude_4_5_haiku": "claude-sonnet-4-6",
+    "model_claude_4_5_haiku_thinking": "claude-sonnet-4-6",
+})
+
 EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     # Gemini 4 Argon (CloudCode)
     "gemini-4-argon": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576},
@@ -477,25 +509,21 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
     "gemini-3.8-flash-n": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
     "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Task (Agent)", "maxTokens": 1048576},
+    # Gemini 3.8 Flagship
+    "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash (High)", "maxTokens": 1048576},
+    "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash (Medium)", "maxTokens": 1048576},
+    "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash (Low)", "maxTokens": 1048576},
+    "gemini-3.8-flash-tiered": {"displayName": "Gemini 3.8 Flash (Tiered)", "maxTokens": 1048576},
     "gemini-3.8-flash-deepagent": {"displayName": "Gemini 3.8 Flash DeepAgent (Autonomous Swarm, 64k Reasoning)", "maxTokens": 1048576},
     "deepagent": {"displayName": "DeepAgent Swarm Preset (64k Reasoning)", "maxTokens": 1048576},
-    # Gemini 3.7
-    "gemini-3.7-flash-high": {"displayName": "Gemini 3.7 Flash (High)", "maxTokens": 1048576},
-    "gemini-3.7-flash-medium": {"displayName": "Gemini 3.7 Flash (Medium)", "maxTokens": 1048576},
-    "gemini-3.7-flash-low": {"displayName": "Gemini 3.7 Flash (Low)", "maxTokens": 1048576},
-    "gemini-3.7-flash-tiered": {"displayName": "Gemini 3.7 Flash (Tiered)", "maxTokens": 1048576},
-    # Gemini 3.6
-    "gemini-3.6-flash-high": {"displayName": "Gemini 3.6 Flash (High)", "maxTokens": 1048576},
-    "gemini-3.6-flash-medium": {"displayName": "Gemini 3.6 Flash (Medium)", "maxTokens": 1048576},
-    "gemini-3.6-flash-low": {"displayName": "Gemini 3.6 Flash (Low)", "maxTokens": 1048576},
-    "gemini-3.6-flash-tiered": {"displayName": "Gemini 3.6 Flash (Tiered)", "maxTokens": 1048576},
     # Gemini 3.5 & earlier
+    "gemini-3.5-flash-low": {"displayName": "Gemini 3.5 Flash (Medium)", "maxTokens": 1048576},
+    "gemini-3.5-flash-extra-low": {"displayName": "Gemini 3.5 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite", "maxTokens": 1048576},
-    "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro (High)", "maxTokens": 1048576},
-    "gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro (Low)", "maxTokens": 1048576},
     "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite", "maxTokens": 1048576},
     "gemini-3.1-flash-image": {"displayName": "Gemini 3.1 Flash Image", "maxTokens": 1048576},
     "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576},
+    "gemini-3-flash-agent": {"displayName": "Gemini 3 Flash Agent", "maxTokens": 1048576},
     "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro", "maxTokens": 1048576},
     "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash", "maxTokens": 1048576},
     "gemini-2.5-flash-lite": {"displayName": "Gemini 2.5 Flash Lite", "maxTokens": 1048576},
@@ -723,16 +751,20 @@ def normalize_model_name(model_name: Any) -> str:
             return "gemini-3.8-flash-high"
         if "3.7" in cleaned or "3-7" in cleaned:
             if "low" in cleaned:
-                return "gemini-3.7-flash-low"
+                return "gemini-3.8-flash-low"
             if "med" in cleaned:
-                return "gemini-3.7-flash-medium"
-            return "gemini-3.7-flash-high"
+                return "gemini-3.8-flash-medium"
+            if "tiered" in cleaned:
+                return "gemini-3.8-flash-tiered"
+            return "gemini-3.8-flash-high"
         if "3.6" in cleaned or "3-6" in cleaned:
             if "low" in cleaned:
-                return "gemini-3.6-flash-low"
+                return "gemini-3.8-flash-low"
             if "med" in cleaned:
-                return "gemini-3.6-flash-medium"
-            return "gemini-3.6-flash-tiered"
+                return "gemini-3.8-flash-medium"
+            if "tiered" in cleaned:
+                return "gemini-3.8-flash-tiered"
+            return "gemini-3.8-flash-high"
         if "3.5" in cleaned or "3-5" in cleaned:
             if "lite" in cleaned:
                 if "high" in cleaned:
@@ -746,11 +778,14 @@ def normalize_model_name(model_name: Any) -> str:
                 return "gemini-3.5-flash-extra-low"
             return "gemini-3.5-flash-low"
         if "3.1-pro" in cleaned or "3_1-pro" in cleaned or "3-1-pro" in cleaned:
-            if "high" in cleaned:
-                return "gemini-3.1-pro-high"
-            if "med" in cleaned:
-                return "gemini-3.1-pro-medium"
-            return "gemini-3.1-pro-low"
+            if "-web" in cleaned or "_web" in cleaned or "(web)" in cleaned:
+                if "med" in cleaned:
+                    return "gemini-3.1-pro-web-medium"
+                if "low" in cleaned:
+                    return "gemini-3.1-pro-web-low"
+                return "gemini-3.1-pro-web-high"
+            # Standard API CloudCode has no 3.1 Pro: map to CloudCode native Pro architecture
+            return "gemini-2.5-pro"
         if "2.5-pro" in cleaned or "2_5-pro" in cleaned:
             return "gemini-2.5-pro"
 

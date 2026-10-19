@@ -3037,6 +3037,57 @@ def create_app(
                         if "request" in candidate_body and isinstance(candidate_body["request"], dict):
                             candidate_body["request"]["model"] = clean_m
 
+                from agy_proxy.models import (
+                    is_argon_model,
+                    get_argon_fallback_model,
+                    is_claude_5_5_model,
+                    get_claude_fallback_model,
+                    is_deepagent_model,
+                    is_gemini_web_model,
+                )
+
+                # 1. DeepAgent swarm preset routes through gemini-3.8-flash-high with 64k thinking budget
+                if is_deepagent_model(target_m):
+                    logger.info("[%s] Routing DeepAgent swarm request (%s) -> gemini-3.8-flash-high (64k reasoning)", acc_label, target_m)
+                    target_m = "gemini-3.8-flash-high"
+                    if isinstance(candidate_body, dict):
+                        candidate_body["model"] = target_m
+                        if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                            candidate_body["request"]["model"] = target_m
+                            gen_cfg = candidate_body["request"].setdefault("generationConfig", {})
+                            th_cfg = gen_cfg.setdefault("thinkingConfig", {})
+                            th_cfg["includeThoughts"] = True
+                            th_cfg["thinkingBudget"] = 64000
+                            th_cfg["thinkingLevel"] = "HIGH"
+
+                # 2. Map Gemini 3.6 / 3.7 to real Google CloudCode 3.8 endpoints
+                target_m_lower = target_m.lower()
+                if "gemini-3.6" in target_m_lower or "gemini-3.7" in target_m_lower:
+                    if "low" in target_m_lower:
+                        map_m = "gemini-3.8-flash-low"
+                    elif "med" in target_m_lower:
+                        map_m = "gemini-3.8-flash-medium"
+                    elif "tiered" in target_m_lower:
+                        map_m = "gemini-3.8-flash-tiered"
+                    else:
+                        map_m = "gemini-3.8-flash-high"
+                    logger.info("[%s] Auto-mapping %s -> %s for CloudCode backend", acc_label, target_m, map_m)
+                    target_m = map_m
+                    if isinstance(candidate_body, dict):
+                        candidate_body["model"] = target_m
+                        if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                            candidate_body["request"]["model"] = target_m
+
+                # 3. Map non-web Gemini 3.1 Pro to real Google CloudCode Pro endpoint (gemini-2.5-pro)
+                if "3.1-pro" in target_m_lower and not is_gemini_web_model(target_m):
+                    logger.info("[%s] Auto-mapping %s -> gemini-2.5-pro for CloudCode backend", acc_label, target_m)
+                    target_m = "gemini-2.5-pro"
+                    if isinstance(candidate_body, dict):
+                        candidate_body["model"] = target_m
+                        if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                            candidate_body["request"]["model"] = target_m
+
+                # 4. Map Argon models if account does not have native Argon access
                 if is_argon_model(target_m):
                     has_argon = getattr(acc, "has_argon_access", False) or (
                         getattr(acc, "available_models", {}) and any("argon" in m for m in acc.available_models)
@@ -3049,6 +3100,16 @@ def create_app(
                             candidate_body["model"] = fallback_m
                             if "request" in candidate_body and isinstance(candidate_body["request"], dict):
                                 candidate_body["request"]["model"] = fallback_m
+
+                # 5. Map Claude 5.5 to Claude 4.6 (CloudCode native endpoint)
+                if is_claude_5_5_model(target_m):
+                    fallback_c = get_claude_fallback_model(target_m)
+                    logger.info("[%s] Auto-mapping Claude 5.5 variant %s -> %s for CloudCode backend", acc_label, target_m, fallback_c)
+                    target_m = fallback_c
+                    if isinstance(candidate_body, dict):
+                        candidate_body["model"] = fallback_c
+                        if "request" in candidate_body and isinstance(candidate_body["request"], dict):
+                            candidate_body["request"]["model"] = fallback_c
 
                 # Ensure generation payload strictly adheres to CloudCode StreamGenerateContentRequest schema
                 if is_generation and isinstance(candidate_body, dict):
@@ -3064,12 +3125,13 @@ def create_app(
                     if "contents" in candidate_body["request"]:
                         _sanitize_roles(candidate_body["request"]["contents"])
                         try:
-                            from agy_proxy.converters.common import sanitize_gemini_contents_thought_signatures
-                            candidate_body["request"]["contents"] = sanitize_gemini_contents_thought_signatures(
-                                candidate_body["request"]["contents"]
+                            from agy_proxy.converters.common import ensure_tool_pairing_integrity
+                            candidate_body["request"]["contents"] = ensure_tool_pairing_integrity(
+                                candidate_body["request"]["contents"],
+                                model=target_m,
                             )
-                        except Exception:
-                            pass
+                        except Exception as sanitize_err:
+                            logger.warning("[%s] Failed to sanitize contents: %s", acc_label, sanitize_err)
 
                     for inner_k in ("tools", "toolConfig", "generationConfig", "systemInstruction", "safetySettings"):
                         if inner_k in candidate_body:
@@ -3136,113 +3198,44 @@ def create_app(
                 err_hint = _extract_error_message(resp)
                 err_lower = err_hint.lower()
 
-                # Upstream error: Claude 4.6 is no longer available on this account (migrated to Claude 5.5)
-                is_claude_deprecated = (
-                    "no longer available" in err_lower
-                    or ("4.6" in err_lower and "5.5" in err_lower)
-                    or "switch to claude" in err_lower
-                )
-                if is_claude_deprecated and is_generation:
-                    if not hasattr(acc, "unsupported_models"):
-                        acc.unsupported_models = set()
-                    acc.unsupported_models.add("claude-sonnet-4-6")
-                    acc.unsupported_models.add("claude-opus-4-6-thinking")
-                    norm_m = normalize_model_name(req_model)
-                    acc.unsupported_models.add(norm_m)
-                    if getattr(acc, "available_models", None):
-                        acc.available_models.pop("claude-sonnet-4-6", None)
-                        acc.available_models.pop("claude-opus-4-6-thinking", None)
-                        acc.available_models.pop(norm_m, None)
-                    acc.supports_claude_5_5 = True
-                    logger.warning(
-                        "[%s] ⚠️ Account does not support Claude 4.6 (%s). Marked as Claude 5.5-only account.",
-                        acc_label,
-                        err_hint,
-                    )
-                    if not is_last:
-                        logger.info("[%s] Failing over to next candidate account for %s...", acc_label, req_model)
-                        continue
-                    else:
-                        # If this was the last candidate in the initial list, check if pool has other accounts for req_model
-                        alt_candidates = []
-                        if pool:
-                            try:
-                                alt_candidates = [
-                                    a for a in pool.get_candidate_accounts(req_model, allow_auto_routing=False)
-                                    if a.account_id != acc.account_id and a.is_model_supported(req_model)
-                                ]
-                            except Exception:
-                                alt_candidates = []
-                        if alt_candidates:
-                            logger.info("[%s] 🔄 Failing over to alternate account in pool supporting %s...", acc_label, req_model)
-                            for alt_acc in alt_candidates:
-                                alt_label = getattr(alt_acc, "email", alt_acc.account_id)
-                                alt_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
-                                if isinstance(alt_body, dict):
-                                    alt_proj = getattr(alt_acc, "project_id", None) or "aicode-consumers"
-                                    alt_body["project"] = alt_proj
-                                    if "request" in alt_body and isinstance(alt_body["request"], dict):
-                                        if is_generation:
-                                            alt_body["request"].pop("project", None)
-                                        elif "project" in alt_body["request"]:
-                                            alt_body["request"]["project"] = alt_proj
-                                try:
-                                    alt_headers = await alt_acc.get_auth_headers()
-                                    _apply_client_user_agent(alt_headers)
-                                    alt_c = await alt_acc.get_http_client()
-                                    alt_resp = await alt_c.post(target_url, headers=alt_headers, json=alt_body, params=query_params, timeout=timeout_sec)
-                                    if alt_resp.status_code == 200:
-                                        logger.info("[%s] ✅ Alternate account failover to %s succeeded!", alt_label, req_model)
-                                        resp = alt_resp
-                                        acc = alt_acc
-                                        acc_label = alt_label
-                                        break
-                                except Exception as alt_err:
-                                    logger.debug("[%s] Alternate failover error: %s", alt_label, alt_err)
-                                    continue
-                        # If no other account supports Claude 4.6, auto-switch to Claude 5.5 on this account as upstream asked
-                        if resp.status_code != 200:
-                            from agy_proxy.models import get_claude_5_5_upgrade_model
-                            upgrade_model = get_claude_5_5_upgrade_model(req_model)
-                            logger.warning(
-                                "[%s] 🔄 Auto-switching request from %s to Claude 5.5 (%s) on this account as recommended by upstream!",
-                                acc_label,
-                                req_model,
-                                upgrade_model,
-                            )
-                            up_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
-                            if isinstance(up_body, dict):
-                                up_body["model"] = upgrade_model
-                                if "request" in up_body and isinstance(up_body["request"], dict):
-                                    up_body["request"]["model"] = upgrade_model
-                            try:
-                                up_headers = await acc.get_auth_headers()
-                                _apply_client_user_agent(up_headers)
-                                up_c = await acc.get_http_client()
-                                up_resp = await up_c.post(target_url, headers=up_headers, json=up_body, params=query_params, timeout=timeout_sec)
-                                if up_resp.status_code == 200:
-                                    logger.info("[%s] ✅ Upgraded request to %s succeeded seamlessly!", acc_label, upgrade_model)
-                                    resp = up_resp
-                                    req_model = upgrade_model
-                            except Exception as up_err:
-                                logger.debug("[%s] Upgrade request error: %s", acc_label, up_err)
-
                 if resp.status_code in (400, 403, 404, 500, 502, 503, 504) and is_generation and not is_last:
-                    is_model_err = (resp.status_code in (403, 404)) or (
-                        resp.status_code == 400 and any(kw in err_lower for kw in ("not supported", "unknown model", "invalid model", "not found", "model", "available"))
-                    )
-                    if is_model_err:
-                        if not hasattr(acc, "unsupported_models"):
-                            acc.unsupported_models = set()
-                        acc.unsupported_models.add(req_model)
-                        norm_m = normalize_model_name(req_model)
-                        acc.unsupported_models.add(norm_m)
-                        if getattr(acc, "available_models", None):
-                            acc.available_models.pop(req_model, None)
-                            acc.available_models.pop(norm_m, None)
                     logger.warning("[%s] CloudCode error %d (%s) for %s. Failing over to next account in pool...", acc_label, resp.status_code, err_hint, req_model)
                     logger.debug("[%s] CloudCode failover raw body: %s", acc_label, resp.text)
                     continue
+
+                # Last candidate got 503 No capacity available (Google server overloaded for gemini-2.5-pro)
+                if resp.status_code == 503 and is_generation and is_last and "capacity" in err_lower:
+                    fallback_model = "gemini-3.8-flash-high"
+                    logger.warning(
+                        "[%s] ⚠️ All accounts reported 503 capacity exhausted for %s. 🔄 Auto-falling back to %s to prevent failure!",
+                        acc_label,
+                        req_model,
+                        fallback_model,
+                    )
+                    if pool:
+                        try:
+                            fb_cands = [a for a in pool.get_candidate_accounts(fallback_model, allow_auto_routing=False)]
+                            for fb_acc in fb_cands:
+                                fb_label = getattr(fb_acc, "email", fb_acc.account_id)
+                                fb_body = copy.deepcopy(candidate_body) if isinstance(candidate_body, dict) else candidate_body
+                                if isinstance(fb_body, dict):
+                                    fb_body["model"] = fallback_model
+                                    if "request" in fb_body and isinstance(fb_body["request"], dict):
+                                        fb_body["request"]["model"] = fallback_model
+                                    fb_proj = getattr(fb_acc, "project_id", None) or "aicode-consumers"
+                                    fb_body["project"] = fb_proj
+                                fb_headers = await fb_acc.get_auth_headers()
+                                _apply_client_user_agent(fb_headers)
+                                fb_c = await fb_acc.get_http_client()
+                                fb_resp = await fb_c.post(target_url, headers=fb_headers, json=fb_body, params=query_params, timeout=timeout_sec)
+                                if fb_resp.status_code == 200:
+                                    logger.info("[%s] ✅ Capacity fallback to %s succeeded seamlessly!", fb_label, fallback_model)
+                                    resp = fb_resp
+                                    acc = fb_acc
+                                    acc_label = fb_label
+                                    break
+                        except Exception as fb_err:
+                            logger.debug("Capacity fallback error: %s", fb_err)
 
                 # Last candidate got 404 or 429: If Claude 5.5 reached quota or is not enabled, auto-fallback to Claude 4.6 on another account
                 if resp.status_code in (404, 429) and is_generation and is_last:

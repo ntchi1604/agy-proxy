@@ -1156,6 +1156,13 @@ class AccountPool:
 
         active_pool = [acc for acc in active_pool if acc.is_model_supported(norm_model)]
 
+        from agy_proxy.models import is_argon_model, is_gemini_web_model
+        is_argon = is_argon_model(norm_model)
+        is_web = is_gemini_web_model(norm_model) or is_argon
+        if not is_web:
+            # Strictly exclude browser sessions from serving standard API / CloudCode models
+            active_pool = [acc for acc in active_pool if getattr(acc, "auth_method", "") != "gemini_web"]
+
         # For Claude 5.5 models: prioritize confirmed accounts first, or auto-fallback to 4.6
         is_c55 = is_claude_5_5_model(norm_model)
         if is_c55:
@@ -1266,6 +1273,25 @@ class AccountPool:
                         )
                         return self.get_candidate_accounts(
                             model=upgrade_m,
+                            specific_account_id=specific_account_id,
+                            preferred_account_id=preferred_account_id,
+                            allow_auto_routing=False,
+                        )
+                if "pro" in norm_model and not is_gemini_web_model(norm_model):
+                    fallback_m = "gemini-3.8-flash-high"
+                    fb_pool = [
+                        a for a in self.accounts.values()
+                        if a.enabled and a.is_model_supported(fallback_m)
+                        and not a.is_rate_limited(fallback_m) and not a.is_quota_exhausted(fallback_m)
+                    ]
+                    if fb_pool:
+                        logger.warning(
+                            "[Model Fallback] ⚠️ All accounts supporting %s have reached quota or server limits. 🔄 Auto-routing to %s to avoid interruption!",
+                            norm_model,
+                            fallback_m,
+                        )
+                        return self.get_candidate_accounts(
+                            model=fallback_m,
                             specific_account_id=specific_account_id,
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
