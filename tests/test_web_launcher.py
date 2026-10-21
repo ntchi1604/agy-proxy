@@ -295,8 +295,9 @@ def test_extract_and_patch_web_bundle(tmp_path):
     # Check patched main.js content
     main_js_content = (out_bundle / "main.js").read_text()
     assert "MODEL_ENUM_MAP" in main_js_content
-    assert "_sep_ordered_v9" in main_js_content
+    assert "_sep_ordered_v10" in main_js_content
     assert "gemini-3.1-flash-image" in main_js_content
+    assert "chat_20706" in main_js_content
     assert "agy.selectedModelLabel" in main_js_content
 
     # Check patched index.html content
