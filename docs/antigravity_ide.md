@@ -6,7 +6,7 @@ This guide details how to integrate **Google Antigravity 2.0** and **Antigravity
 
 ## 📋 Overview
 
-Antigravity IDE relies on a native Go backend (`language_server`) to communicate with Google's CloudCode and Generative Language APIs. The included helper script [`patch_language_server.sh`](../patch_language_server.sh) replaces this executable with a non-destructive wrapper that intercepts and transparently routes all model traffic through `agy-proxy`.
+Antigravity IDE relies on a native Go backend (`language_server`) to communicate with Google's CloudCode and Generative Language APIs. The CLI command `agy-proxy patch` manages this executable with a non-destructive wrapper that intercepts and transparently routes all model traffic through `agy-proxy`.
 
 ### 🛡️ Non-Destructive Wrapper Architecture
 - **Preserves Original Binary**: Backs up the original compiled ELF/Mach-O binary as `language_server.real`.
@@ -14,7 +14,7 @@ Antigravity IDE relies on a native Go backend (`language_server`) to communicate
 - **Background Watchdog**: Monitors proxy health and dynamically toggles routing:
   - If `agy-proxy` is running: traffic routes through local proxy (`http://127.0.0.1:8000`).
   - If `agy-proxy` is offline: gracefully falls back to official Google upstream servers (`https://daily-cloudcode-pa.googleapis.com` and `https://generativelanguage.googleapis.com`).
-- **Clean 1-Command Reversion**: Restore original binaries at any time with `--unpatch`.
+- **Clean 1-Command Reversion**: Restore original binaries at any time with `agy-proxy patch restore`.
 
 ---
 
@@ -60,20 +60,20 @@ agy-proxy config --clear
 
 ```bash
 # Check current patching and process status (auto-detects installation):
-./patch_language_server.sh --check
+agy-proxy patch status
 
 # Check status by pointing to an editor installation directory:
-./patch_language_server.sh --check --dir "/opt/Antigravity IDE"
+agy-proxy patch status -e "/opt/Antigravity IDE"
 
 # Patch automatically (port 8000, startup wait & watchdog enabled):
-./patch_language_server.sh
+agy-proxy patch install -y
 
 # Patch by editor directory or specific binary:
-./patch_language_server.sh --dir "/opt/Antigravity"
-./patch_language_server.sh --file "/opt/Antigravity/resources/bin/language_server"
+agy-proxy patch install -e "/opt/Antigravity"
+agy-proxy patch install -f "/opt/Antigravity/resources/bin/language_server"
 
 # Restore original unmodified binary (clean unpatch):
-./patch_language_server.sh --unpatch
+agy-proxy patch restore -y
 ```
 
 ### Windows (PowerShell & CMD)

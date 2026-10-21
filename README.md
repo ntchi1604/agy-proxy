@@ -68,11 +68,11 @@ Open **`http://127.0.0.1:8000`** in your browser to:
 ### 1. 🚀 Antigravity Web Hub (Zero Electron)
 Run Google Antigravity 2.0 in your browser, saving **~1.6 GB RAM**:
 ```bash
-# Standard Web Hub:
-./start_web.sh -k -o
+# Standard Web Hub (-1.6 GB RAM):
+agy-proxy web -k -o
 
-# Experimental Patched Web Hub (Unlocks Web Terminal, File Explorer, Battle Mode):
-./start_web_patched.sh -k -o
+# Patched Web Hub (Unlocks Web Terminal, File Explorer, Battle Mode):
+agy-proxy web --patched -k -o
 ```
 👉 *Detailed guide: [Antigravity Web Mode & Patched Hub](docs/web_mode.md)*
 
@@ -88,11 +88,14 @@ Run Anthropic's official Claude Code CLI routed through `agy-proxy`:
 ### 3. 🖥️ Antigravity IDE Patcher
 Route Antigravity IDE's internal `language_server` through `agy-proxy`:
 ```bash
+# Check current patch status:
+agy-proxy patch status
+
 # Patch automatically with live health watchdog:
-./patch_language_server.sh
+agy-proxy patch install -y
 
 # Restore original binary at any time:
-./patch_language_server.sh --unpatch
+agy-proxy patch restore -y
 ```
 👉 *Detailed guide: [Antigravity IDE Integration Guide](docs/antigravity_ide.md)*
 

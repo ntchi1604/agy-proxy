@@ -11,6 +11,7 @@ Validates:
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 import pytest
 
@@ -190,10 +191,9 @@ def test_real_antigravity_ide_parent_folder():
 
 
 def test_patch_script_discovery():
-    """Verify patch_language_server.sh can discover binaries in test directory."""
-    patch_script = Path(__file__).parent.parent / "patch_language_server.sh"
+    """Verify agy-proxy patch can discover binaries in test directory."""
     real_ide = Path("/home/qumhab/tmp_gemini/new2/Antigravity IDE/Antigravity IDE-x64")
-    if real_ide.exists() and patch_script.exists():
-        res = subprocess.run([str(patch_script), "status", "-e", str(real_ide)], capture_output=True, text=True)
+    if real_ide.exists():
+        res = subprocess.run([sys.executable, "-m", "agy_proxy.cli", "patch", "status", "-e", str(real_ide)], capture_output=True, text=True)
         assert res.returncode == 0
         assert "language_server_linux_x64" in res.stdout

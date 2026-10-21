@@ -8,14 +8,15 @@ Verifies:
 5. Clean termination of watchdog when target process exits.
 """
 
+import http.server
 import os
 import signal
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 import unittest
-import http.server
-import threading
 
 
 class MockProxyServer:
@@ -94,11 +95,17 @@ int main(int argc, char** argv) {{
 
     def _generate_wrapper(self, proxy_url, timeout=1, enable_watchdog=0):
         cmd = [
-            self.patch_script,
+            sys.executable,
+            "-m",
+            "agy_proxy.cli",
             "patch",
-            "-f", self.real_bin,
-            "--url", proxy_url,
-            "--timeout", str(timeout),
+            "install",
+            "-f",
+            self.real_bin,
+            "--url",
+            proxy_url,
+            "--timeout",
+            str(timeout),
             "-y",
         ]
         if not enable_watchdog:

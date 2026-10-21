@@ -115,7 +115,7 @@ get_ls_pids() {
             continue
         fi
         # Never touch standalone web mode, web hub, or web runner processes
-        if [[ "$cmd" =~ --standalone ]] || [[ "$cmd" =~ --https_server_port ]] || [[ "$cmd" =~ start_web ]]; then
+        if [[ "$cmd" =~ --standalone ]] || [[ "$cmd" =~ --https_server_port ]] || [[ "$cmd" =~ "agy_proxy.cli web" ]] || [[ "$cmd" =~ start_web ]]; then
             continue
         fi
         if [[ "$cmd" =~ language_server ]]; then
@@ -172,7 +172,7 @@ if [ "${AGY_RECONNECT:-0}" = "1" ]; then
         if [ "$ready" -eq 1 ]; then
             if [ "${START_WEB:-0}" -eq 1 ]; then
                 echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;36m🌐 Starting Antigravity Web Mode alongside proxy...\033[0m" >&2
-                "$SCRIPT_DIR/start_web.sh" --detach >/dev/null 2>&1 || true
+                "$PYTHON_BIN" -m agy_proxy.cli web --detach >/dev/null 2>&1 || true
             fi
             current_pids=$(get_ls_pids)
             for pid in $current_pids; do
@@ -191,7 +191,7 @@ elif [ "${START_WEB:-0}" -eq 1 ]; then
             if curl -sf --max-time 1 "${CHECK_URL}/health" >/dev/null 2>&1 || \
                curl -sf --max-time 1 "${CHECK_URL}/api/info" >/dev/null 2>&1; then
                 echo -e "\n\033[0;36m[agy-proxy]\033[0m \033[1;36m🌐 Starting Antigravity Web Mode alongside proxy...\033[0m" >&2
-                "$SCRIPT_DIR/start_web.sh" --detach >/dev/null 2>&1 || true
+                "$PYTHON_BIN" -m agy_proxy.cli web --detach >/dev/null 2>&1 || true
                 break
             fi
             sleep 0.25

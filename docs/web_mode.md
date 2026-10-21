@@ -21,9 +21,8 @@ Google Antigravity 2.0 features an ultra-fast, native Go backend (`language_serv
 
 ---
 
-## 🏃 Standard Web Mode (`start_web.sh` & CLI)
+## 🏃 Standard Web Mode (`agy-proxy web`)
 
-### 1. Via Python CLI
 ```bash
 # Start Antigravity in browser Web mode:
 agy-proxy web
@@ -32,25 +31,16 @@ agy-proxy web
 agy-proxy web --status
 
 # Automatically close running Electron window to free memory:
-agy-proxy web --kill-electron
+agy-proxy web -k
+
+# Open browser automatically:
+agy-proxy web -k -o
 
 # Custom port or custom browser:
 agy-proxy web --port 44741 --browser helium
 ```
 
-### 2. Via Standalone Shell Script
-```bash
-# Run web mode directly:
-./start_web.sh
-
-# Run with automatic Electron cleanup:
-./start_web.sh -k
-
-# Open browser automatically:
-./start_web.sh -k -o
-```
-
-### 3. Combined One-Command Launch (Proxy + Web together)
+### Combined One-Command Launch (Proxy + Web together)
 ```bash
 # Starts agy-proxy and launches Antigravity Web simultaneously:
 ./start_proxy.sh --web
@@ -61,11 +51,11 @@ agy-proxy web --port 44741 --browser helium
 
 ---
 
-## 🧪 Experimental: Patched Web Hub (`start_web_patched.sh`)
+## 🧪 Patched Web Hub (`agy-proxy web --patched`)
 
 By default, the official Web UI limits certain advanced features to Google internal domains (`jetski.corp.google.com`) and displays non-functional Google3 Piper banners.
 
-The self-contained script [`start_web_patched.sh`](../start_web_patched.sh) extracts the embedded web assets (304 files) directly from `language_server`, applies clean client-side feature patches, and runs `language_server` with `--web_bundle_path` without modifying the original binary.
+Using `agy-proxy web --patched` (or `agy-proxy web -P`) automatically extracts the embedded web assets (304 files) directly from `language_server`, applies clean client-side feature patches, and runs `language_server` with `--web_bundle_path` without modifying the original binary.
 
 ### 🌟 Unlocked Features
 
@@ -79,35 +69,41 @@ The self-contained script [`start_web_patched.sh`](../start_web_patched.sh) extr
 ### 🚀 Usage
 
 ```bash
-# 1-click run (auto-extracts bundle, cleans spam logs into ~/.config/Antigravity/logs/):
-./start_web_patched.sh
+# 1-click run (auto-extracts bundle and patches UI):
+agy-proxy web --patched
 
 # Run with automatic Electron cleanup (-k) and browser launch (-o):
-./start_web_patched.sh -k -o
+agy-proxy web --patched -k -o
 
 # Restart server (kills previous instances on port):
-./start_web_patched.sh -r
+agy-proxy web --patched -r
 
 # Run on custom port:
-./start_web_patched.sh -p 44742
+agy-proxy web --patched -p 44742
 
 # Point to custom language_server binary:
-./start_web_patched.sh -b /opt/Antigravity/resources/bin/language_server.real
+agy-proxy web --patched --ls-path /opt/Antigravity/resources/bin/language_server
 
 # Force re-extracting and re-patching assets:
-./start_web_patched.sh -f
+agy-proxy web --patched -f
 
 # Show verbose language_server console output (debug mode):
-./start_web_patched.sh -v
+agy-proxy web --patched -v
 ```
 
-### 📋 Command Options for `start_web_patched.sh`
+### 📋 Command Options for `agy-proxy web`
 
 | Option | Description |
 | :--- | :--- |
-| `-b, --bin <path>` | Path to `language_server` (or `language_server.real`). |
-| `-p, --port <port>` | Port for HTTPS web server (default: `44741` or `44742`). |
+| `-P, --patched` | Launch with feature-patched Web UI bundle. |
+| `-k, --kill-electron` | Automatically terminate running Electron instances. |
+| `-o, --open` | Automatically open web browser on startup. |
+| `-p, --port <port>` | Port for HTTPS web server (default: `44741`). |
+| `-f, --force-patch` | Force re-extracting and re-patching Web UI bundle. |
 | `-d, --bundle-dir <path>` | Target directory for extracted bundle (default: `~/.config/agy-proxy/web_ui`). |
+| `--ls-path, --bin <path>` | Path to `language_server` (or `language_server.real`). |
+| `-r, --restart` | Restart server (kills previous instance on port). |
+| `-v, --debug` | Show verbose language_server console output. |
 | `-f, --force` | Force re-extracting and re-patching bundle. |
 | `-k, --kill-electron` | Automatically terminate running Electron instances to free memory. |
 | `-r, --restart` | Restart web server (terminate any instance running on port). |
