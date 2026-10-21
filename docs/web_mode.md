@@ -97,6 +97,12 @@ Using `agy-proxy web --patched` (or `agy-proxy web -P`) automatically extracts t
 - ⚔️ **Battle Mode & Split View**: Enables multi-model side-by-side comparison and split chat layouts.
 - 🤖 **Autonomous Mode**: Enables the autonomous execution toggle (`labs-autonomous-mode`) without repeated permission prompts.
 - 💬 **Inline Actions & Thought Steering**: Displays floating toast action cards and allows editing agent thoughts in real-time.
+- 🎯 **Full Model Selector Unlocked**: Direct access to all Google models categorized neatly with section banners:
+  - **Default**: Default recommended workspace models.
+  - **Web**: Gemini 4 Argon (Web), Gemini 3.8 Flash (Web), Gemini 3.1 Pro (Web), Gemini 3.5 Flash-Lite (Web).
+  - **Antigravity**: Gemini 3.8 Flash (High/Med/Low/Tiered/DeepAgent), Claude Sonnet 4.6 & Opus 4.6 (Thinking), Claude Sonnet 5.5, GPT-OSS 120B, Gemini 3.5 Flash/Lite, Gemini 2.5 Pro/Flash/Thinking.
+  - **Tab & Fast (Unlimited)**: Tab Code Completion (16k & 32k) [Unlimited], Tab Flash Lite Preview [Unlimited], Tab Jump Prediction [Unlimited].
+  - **Image Generation**: Gemini 3.1 Flash (Image), Gemini 3 Pro (Image), Gemini 2.5 Flash (Image).
 - 🧹 **Google3 Clutter Removed**: Suppresses scary Google3 chat migration banners (`projectV5Migration`), broken `Agent Team` blaze calls, and inaccessible `Chief of Staff` concierge archives.
 
 ### 🚀 Usage
