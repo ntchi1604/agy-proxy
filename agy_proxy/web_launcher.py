@@ -686,9 +686,10 @@ def patch_web_bundle(bundle_dir: Path) -> bool:
 "gemini-4-argon-web-high":1501,"gemini-4-argon-web-medium":1502,"gemini-4-argon-web-low":1503,"gemini-4-argon-web-task":1504,
 "gemini-3.8-flash-web-high":1505,"gemini-3.8-flash-web-medium":1506,"gemini-3.8-flash-web-low":1507,"gemini-3.8-flash-web-task":1508,
 "gemini-3.1-pro-web-high":1509,"gemini-3.1-pro-web-medium":1510,"gemini-3.1-pro-web-low":1511,
-"gemini-3.5-flash-lite-web-high":1512,"gemini-3.5-flash-lite-web-medium":1513,"gemini-3.5-flash-lite-web-low":1514
+"gemini-3.5-flash-lite-web-high":1512,"gemini-3.5-flash-lite-web-medium":1513,"gemini-3.5-flash-lite-web-low":1514,
+"gemini-3.1-flash-image":1021,"gemini-3-pro-image":1022,"gemini-2.5-flash-image":314
 };
-var __enhanceUserStatus=function(b){if(!b||!b.cascadeModelConfigData||b._agyEnhanced)return b;try{var d=b.cascadeModelConfigData,origConfigs=d.clientModelConfigs||[],origSorts=d.clientModelSorts||[],newConfigs=[...origConfigs],existingLabels=new Set(newConfigs.map(m=>m.label)),template=origConfigs.find(m=>!m.disabled)||origConfigs[0]||{},newSorts=JSON.parse(JSON.stringify(origSorts)),recGroup=newSorts.find(s=>s.name&&s.name.toLowerCase()==="recommended")?.groups?.[0];!recGroup&&newSorts.length>0&&newSorts[0].groups&&(recGroup=newSorts[0].groups[0]);var webModels=[{label:"Gemini 4 Argon (Web) (High)",alias:"gemini-4-argon-web-high"},{label:"Gemini 4 Argon (Web) (Medium)",alias:"gemini-4-argon-web-medium"},{label:"Gemini 4 Argon (Web) (Low)",alias:"gemini-4-argon-web-low"},{label:"Gemini 4 Argon (Web) (Agent)",alias:"gemini-4-argon-web-task"},{label:"Gemini 3.8 Flash (Web) (High)",alias:"gemini-3.8-flash-web-high"},{label:"Gemini 3.8 Flash (Web) (Medium)",alias:"gemini-3.8-flash-web-medium"},{label:"Gemini 3.8 Flash (Web) (Low)",alias:"gemini-3.8-flash-web-low"},{label:"Gemini 3.8 Flash (Web) (Agent)",alias:"gemini-3.8-flash-web-task"},{label:"Gemini 3.1 Pro (Web) (High)",alias:"gemini-3.1-pro-web-high"},{label:"Gemini 3.1 Pro (Web) (Medium)",alias:"gemini-3.1-pro-web-medium"},{label:"Gemini 3.1 Pro (Web) (Low)",alias:"gemini-3.1-pro-web-low"},{label:"Gemini 3.5 Flash-Lite (Web) (High)",alias:"gemini-3.5-flash-lite-web-high"},{label:"Gemini 3.5 Flash-Lite (Web) (Medium)",alias:"gemini-3.5-flash-lite-web-medium"},{label:"Gemini 3.5 Flash-Lite (Web) (Low)",alias:"gemini-3.5-flash-lite-web-low"}],agyModels=[{label:"Gemini 3.8 Flash (High)",alias:"gemini-3.8-flash-high"},{label:"Gemini 3.8 Flash (Medium)",alias:"gemini-3.8-flash-medium"},{label:"Gemini 3.8 Flash (Low)",alias:"gemini-3.8-flash-low"},{label:"Gemini 3.8 Flash (Tiered)",alias:"gemini-3.8-flash-tiered"},{label:"Gemini 3.8 Flash (DeepAgent)",alias:"gemini-3.8-flash-deepagent"},{label:"Claude Sonnet 4.6 (Thinking)",alias:"claude-sonnet-4-6"},{label:"Claude Opus 4.6 (Thinking)",alias:"claude-opus-4-6-thinking"},{label:"Claude Sonnet 5.5 (High)",alias:"claude-sonnet-5-5-high"},{label:"Claude Opus 5.5 (High)",alias:"claude-opus-5-5-high"},{label:"Gemini 3.5 Flash (High)",alias:"gemini-3-flash-agent"},{label:"Gemini 3.5 Flash (Medium)",alias:"gemini-3.5-flash-low"},{label:"Gemini 3.5 Flash (Low)",alias:"gemini-3.5-flash-extra-low"},{label:"Gemini 3.5 Flash Lite",alias:"gemini-3.5-flash-lite"},{label:"Gemini 3.1 Flash Lite",alias:"gemini-3.1-flash-lite"},{label:"Gemini 3 Flash",alias:"gemini-3-flash"},{label:"Gemini 2.5 Pro",alias:"gemini-2.5-pro"},{label:"Gemini 2.5 Flash",alias:"gemini-2.5-flash"},{label:"Gemini 2.5 Flash Lite",alias:"gemini-2.5-flash-lite"},{label:"Gemini 2.5 Flash (Thinking)",alias:"gemini-2.5-flash-thinking"},{label:"GPT-OSS 120B",alias:"gpt-oss-120b-medium"}];var addSep=function(secLabel,secId){if(!existingLabels.has(secLabel)){var sepEntry=Object.assign({},template,{label:secLabel,disabled:!0,isRecommended:!1,modelId:secId,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"alias",value:secId}},supportedMimeTypes:{}});delete sepEntry.tagTitle;delete sepEntry.tagDescription;newConfigs.push(sepEntry);existingLabels.add(secLabel)}};addSep("── Default ──────────────────","sep_default");addSep("── Web ──────────────────","sep_web");addSep("── Antigravity ───────────","sep_agy");var addModels=function(items){for(var item of items){if(!existingLabels.has(item.label)){var enumVal=MODEL_ENUM_MAP[item.alias]||1500;var entry=Object.assign({},template,{label:item.label,disabled:!1,isRecommended:!0,modelId:item.alias,value:enumVal,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"model",value:enumVal}},supportedMimeTypes:{}});delete entry.modelAlias;delete entry.tagTitle;delete entry.tagDescription;newConfigs.push(entry);existingLabels.add(item.label)}}};addModels(webModels);addModels(agyModels);if(recGroup){var ordered=[];var origRecLabels=(recGroup&&Array.isArray(recGroup.modelLabels))?[...recGroup.modelLabels]:origConfigs.map(m=>m.label);var defaultLabels=[];origRecLabels.forEach(lbl=>{lbl&&!lbl.startsWith("──")&&!defaultLabels.includes(lbl)&&defaultLabels.push(lbl)});origConfigs.forEach(m=>{m.label&&!m.label.startsWith("──")&&!defaultLabels.includes(m.label)&&defaultLabels.push(m.label)});ordered.push("── Default ──────────────────");defaultLabels.forEach(lbl=>{!ordered.includes(lbl)&&ordered.push(lbl)});ordered.push("── Web ──────────────────");webModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)});ordered.push("── Antigravity ───────────");agyModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)});recGroup.modelLabels=ordered}return Object.assign({},b,{_agyEnhanced:!0,_sep_ordered_v8:!0,cascadeModelConfigData:Object.assign({},d,{clientModelConfigs:newConfigs,clientModelSorts:newSorts})})}catch(err){console.error("[AGY-Proxy] enhanceUserStatus failed:",err);return b}};
+var __enhanceUserStatus=function(b){if(!b||!b.cascadeModelConfigData||b._agyEnhanced)return b;try{var isProxyActive=false;try{if(typeof window!=="undefined"&&window.__AGY_PROXY_ACTIVE__!==undefined){isProxyActive=Boolean(window.__AGY_PROXY_ACTIVE__)}else if(typeof localStorage!=="undefined"&&localStorage.getItem("agy.proxyActive")!==null){isProxyActive=localStorage.getItem("agy.proxyActive")==="true"}}catch(e){}var d=b.cascadeModelConfigData,origConfigs=d.clientModelConfigs||[],origSorts=d.clientModelSorts||[],newConfigs=[...origConfigs],existingLabels=new Set(newConfigs.map(m=>m.label)),template=origConfigs.find(m=>!m.disabled)||origConfigs[0]||{},newSorts=JSON.parse(JSON.stringify(origSorts)),recGroup=newSorts.find(s=>s.name&&s.name.toLowerCase()==="recommended")?.groups?.[0];!recGroup&&newSorts.length>0&&newSorts[0].groups&&(recGroup=newSorts[0].groups[0]);var webModels=[{label:"Gemini 4 Argon (Web) (High)",alias:"gemini-4-argon-web-high"},{label:"Gemini 4 Argon (Web) (Medium)",alias:"gemini-4-argon-web-medium"},{label:"Gemini 4 Argon (Web) (Low)",alias:"gemini-4-argon-web-low"},{label:"Gemini 4 Argon (Web) (Agent)",alias:"gemini-4-argon-web-task"},{label:"Gemini 3.8 Flash (Web) (High)",alias:"gemini-3.8-flash-web-high"},{label:"Gemini 3.8 Flash (Web) (Medium)",alias:"gemini-3.8-flash-web-medium"},{label:"Gemini 3.8 Flash (Web) (Low)",alias:"gemini-3.8-flash-web-low"},{label:"Gemini 3.8 Flash (Web) (Agent)",alias:"gemini-3.8-flash-web-task"},{label:"Gemini 3.1 Pro (Web) (High)",alias:"gemini-3.1-pro-web-high"},{label:"Gemini 3.1 Pro (Web) (Medium)",alias:"gemini-3.1-pro-web-medium"},{label:"Gemini 3.1 Pro (Web) (Low)",alias:"gemini-3.1-pro-web-low"},{label:"Gemini 3.5 Flash-Lite (Web) (High)",alias:"gemini-3.5-flash-lite-web-high"},{label:"Gemini 3.5 Flash-Lite (Web) (Medium)",alias:"gemini-3.5-flash-lite-web-medium"},{label:"Gemini 3.5 Flash-Lite (Web) (Low)",alias:"gemini-3.5-flash-lite-web-low"}],agyModels=[{label:"Gemini 3.8 Flash (High)",alias:"gemini-3.8-flash-high"},{label:"Gemini 3.8 Flash (Medium)",alias:"gemini-3.8-flash-medium"},{label:"Gemini 3.8 Flash (Low)",alias:"gemini-3.8-flash-low"},{label:"Gemini 3.8 Flash (Tiered)",alias:"gemini-3.8-flash-tiered"},{label:"Claude Sonnet 4.6 (Thinking)",alias:"claude-sonnet-4-6"},{label:"Claude Opus 4.6 (Thinking)",alias:"claude-opus-4-6-thinking"},{label:"GPT-OSS 120B",alias:"gpt-oss-120b-medium"},{label:"Gemini 3.5 Flash (High)",alias:"gemini-3-flash-agent"},{label:"Gemini 3.5 Flash (Medium)",alias:"gemini-3.5-flash-low"},{label:"Gemini 3.5 Flash (Low)",alias:"gemini-3.5-flash-extra-low"},{label:"Gemini 3.5 Flash Lite",alias:"gemini-3.5-flash-lite"},{label:"Gemini 3.1 Flash Lite",alias:"gemini-3.1-flash-lite"},{label:"Gemini 3.1 Flash (Image)",alias:"gemini-3.1-flash-image"},{label:"Gemini 3 Flash",alias:"gemini-3-flash"},{label:"Gemini 2.5 Pro",alias:"gemini-2.5-pro"},{label:"Gemini 2.5 Flash",alias:"gemini-2.5-flash"},{label:"Gemini 2.5 Flash Lite",alias:"gemini-2.5-flash-lite"},{label:"Gemini 2.5 Flash (Thinking)",alias:"gemini-2.5-flash-thinking"}];if(isProxyActive){agyModels.push({label:"Gemini 3.8 Flash (DeepAgent)",alias:"gemini-3.8-flash-deepagent"},{label:"Claude Sonnet 5.5 (High)",alias:"claude-sonnet-5-5-high"},{label:"Claude Opus 5.5 (High)",alias:"claude-opus-5-5-high"})};var addSep=function(secLabel,secId){if(!existingLabels.has(secLabel)){var sepEntry=Object.assign({},template,{label:secLabel,disabled:!0,isRecommended:!1,modelId:secId,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"alias",value:secId}},supportedMimeTypes:{}});delete sepEntry.tagTitle;delete sepEntry.tagDescription;newConfigs.push(sepEntry);existingLabels.add(secLabel)}};var addModels=function(items){for(var item of items){if(!existingLabels.has(item.label)){var enumVal=MODEL_ENUM_MAP[item.alias]||1500;var entry=Object.assign({},template,{label:item.label,disabled:!1,isRecommended:!0,modelId:item.alias,value:enumVal,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"model",value:enumVal}},supportedMimeTypes:{}});delete entry.modelAlias;delete entry.tagTitle;delete entry.tagDescription;newConfigs.push(entry);existingLabels.add(item.label)}}};addSep("── Default ──────────────────","sep_default");if(isProxyActive){addSep("── Web ──────────────────","sep_web");addModels(webModels)};addSep("── Antigravity ───────────","sep_agy");addModels(agyModels);if(recGroup){var ordered=[];var origRecLabels=(recGroup&&Array.isArray(recGroup.modelLabels))?[...recGroup.modelLabels]:origConfigs.map(m=>m.label);var defaultLabels=[];origRecLabels.forEach(lbl=>{lbl&&!lbl.startsWith("──")&&!defaultLabels.includes(lbl)&&defaultLabels.push(lbl)});origConfigs.forEach(m=>{m.label&&!m.label.startsWith("──")&&!defaultLabels.includes(m.label)&&defaultLabels.push(m.label)});ordered.push("── Default ──────────────────");defaultLabels.forEach(lbl=>{!ordered.includes(lbl)&&ordered.push(lbl)});if(isProxyActive){ordered.push("── Web ──────────────────");webModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)})};ordered.push("── Antigravity ───────────");agyModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)});recGroup.modelLabels=ordered}return Object.assign({},b,{_agyEnhanced:!0,_sep_ordered_v8:!0,_proxyActive:isProxyActive,cascadeModelConfigData:Object.assign({},d,{clientModelConfigs:newConfigs,clientModelSorts:newSorts})})}catch(err){console.error("[AGY-Proxy] enhanceUserStatus failed:",err);return b}};
 '''
         # Dynamic structural matching for React State Provider
         prov_re = re.compile(
@@ -815,6 +816,12 @@ var __enhanceUserStatus=function(b){if(!b||!b.cascadeModelConfigData||b._agyEnha
     auto_script = '''    <script>
       // Antigravity Web Hub: Auto-unlock Developer & Google-internal capabilities
       try {
+        if (window.__AGY_PROXY_ACTIVE__ === undefined) {
+          window.__AGY_PROXY_ACTIVE__ = true;
+        }
+        try {
+          localStorage.setItem("agy.proxyActive", window.__AGY_PROXY_ACTIVE__ ? "true" : "false");
+        } catch (e) {}
         if (window.__APP_CONFIG__) {
           window.__APP_CONFIG__.devMode = true;
         }
@@ -901,13 +908,38 @@ def is_bundle_patched(bundle_dir: Path) -> bool:
         return False
 
 
+def sync_bundle_proxy_mode(bundle_dir: Path, proxy_active: bool) -> None:
+    """
+    Updates the runtime proxy mode state in index.html so the UI knows
+    whether to show Web models (when proxy is active) or only native Antigravity models (direct mode).
+    """
+    index_html_path = bundle_dir / "index.html"
+    if not index_html_path.is_file():
+        return
+    try:
+        html = index_html_path.read_text(encoding="utf-8")
+        val_str = "true" if proxy_active else "false"
+        script_pattern = re.compile(r'window\.__AGY_PROXY_ACTIVE__\s*=\s*(?:true|false);?')
+        new_stmt = f'window.__AGY_PROXY_ACTIVE__ = {val_str}; try {{ localStorage.setItem("agy.proxyActive", "{val_str}"); }} catch (e) {{}}'
+        if script_pattern.search(html):
+            html = script_pattern.sub(new_stmt, html)
+        elif "</head>" in html:
+            html = html.replace("</head>", f"    <script>{new_stmt}</script>\n  </head>")
+        index_html_path.write_text(html, encoding="utf-8")
+    except Exception as e:
+        logger.debug(f"Could not sync bundle proxy mode in index.html: {e}")
+
+
 def prepare_patched_web_bundle(
     ls_bin: Path,
     bundle_dir: Optional[Path] = None,
     force: bool = False,
+    direct: bool = False,
+    proxy_active: bool = True,
 ) -> Path:
     """
     Ensures a patched Web UI bundle exists at bundle_dir, extracting and patching if necessary.
+    Synchronizes runtime proxy mode (direct vs proxy) so only available models are shown.
     """
     target_dir = bundle_dir or DEFAULT_BUNDLE_DIR
 
@@ -920,6 +952,9 @@ def prepare_patched_web_bundle(
         logger.info("Web UI bundle successfully prepared and patched.")
     else:
         logger.debug(f"Using existing patched web bundle at: {target_dir}")
+
+    # Synchronize runtime proxy mode flag in index.html
+    sync_bundle_proxy_mode(target_dir, proxy_active=proxy_active and not direct)
 
     return target_dir
 
@@ -1193,6 +1228,8 @@ def launch_antigravity_web(
                 resolved_ls,
                 bundle_dir=Path(bundle_dir) if bundle_dir else None,
                 force=force_patch,
+                direct=direct,
+                proxy_active=proxy_alive,
             )
         except Exception as e:
             console.print(f"[bold red]❌ Failed to prepare patched web bundle: {e}[/bold red]")

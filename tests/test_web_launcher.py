@@ -370,3 +370,48 @@ def test_patch_web_bundle_graceful_degradation(tmp_path):
     assert "restrictToCorpDomain:!1" in patched_js
     assert (bundle_dir / ".patched").is_file()
 
+
+def test_sync_bundle_proxy_mode_direct_vs_proxy(tmp_path):
+    from agy_proxy.web_launcher import (
+        prepare_patched_web_bundle,
+        sync_bundle_proxy_mode,
+        is_bundle_patched,
+    )
+    import io
+    import zipfile
+
+    # 1. Create a dummy binary with zip
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as z:
+        dummy_js = 'restrictToCorpDomain:!0; var tk=a=>a.modelOrAlias?{label:a.label,value:1}; function gMa({children:a,userStatus:b}){return .Provider,{value:g},a)}'
+        z.writestr("main.js", dummy_js)
+        z.writestr("index.html", '<html><head><title>Test</title></head><body></body></html>')
+    zip_bytes = zip_buffer.getvalue()
+
+    fake_bin = tmp_path / "language_server"
+    fake_bin.write_bytes(b"\x7fELF_PREFIX_HEADER" + zip_bytes)
+    os.chmod(fake_bin, 0o755)
+
+    out_bundle = tmp_path / "bundle_mode_test"
+
+    # Test 1: prepare in direct mode (proxy_active=False)
+    prepare_patched_web_bundle(fake_bin, bundle_dir=out_bundle, force=True, direct=True)
+    html_direct = (out_bundle / "index.html").read_text()
+    assert "window.__AGY_PROXY_ACTIVE__ = false;" in html_direct
+
+    # Test 2: sync to proxy mode without re-extracting
+    sync_bundle_proxy_mode(out_bundle, proxy_active=True)
+    html_proxy = (out_bundle / "index.html").read_text()
+    assert "window.__AGY_PROXY_ACTIVE__ = true;" in html_proxy
+
+    # Test 3: prepare again with proxy_active=True and direct=False
+    prepare_patched_web_bundle(fake_bin, bundle_dir=out_bundle, force=False, direct=False, proxy_active=True)
+    html_proxy2 = (out_bundle / "index.html").read_text()
+    assert "window.__AGY_PROXY_ACTIVE__ = true;" in html_proxy2
+
+    # Check main.js has image models and conditional webModels
+    js_content = (out_bundle / "main.js").read_text()
+    assert "gemini-3.1-flash-image" in js_content
+    assert "isProxyActive" in js_content
+
+
