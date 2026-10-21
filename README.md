@@ -66,13 +66,19 @@ Open **`http://127.0.0.1:8000`** in your browser to:
 `agy-proxy` comes with dedicated, ready-to-run helpers for the most popular workflows:
 
 ### 1. 🚀 Antigravity Web Hub (Zero Electron)
-Run Google Antigravity 2.0 in your browser, saving **~1.6 GB RAM**:
+Run Google Antigravity 2.0 in your browser, saving **~1.6 GB RAM** (works even on headless VPS servers):
 ```bash
-# Standard Web Hub (-1.6 GB RAM):
-agy-proxy web -k -o
+# Standard Web Hub (-1.6 GB RAM freed):
+agy-proxy web
 
 # Patched Web Hub (Unlocks Web Terminal, File Explorer, Battle Mode):
+agy-proxy web --patched
+
+# Open browser explicitly (-o) and clean up Electron (-k):
 agy-proxy web --patched -k -o
+
+# Headless server setup (download official binary without Electron):
+agy-proxy web --download-server
 ```
 👉 *Detailed guide: [Antigravity Web Mode & Patched Hub](docs/web_mode.md)*
 

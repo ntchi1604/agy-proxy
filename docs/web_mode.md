@@ -24,7 +24,7 @@ Google Antigravity 2.0 features an ultra-fast, native Go backend (`language_serv
 ## 🏃 Standard Web Mode (`agy-proxy web`)
 
 ```bash
-# Start Antigravity in browser Web mode:
+# Start Antigravity in browser Web mode (terminal link printed, browser not opened by default):
 agy-proxy web
 
 # Check current Web mode status:
@@ -33,12 +33,18 @@ agy-proxy web --status
 # Automatically close running Electron window to free memory:
 agy-proxy web -k
 
-# Open browser automatically:
+# Open browser automatically on startup (-o / --open):
 agy-proxy web -k -o
 
 # Custom port or custom browser:
 agy-proxy web --port 44741 --browser helium
+
+# Download standalone language_server binary on a server without Antigravity installed:
+agy-proxy web --download-server
 ```
+
+> [!TIP]
+> **Tab Spam Protection**: By default, `agy-proxy web` does **not** auto-open your browser to prevent accidental browser tab spam when running multiple background commands. You can click the displayed HTTPS URL directly in your terminal, or pass `-o` / `--open`. When `-o` is used, a 10-second cross-process debounce lock prevents duplicate tabs from opening.
 
 ### Combined One-Command Launch (Proxy + Web together)
 ```bash
@@ -48,6 +54,33 @@ agy-proxy web --port 44741 --browser helium
 
 > [!NOTE]
 > **Local SSL Certificate**: Because Antigravity serves local HTTPS with self-signed certificates, your browser will prompt to accept the certificate on first access. Simply click **Advanced** -> **Proceed to 127.0.0.1**.
+
+---
+
+## 📦 Headless & VPS Server Setup (`--download-server`)
+
+You can run Antigravity Web Mode on headless Linux servers, VPS, remote containers, or machines without the full Antigravity desktop Electron app installed.
+
+### Automatic Binary Resolution
+When you run `agy-proxy web`, it searches for `language_server` in the following order:
+1. Explicit CLI arguments (`--ls-path` or `-e / --editor`)
+2. Environment variables (`ANTIGRAVITY_LS_PATH`, `ANTIGRAVITY_EDITOR_PATH`)
+3. User config (`~/.config/agy-proxy/config.json`)
+4. Cached download directory (`~/.config/agy-proxy/bin/language_server`)
+5. Standard desktop install locations (`/opt/Antigravity/resources/bin/`, `/opt/Antigravity IDE/...`)
+6. System `PATH`
+7. **Auto-Download prompt** (if running in interactive terminal): automatically offers to download the official Google release for your OS/architecture and extracts the binary into `~/.config/agy-proxy/bin/`.
+
+### Manual Pre-Download
+To download and extract the binary beforehand without starting the server:
+```bash
+agy-proxy web --download-server
+```
+
+**Supported extraction formats**:
+- **Linux** (`linux-x64`, `linux-arm`): downloads official `Antigravity.tar.gz` and extracts `language_server` using Python's native `tarfile` module (zero external dependencies).
+- **macOS** (`darwin-arm` Silicon, `darwin-x64` Intel): downloads `Antigravity.dmg` and extracts `language_server` using `7z` or native `hdiutil`.
+- **Windows** (`windows-x64`, `windows-arm`): downloads `Antigravity-x64.exe` (NSIS installer) and extracts `language_server.exe` using `7z`.
 
 ---
 
@@ -95,21 +128,24 @@ agy-proxy web --patched -v
 
 | Option | Description |
 | :--- | :--- |
-| `-P, --patched` | Launch with feature-patched Web UI bundle. |
-| `-k, --kill-electron` | Automatically terminate running Electron instances. |
-| `-o, --open` | Automatically open web browser on startup. |
-| `-p, --port <port>` | Port for HTTPS web server (default: `44741`). |
-| `-f, --force-patch` | Force re-extracting and re-patching Web UI bundle. |
+| `-P, --patched` | Launch with feature-patched Web UI bundle (unlocks Web Terminal, File Explorer, Battle Mode). |
+| `-k, --kill-electron` | Automatically terminate running Electron instances to free ~1.6 GB RAM. |
+| `-o, --open` | Open web browser on startup (default: `False` to prevent tab spam). |
+| `--no-open` | Explicitly prevent opening web browser on startup. |
+| `-D, --direct, --no-proxy` | Bypass proxy and connect directly to official Google backend. |
+| `--download-server` | Download official standalone `language_server` binary for current OS/arch to `~/.config/agy-proxy/bin/` and exit. |
+| `-p, --port <port>` | HTTPS port for Antigravity Web UI (default: `44741`). |
+| `--host <host>` | Host address to bind Web UI (default: `127.0.0.1`). |
+| `--proxy-url <url>` | Proxy backend URL (default: `http://127.0.0.1:8000`). |
+| `-r, --restart` | Force restart Antigravity Web even if already running on port. |
+| `-s, --status` | Check real-time status of Antigravity Web server and RAM savings. |
+| `--detach` | Run Antigravity Web in background daemon mode. |
+| `-f, --force-patch` | Force re-extraction and re-patching of the Web UI bundle. |
 | `-d, --bundle-dir <path>` | Target directory for extracted bundle (default: `~/.config/agy-proxy/web_ui`). |
-| `--ls-path, --bin <path>` | Path to `language_server` (or `language_server.real`). |
-| `-r, --restart` | Restart server (kills previous instance on port). |
-| `-v, --debug` | Show verbose language_server console output. |
-| `-f, --force` | Force re-extracting and re-patching bundle. |
-| `-k, --kill-electron` | Automatically terminate running Electron instances to free memory. |
-| `-r, --restart` | Restart web server (terminate any instance running on port). |
-| `-o, --open` | Automatically open web browser after startup. |
-| `--browser <cmd>` | Specify custom browser executable (e.g. `helium`, `google-chrome`). |
-| `-v, --verbose, --debug` | Show raw `language_server` console output (default: logged to file). |
+| `--ls-path, --bin <path>` | Explicit path to `language_server` binary. |
+| `-e, --editor <path>` | Path to Antigravity editor root directory. |
+| `-b, --browser <cmd>` | Custom browser executable to open (e.g. `helium`, `google-chrome`, `firefox`). |
+| `-v, --verbose, --debug` | Show raw `language_server` debug output in console (default: logged to file). |
 | `-h, --help` | Show help message. |
 
 ---
