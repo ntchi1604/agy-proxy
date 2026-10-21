@@ -336,8 +336,15 @@ def get_running_instances() -> Dict[str, Any]:
             cmd_str = " ".join(cmd)
             name = (p.info.get("name") or "").lower()
 
-            # Ignore proxy itself
-            if "agy_proxy" in cmd_str or "agy-proxy" in cmd_str or "test_web_launcher" in cmd_str:
+            # Check for language_server
+            is_ls = (
+                "language_server" in name
+                or "language-server" in name
+                or any("language_server" in os.path.basename(arg) for arg in cmd)
+            )
+
+            # Ignore proxy itself (unless it's language_server with --web_bundle_path in ~/.config/agy-proxy)
+            if not is_ls and ("agy_proxy" in cmd_str or "agy-proxy" in cmd_str or "test_web_launcher" in cmd_str):
                 continue
 
             # Check for Electron Antigravity
@@ -360,17 +367,26 @@ def get_running_instances() -> Dict[str, Any]:
                 continue
 
             # Check for language_server
-            is_ls = (
-                "language_server" in name
-                or "language-server" in name
-                or any("language_server" in os.path.basename(arg) for arg in cmd)
-            )
             if is_ls:
                 is_standalone = "--standalone" in cmd
+                web_port = None
+                for i, arg in enumerate(cmd):
+                    if arg == "--https_server_port" and i + 1 < len(cmd):
+                        try:
+                            web_port = int(cmd[i + 1])
+                        except ValueError:
+                            pass
+                    elif arg.startswith("--https_server_port="):
+                        try:
+                            web_port = int(arg.split("=", 1)[1])
+                        except ValueError:
+                            pass
+
                 ls_pids.append(pid)
                 ls_details.append({
                     "pid": pid,
                     "standalone": is_standalone,
+                    "web_port": web_port,
                     "cmd": cmd_str[:160],
                 })
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
@@ -1029,8 +1045,39 @@ def build_web_args(
     return args
 
 
-def open_browser_async(url: str, browser_name: Optional[str] = None, delay: float = 2.5):
-    """Opens the specified URL in a web browser in a background daemon thread."""
+BROWSER_OPEN_COOLDOWN_SECONDS: float = 10.0
+
+
+def can_open_browser(cooldown: float = BROWSER_OPEN_COOLDOWN_SECONDS) -> bool:
+    """
+    Checks if enough time has elapsed since the last browser opening to prevent tab spam.
+    Uses a timestamp file in ~/.config/agy-proxy/.browser_open_ts for cross-process synchronization.
+    Returns True if allowed to open, False if suppressed.
+    """
+    ts_file = Path.home() / ".config" / "agy-proxy" / ".browser_open_ts"
+    now = time.time()
+    try:
+        if ts_file.is_file():
+            try:
+                last_ts = float(ts_file.read_text(encoding="utf-8").strip())
+                if (now - last_ts) < cooldown:
+                    return False
+            except Exception:
+                pass
+        ts_file.parent.mkdir(parents=True, exist_ok=True)
+        ts_file.write_text(str(now), encoding="utf-8")
+        return True
+    except Exception:
+        return True
+
+
+def open_browser_async(url: str, browser_name: Optional[str] = None, delay: float = 2.5, force: bool = False):
+    """Opens the specified URL in a web browser in a background daemon thread with tab spam protection."""
+    if not force and not can_open_browser():
+        logger.info("Skipping browser open: another browser instance was opened recently (tab spam protection).")
+        console.print("[dim]🌐 Browser was opened recently. Skipping auto-open to prevent tab spam.[/dim]")
+        return
+
     def _open():
         time.sleep(delay)
         try:
@@ -1056,23 +1103,21 @@ def get_web_status(port: int = DEFAULT_WEB_PORT) -> Dict[str, Any]:
     """Returns complete real-time status of Antigravity Web Mode."""
     instances = get_running_instances()
     port_busy = is_port_in_use(port)
-    ls_standalone = False
-    standalone_pid = None
+    web_pid = None
 
     for ls in instances.get("language_server_details", []):
-        if ls.get("standalone"):
-            ls_standalone = True
-            standalone_pid = ls.get("pid")
+        if ls.get("web_port") == port:
+            web_pid = ls.get("pid")
             break
+        elif ls.get("standalone") and port_busy and web_pid is None:
+            web_pid = ls.get("pid")
 
-    is_running = port_busy or ls_standalone
-    ls_pids = instances.get("language_server_pids") or []
-    primary_ls_pid = ls_pids[0] if ls_pids else None
+    is_running = port_busy
     return {
         "status": "running" if is_running else "stopped",
         "port": port,
         "url": f"https://127.0.0.1:{port}/",
-        "pid": standalone_pid or primary_ls_pid,
+        "pid": web_pid if is_running else None,
         "electron_running": instances.get("electron_running", False),
         "electron_pids": instances.get("electron_pids", []),
         "port_in_use": port_busy,
@@ -1194,10 +1239,10 @@ def launch_antigravity_web(
             console.print("[bold yellow]⚠️  Notice: Running Electron Antigravity instance detected.[/bold yellow]")
             console.print("Closing the Electron window will free ~1.6 GB of RAM. You can use [bold cyan]--kill-electron[/bold cyan] to do this automatically.")
 
-    # Determine whether to auto-open browser (default: False to prevent tab spam)
-    should_open = open_browser
-    if no_open is not None and not open_browser:
-        should_open = not no_open
+    # Determine whether to auto-open browser (default: strictly False to prevent tab spam)
+    should_open = bool(open_browser)
+    if no_open:
+        should_open = False
 
     # Check proxy status first
     if direct:
@@ -1333,18 +1378,17 @@ def launch_antigravity_web(
         # Health check: verify process didn't terminate immediately at startup
         try:
             exit_code = proc.wait(timeout=1.2)
-            if exit_code != 0:
-                console.print(f"[bold red]❌ Antigravity Web exited immediately with code {exit_code}.[/bold red]")
-                if effective_log_path.is_file():
-                    try:
-                        log_lines = effective_log_path.read_text(encoding="utf-8").splitlines()[-15:]
-                        if log_lines:
-                            console.print("[bold yellow]Recent server log output:[/bold yellow]")
-                            for line in log_lines:
-                                console.print(f"[dim]{line}[/dim]")
-                    except Exception:
-                        pass
-                return exit_code
+            console.print(f"[bold red]❌ Antigravity Web process stopped immediately (exit code {exit_code}).[/bold red]")
+            if effective_log_path.is_file():
+                try:
+                    log_lines = effective_log_path.read_text(encoding="utf-8").splitlines()[-15:]
+                    if log_lines:
+                        console.print("[bold yellow]Recent server log output:[/bold yellow]")
+                        for line in log_lines:
+                            console.print(f"[dim]{line}[/dim]")
+                except Exception:
+                    pass
+            return exit_code
         except subprocess.TimeoutExpired:
             # Process started successfully and is still running normally
             pass

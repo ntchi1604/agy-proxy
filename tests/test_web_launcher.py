@@ -415,3 +415,48 @@ def test_sync_bundle_proxy_mode_direct_vs_proxy(tmp_path):
     assert "isProxyActive" in js_content
 
 
+def test_can_open_browser_cooldown(tmp_path, monkeypatch):
+    from agy_proxy.web_launcher import can_open_browser
+
+    lock_file = tmp_path / ".browser_open_ts"
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    # First call should succeed and record timestamp
+    assert can_open_browser(cooldown=5.0) is True
+
+    # Immediate second call should be throttled
+    assert can_open_browser(cooldown=5.0) is False
+
+    # Simulate timestamp from 10 seconds ago
+    import time
+    old_time = time.time() - 10.0
+    (tmp_path / ".config" / "agy-proxy" / ".browser_open_ts").write_text(str(old_time))
+
+    # Now it should succeed again
+    assert can_open_browser(cooldown=5.0) is True
+
+
+def test_launch_antigravity_web_default_no_open(tmp_path):
+    from agy_proxy.web_launcher import launch_antigravity_web
+
+    mock_bin = tmp_path / "language_server"
+    mock_bin.write_text("#!/bin/sh\nexit 0\n")
+    mock_bin.chmod(0o755)
+
+    with patch("agy_proxy.web_launcher.find_language_server", return_value=mock_bin), \
+         patch("agy_proxy.web_launcher.get_running_instances", return_value={"electron_running": False, "language_server_running": True}), \
+         patch("agy_proxy.web_launcher.is_port_in_use", return_value=True), \
+         patch("agy_proxy.web_launcher.open_browser_async") as mock_open:
+
+        # Default launch with open_browser=False
+        res = launch_antigravity_web(open_browser=False, ls_path=mock_bin)
+        assert res == 0
+        mock_open.assert_not_called()
+
+        # Explicit launch with open_browser=True
+        res = launch_antigravity_web(open_browser=True, ls_path=mock_bin)
+        assert res == 0
+        mock_open.assert_called_once()
+
+
+
