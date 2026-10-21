@@ -8,6 +8,7 @@ Automatically connects to agy-proxy for multi-account pooling and quota failover
 import io
 import logging
 import os
+import platform
 import re
 import shutil
 import signal
@@ -15,8 +16,11 @@ import socket
 import struct
 import subprocess
 import sys
+import tarfile
+import tempfile
 import threading
 import time
+import urllib.request
 import uuid
 import webbrowser
 import zipfile
@@ -43,8 +47,25 @@ DEFAULT_PROXY_PORT = 8000
 DEFAULT_PROXY_URL = f"http://127.0.0.1:{DEFAULT_PROXY_PORT}"
 DEFAULT_IDE_VERSION = "2.25.0"
 DEFAULT_BUNDLE_DIR = Path.home() / ".config" / "agy-proxy" / "web_ui"
+DEFAULT_BIN_DIR = Path.home() / ".config" / "agy-proxy" / "bin"
+
+# ─── Auto-download URLs for the Antigravity Hub standalone binary ────────────
+#   Platform key → (download_url, archive_type)
+#   archive_type: "tar.gz" → extract language_server from tar; "exe" → copy directly
+_BUILD_TAG = "2.25.0-6535192714805248"
+_BASE_URL = f"https://storage.googleapis.com/antigravity-public/antigravity-hub/{_BUILD_TAG}"
+DOWNLOAD_URLS: Dict[str, tuple] = {
+    "linux-x64":    (f"{_BASE_URL}/linux-x64/Antigravity.tar.gz", "tar.gz"),
+    "linux-arm":    (f"{_BASE_URL}/linux-arm/Antigravity.tar.gz", "tar.gz"),
+    "darwin-arm":   (f"{_BASE_URL}/darwin-arm/Antigravity.dmg",   "dmg"),
+    "darwin-x64":   (f"{_BASE_URL}/darwin-x64/Antigravity.dmg",   "dmg"),
+    "windows-x64":  (f"{_BASE_URL}/windows-x64/Antigravity-x64.exe", "exe"),
+    "windows-arm":  (f"{_BASE_URL}/windows-arm/Antigravity-arm64.exe", "exe"),
+}
 
 KNOWN_CANDIDATE_DIRS = [
+    # Auto-downloaded binary (highest priority after explicit paths)
+    str(DEFAULT_BIN_DIR),
     # Linux (Desktop App & Hub)
     "/opt/Antigravity/resources/bin",
     "/opt/Antigravity",
@@ -191,6 +212,182 @@ def search_dir_for_language_server(directory: Path) -> Optional[Path]:
     return None
 
 
+def detect_platform_key() -> Optional[str]:
+    """
+    Returns a platform key matching DOWNLOAD_URLS keys:
+      linux-x64 | linux-arm | darwin-arm | darwin-x64 | windows-x64 | windows-arm
+    Returns None for unsupported platforms.
+    """
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    # Normalize machine names
+    if machine in ("x86_64", "amd64"):
+        arch = "x64"
+    elif machine in ("aarch64", "arm64", "armv8l"):
+        arch = "arm"
+    elif machine.startswith("arm"):
+        arch = "arm"
+    else:
+        arch = machine
+
+    if system == "linux":
+        return f"linux-{arch}"
+    elif system == "darwin":
+        return f"darwin-{arch}"
+    elif system == "windows":
+        return f"windows-{arch}"
+    return None
+
+
+def _extract_language_server_from_tar(archive_path: Path, dest_dir: Path) -> Optional[Path]:
+    """
+    Extracts the language_server binary from a .tar.gz archive produced by the
+    Antigravity Hub release pipeline.
+    Searches for files matching KNOWN_BIN_NAMES inside the archive.
+    """
+    try:
+        with tarfile.open(archive_path, "r:gz") as tar:
+            for member in tar.getmembers():
+                bname = os.path.basename(member.name)
+                # Strip .real suffix for matching
+                clean_bname = bname[:-5] if bname.endswith(".real") else bname
+                if clean_bname in KNOWN_BIN_NAMES or clean_bname == "language_server":
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest_file = dest_dir / "language_server"
+                    f_in = tar.extractfile(member)
+                    if f_in is None:
+                        continue
+                    with open(dest_file, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                    os.chmod(dest_file, 0o755)
+                    logger.info(f"Extracted language_server → {dest_file}")
+                    return dest_file
+    except Exception as e:
+        logger.warning(f"Failed to extract language_server from tar: {e}")
+    return None
+
+
+def download_language_server(
+    dest_dir: Optional[Path] = None,
+    interactive: bool = True,
+    platform_key: Optional[str] = None,
+) -> Optional[Path]:
+    """
+    Downloads the Antigravity Hub standalone binary for the current platform.
+
+    Downloads to dest_dir (default: ~/.config/agy-proxy/bin/).
+    Returns the path to the extracted language_server binary, or None on failure.
+
+    On Linux/macOS: downloads tar.gz and extracts language_server binary.
+    On Windows: downloads .exe and saves as language_server.exe.
+    On macOS (DMG): not auto-extractable — instructs user to install manually.
+    """
+    dest_dir = dest_dir or DEFAULT_BIN_DIR
+    pkey = platform_key or detect_platform_key()
+
+    if pkey is None:
+        console.print("[bold red]❌ Unsupported platform. Cannot auto-download Antigravity Hub.[/bold red]")
+        return None
+
+    if pkey not in DOWNLOAD_URLS:
+        console.print(f"[bold red]❌ No download URL for platform: {pkey}[/bold red]")
+        return None
+
+    url, archive_type = DOWNLOAD_URLS[pkey]
+
+    # macOS DMG cannot be auto-extracted — show instructions
+    if archive_type == "dmg":
+        console.print("[bold yellow]⚠️  macOS DMG cannot be auto-extracted.[/bold yellow]")
+        console.print(f"   Download manually: [bold cyan]{url}[/bold cyan]")
+        console.print("   Mount the DMG, drag Antigravity.app to /Applications, then re-run.")
+        return None
+
+    # Ask user confirmation when interactive
+    if interactive and sys.stdin and sys.stdin.isatty():
+        console.print(f"\n[bold yellow]📦 Antigravity language_server not found on this system.[/bold yellow]")
+        console.print(f"   Platform detected: [bold cyan]{pkey}[/bold cyan]")
+        console.print(f"   Download URL: [dim]{url}[/dim]")
+        console.print(f"   Install target: [bold cyan]{dest_dir / 'language_server'}[/bold cyan]")
+        try:
+            answer = input("\nDownload and install automatically? [Y/n]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return None
+        if answer not in ("", "y", "yes"):
+            console.print("[dim]Download skipped.[/dim]")
+            return None
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    ls_name = "language_server" if archive_type != "exe" else "language_server.exe"
+    final_path = dest_dir / ls_name
+
+    console.print(f"[bold green]⬇️  Downloading Antigravity Hub ({pkey})...[/bold green]")
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=f".{archive_type}" if archive_type != "tar.gz" else ".tar.gz",
+            delete=False,
+        ) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+
+        _download_with_progress(url, tmp_path)
+
+        if archive_type == "tar.gz":
+            result = _extract_language_server_from_tar(tmp_path, dest_dir)
+            if result is None:
+                console.print("[bold red]❌ Could not find language_server binary inside the archive.[/bold red]")
+                return None
+            final_path = result
+        elif archive_type == "exe":
+            shutil.move(str(tmp_path), str(final_path))
+            os.chmod(final_path, 0o755)
+        else:
+            shutil.move(str(tmp_path), str(final_path))
+
+        # Clean up temp file if it still exists
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+        console.print(f"[bold green]✅ Antigravity language_server installed:[/bold green] [cyan]{final_path}[/cyan]")
+        return final_path
+
+    except Exception as e:
+        console.print(f"[bold red]❌ Download failed: {e}[/bold red]")
+        logger.exception("download_language_server error")
+        return None
+
+
+def _download_with_progress(url: str, dest: Path) -> None:
+    """
+    Downloads a file from url to dest, showing a Rich progress bar.
+    Falls back to silent download if Rich progress is unavailable.
+    """
+    try:
+        from rich.progress import Progress, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn, BarColumn, TextColumn
+        with urllib.request.urlopen(url) as response:
+            total = int(response.headers.get("Content-Length", 0))
+            with Progress(
+                TextColumn("[bold cyan]{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
+                task = progress.add_task("Downloading...", total=total or None)
+                with open(dest, "wb") as f:
+                    while True:
+                        chunk = response.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        progress.advance(task, len(chunk))
+    except ImportError:
+        # Fallback: silent download
+        urllib.request.urlretrieve(url, str(dest))
+
+
 def find_language_server(
     custom_path: Optional[str | Path] = None,
     interactive: bool = False,
@@ -284,12 +481,26 @@ def find_language_server(
         if which_ls:
             return Path(which_ls).resolve()
 
-    # 6. Interactive fallback if running in an interactive terminal
+    # 6. Interactive fallback: ask for manual path or offer auto-download
     if interactive and sys.stdin and sys.stdin.isatty():
         console.print("[bold yellow]⚠️  Could not auto-detect Antigravity language_server path.[/bold yellow]")
         console.print("[dim]Antigravity may be installed in a custom location or not in standard system paths.[/dim]")
+
+        # 6a. Offer to auto-download
+        pkey = detect_platform_key()
+        if pkey and pkey in DOWNLOAD_URLS and DOWNLOAD_URLS[pkey][1] != "dmg":
+            downloaded = download_language_server(interactive=True, platform_key=pkey)
+            if downloaded and downloaded.is_file():
+                if persist:
+                    try:
+                        set_configured_ls_path(str(downloaded))
+                    except Exception:
+                        pass
+                return downloaded
+
+        # 6b. Manual path entry
         try:
-            user_input = input("Enter path to Antigravity directory or language_server binary: ").strip()
+            user_input = input("Enter path to Antigravity directory or language_server binary (or press Enter to skip): ").strip()
         except (EOFError, KeyboardInterrupt):
             return None
 
@@ -301,6 +512,15 @@ def find_language_server(
                 return resolved
             else:
                 console.print(f"[bold red]❌ Could not locate valid language_server in:[/bold red] {clean_input}")
+
+    # 7. Non-interactive: check if downloaded binary exists in default bin dir
+    cached_bin = DEFAULT_BIN_DIR / "language_server"
+    if cached_bin.is_file() and os.access(cached_bin, os.X_OK):
+        logger.info(f"Found cached language_server in bin dir: {cached_bin}")
+        return cached_bin
+    cached_bin_exe = DEFAULT_BIN_DIR / "language_server.exe"
+    if cached_bin_exe.is_file():
+        return cached_bin_exe
 
     return None
 

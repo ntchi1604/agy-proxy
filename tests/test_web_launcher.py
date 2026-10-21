@@ -459,4 +459,73 @@ def test_launch_antigravity_web_default_no_open(tmp_path):
         mock_open.assert_called_once()
 
 
+def test_detect_platform_key():
+    from agy_proxy.web_launcher import detect_platform_key, DOWNLOAD_URLS
+    key = detect_platform_key()
+    # Must return a string or None
+    assert key is None or isinstance(key, str)
+    # On this test system (Linux x64), should return linux-x64
+    import platform as _platform
+    system = _platform.system().lower()
+    machine = _platform.machine().lower()
+    if system == "linux" and machine in ("x86_64", "amd64"):
+        assert key == "linux-x64"
+    elif system == "linux" and machine in ("aarch64", "arm64"):
+        assert key == "linux-arm"
+    # Verify all known keys have valid URL entries
+    for pkey, (url, atype) in DOWNLOAD_URLS.items():
+        assert url.startswith("https://")
+        assert atype in ("tar.gz", "dmg", "exe")
+
+
+def test_download_language_server_tar(tmp_path):
+    """Simulates downloading and extracting a tar.gz archive with a fake language_server."""
+    import io
+    import tarfile as _tarfile
+    from unittest.mock import patch
+    from agy_proxy.web_launcher import download_language_server
+
+    # Create a fake tar.gz in memory
+    buf = io.BytesIO()
+    with _tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        content = b"#!/bin/sh\necho language_server\n"
+        info = _tarfile.TarInfo(name="Antigravity/resources/bin/language_server")
+        info.size = len(content)
+        info.mode = 0o755
+        tar.addfile(info, io.BytesIO(content))
+    tar_bytes = buf.getvalue()
+
+    def fake_download(url, dest: Path):
+        dest.write_bytes(tar_bytes)
+
+    with patch("agy_proxy.web_launcher._download_with_progress", side_effect=fake_download):
+        result = download_language_server(
+            dest_dir=tmp_path / "bin",
+            interactive=False,
+            platform_key="linux-x64",
+        )
+
+    assert result is not None
+    assert result.is_file()
+    assert result.name == "language_server"
+    assert os.access(result, os.X_OK)
+
+
+def test_download_language_server_non_interactive_skips_dmg(tmp_path):
+    """macOS DMG download must return None without crashing."""
+    from agy_proxy.web_launcher import download_language_server
+    result = download_language_server(
+        dest_dir=tmp_path / "bin",
+        interactive=False,
+        platform_key="darwin-arm",
+    )
+    assert result is None
+
+
+def test_cli_download_server_flag(tmp_path):
+    """agy-proxy web --download-server flag should be parsed without error."""
+    from agy_proxy.cli import build_parser
+    parser = build_parser()
+    args = parser.parse_args(["web", "--download-server"])
+    assert args.download_server is True
 

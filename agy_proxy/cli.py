@@ -1016,6 +1016,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--patched", "-P", action="store_true", help="Launch with feature-patched Web UI bundle (unlocks Web Terminal, custom models, and UI enhancements)")
     web_parser.add_argument("--force-patch", "-f", "--force", action="store_true", help="Force re-extraction and re-patching of the Web UI bundle")
     web_parser.add_argument("--bundle-dir", "-d", type=str, default=None, help="Target directory for extracted & patched bundle (default: ~/.config/agy-proxy/web_ui)")
+    web_parser.add_argument("--download-server", action="store_true", help="Download Antigravity Hub language_server binary for this platform to ~/.config/agy-proxy/bin/ and exit")
 
     # patch subcommand (agy-proxy patch [install|restore|status|restart])
     patch_parser = subparsers.add_parser(
@@ -1341,7 +1342,18 @@ def main():
         handle_patch_command(args)
         return
     elif args.subcommand in ("web", "antigravity-web", "web-mode"):
-        from agy_proxy.web_launcher import launch_antigravity_web, get_web_status
+        from agy_proxy.web_launcher import launch_antigravity_web, get_web_status, download_language_server, detect_platform_key
+        if getattr(args, "download_server", False):
+            pkey = detect_platform_key()
+            result = download_language_server(interactive=True, platform_key=pkey)
+            if result:
+                from agy_proxy.config import set_configured_ls_path
+                set_configured_ls_path(str(result))
+                console.print(f"[bold green]✅ language_server downloaded and configured:[/bold green] [cyan]{result}[/cyan]")
+                console.print(f"[dim]You can now run: agy-proxy web -P[/dim]")
+                sys.exit(0)
+            else:
+                sys.exit(1)
         if getattr(args, "status", False):
             status = get_web_status(port=getattr(args, "port", 44741))
             st_color = "bold green" if status["status"] == "running" else "bold red"
