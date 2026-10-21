@@ -6,6 +6,7 @@ import os
 import stat
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from agy_proxy.patcher import Patcher
 
@@ -106,6 +107,86 @@ class TestPatcher(unittest.TestCase):
         res = self.patcher.resign_macos_binary(bin_path)
         self.assertTrue(res)
         mock_run.assert_called_once()
+
+
+class TestLanguageServerPatcher(unittest.TestCase):
+    def setUp(self):
+        from agy_proxy.patcher import LanguageServerPatcher
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.bin_dir = Path(self.temp_dir.name)
+        self.ls_file = self.bin_dir / "language_server"
+        with open(self.ls_file, "wb") as f:
+            f.write(b"\x7fELFfake_binary_content")
+        os.chmod(self.ls_file, 0o755)
+
+        self.patcher = LanguageServerPatcher(
+            target_path=self.ls_file,
+            proxy_url="http://127.0.0.1:8000",
+            wait_timeout=2,
+            enable_watchdog=True,
+        )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_is_wrapper_script(self):
+        from agy_proxy.patcher import is_wrapper_script
+        self.assertFalse(is_wrapper_script(self.ls_file))
+
+        wrapper_file = self.bin_dir / "test_wrapper.sh"
+        wrapper_file.write_text("#!/usr/bin/env bash\necho hi\n")
+        self.assertTrue(is_wrapper_script(wrapper_file))
+
+    def test_generate_wrapper_script(self):
+        from agy_proxy.patcher import generate_wrapper_script
+        content = generate_wrapper_script(
+            proxy_url="http://127.0.0.1:9999",
+            wait_timeout=5,
+            real_bin_name="custom_ls.real",
+            enable_watchdog=True,
+        )
+        self.assertIn("custom_ls.real", content)
+        self.assertIn("http://127.0.0.1:9999", content)
+        self.assertIn("ENABLE_WATCHDOG", content)
+        self.assertIn("generativelanguage.googleapis.com", content)
+
+    def test_install_and_restore_lifecycle(self):
+        from agy_proxy.patcher import is_wrapper_script
+        # 1. Initial state
+        st1 = self.patcher.status()
+        self.assertFalse(st1["is_patched"])
+        self.assertFalse(st1["backup_exists"])
+
+        # 2. Install wrapper
+        res_inst = self.patcher.install()
+        self.assertTrue(res_inst["success"])
+        self.assertEqual(res_inst["status"], "installed")
+
+        real_file = self.bin_dir / "language_server.real"
+        self.assertTrue(real_file.is_file())
+        self.assertTrue(self.ls_file.is_file())
+        self.assertTrue(is_wrapper_script(self.ls_file))
+        self.assertFalse(is_wrapper_script(real_file))
+
+        # Check status after install
+        st2 = self.patcher.status()
+        self.assertTrue(st2["is_patched"])
+        self.assertTrue(st2["backup_exists"])
+
+        # 3. Restore original
+        res_rest = self.patcher.restore()
+        self.assertTrue(res_rest["success"])
+        self.assertEqual(res_rest["status"], "restored")
+
+        self.assertFalse(real_file.exists())
+        self.assertTrue(self.ls_file.is_file())
+        self.assertFalse(is_wrapper_script(self.ls_file))
+        self.assertEqual(self.ls_file.read_bytes(), b"\x7fELFfake_binary_content")
+
+        # Check status after restore
+        st3 = self.patcher.status()
+        self.assertFalse(st3["is_patched"])
+        self.assertFalse(st3["backup_exists"])
 
 
 if __name__ == "__main__":

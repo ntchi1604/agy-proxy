@@ -761,6 +761,93 @@ def handle_service_command(args: argparse.Namespace) -> None:
         console.print("[yellow]Usage: agy-proxy service [install|uninstall|status|start|stop|restart][/yellow]")
 
 
+def handle_patch_command(args: argparse.Namespace) -> None:
+    """Command for managing Antigravity language_server desktop patching."""
+    from agy_proxy.patcher import LanguageServerPatcher
+
+    action = getattr(args, "patch_action", None) or "status"
+    target = getattr(args, "target", None) or getattr(args, "ls_path", None) or getattr(args, "editor", None)
+
+    proxy_url = getattr(args, "url", None)
+    if not proxy_url:
+        host = getattr(args, "host", "127.0.0.1")
+        port = getattr(args, "port", 8000)
+        proxy_url = f"http://{host}:{port}"
+
+    wait_timeout = 0 if getattr(args, "no_wait", False) else getattr(args, "timeout", 2)
+    enable_watchdog = not getattr(args, "no_watchdog", False)
+
+    patcher = LanguageServerPatcher(
+        target_path=target,
+        proxy_url=proxy_url,
+        wait_timeout=wait_timeout,
+        enable_watchdog=enable_watchdog,
+    )
+
+    if action in ("install", "patch"):
+        console.print("[bold cyan]🔧 Patching Antigravity Language Server (Desktop App / Electron)[/bold cyan]")
+        res = patcher.install()
+        if res.get("success"):
+            console.print(f"[bold green]✓ Successfully installed wrapper at:[/bold green] {res.get('ls_file')}")
+            console.print(f"[bold green]✓ Original binary backup at:[/bold green] {res.get('real_file')}")
+            console.print(f"[bold cyan]⚡ Requests will route through:[/bold cyan] {res.get('proxy_url')}")
+            if getattr(args, "yes", False):
+                killed = patcher.kill_running_instances(res.get("real_file"))
+                if killed:
+                    console.print(f"[bold green]✓ Restarted {len(killed)} language_server instance(s).[/bold green]")
+        else:
+            console.print(f"[bold red]❌ Error: {res.get('error')}[/bold red]")
+            sys.exit(1)
+
+    elif action in ("restore", "unpatch"):
+        console.print("[bold yellow]⏪ Restoring Original Antigravity Language Server Binary[/bold yellow]")
+        res = patcher.restore()
+        if res.get("success"):
+            console.print(f"[bold green]✓ Original binary restored:[/bold green] {res.get('ls_file')}")
+            if getattr(args, "yes", False):
+                killed = patcher.kill_running_instances(res.get("ls_file"))
+                if killed:
+                    console.print(f"[bold green]✓ Restarted {len(killed)} language_server instance(s).[/bold green]")
+        else:
+            console.print(f"[bold red]❌ Error: {res.get('error')}[/bold red]")
+            sys.exit(1)
+
+    elif action == "restart":
+        killed = patcher.kill_running_instances()
+        if killed:
+            console.print(f"[bold green]✓ Terminated {len(killed)} running language_server process(es). Antigravity will respawn automatically.[/bold green]")
+        else:
+            console.print("[bold yellow]ℹ️  No active language_server processes found.[/bold yellow]")
+
+    elif action == "status":
+        info = patcher.status()
+        ls_file = info.get("ls_file")
+        real_file = info.get("real_file")
+        is_patched = info.get("is_patched")
+        pids = info.get("running_pids", [])
+        proxy_alive = info.get("proxy_alive", False)
+
+        patch_status = "[bold green]PATCHED (Wrapper Active)[/bold green]" if is_patched else "[bold yellow]ORIGINAL (Unpatched Binary)[/bold yellow]"
+        proxy_status = "[bold green]ONLINE[/bold green]" if proxy_alive else "[bold red]OFFLINE (Direct Fallback)[/bold red]"
+
+        lines = [
+            f"[bold cyan]Target Binary:[/bold cyan] {ls_file or 'Not found'}",
+            f"[bold cyan]Backup (.real):[/bold cyan] {real_file if info.get('backup_exists') else 'None'}",
+            f"[bold cyan]Patch State:[/bold cyan] {patch_status}",
+            f"[bold cyan]Target Proxy:[/bold cyan] {info.get('proxy_url')} ({proxy_status})",
+            f"[bold cyan]Running Processes:[/bold cyan] {len(pids)} active",
+        ]
+        for pid in pids:
+            mode = info.get("pid_modes", {}).get(pid, "unknown").upper()
+            lines.append(f"  • PID {pid}: [bold green]{mode}[/bold green] mode")
+
+        console.print(Panel(
+            "\n".join(lines),
+            title="[bold white]Antigravity Language Server Desktop Patch Status[/bold white]",
+            border_style="cyan",
+        ))
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Constructs the argument parser for agy-proxy CLI."""
     parser = argparse.ArgumentParser(
@@ -918,14 +1005,64 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--no-open", action="store_true", default=False, help=argparse.SUPPRESS)
     web_parser.add_argument("--browser", "-b", type=str, default=None, help="Custom browser executable to open (e.g. helium, google-chrome, firefox)")
     web_parser.add_argument("--kill-electron", "-k", action="store_true", help="Automatically terminate running Electron instances without prompt to free RAM")
-    web_parser.add_argument("--ls-path", type=str, default=None, help="Explicit path to language_server binary")
+    web_parser.add_argument("--ls-path", "--bin", type=str, default=None, help="Explicit path to language_server binary")
     web_parser.add_argument("--editor", "-e", type=str, default=None, help="Path to Antigravity editor root directory (e.g. /opt/Antigravity, /opt/Antigravity IDE, /Applications/Antigravity.app)")
-    web_parser.add_argument("--detach", "-d", action="store_true", help="Run in background daemon mode")
+    web_parser.add_argument("--detach", action="store_true", help="Run in background daemon mode")
     web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
     web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--restart", "-r", action="store_true", help="Force restart Antigravity Web even if already running")
     web_parser.add_argument("--ide-version", type=str, default="2.25.0", help="Reported IDE version (default: 2.25.0)")
+    web_parser.add_argument("--patched", "-P", action="store_true", help="Launch with feature-patched Web UI bundle (unlocks Web Terminal, custom models, and UI enhancements)")
+    web_parser.add_argument("--force-patch", "-f", "--force", action="store_true", help="Force re-extraction and re-patching of the Web UI bundle")
+    web_parser.add_argument("--bundle-dir", "-d", type=str, default=None, help="Target directory for extracted & patched bundle (default: ~/.config/agy-proxy/web_ui)")
+
+    # patch subcommand (agy-proxy patch [install|restore|status|restart])
+    patch_parser = subparsers.add_parser(
+        "patch",
+        aliases=["ide-patch"],
+        help="Manage Antigravity Language Server desktop patching (route Electron IDE through proxy with auto-fallback and live watchdog)",
+    )
+    patch_parser.add_argument("-f", "--file", "--path", "--ls-path", dest="ls_path", default=None, help="Direct path to language_server file or editor directory")
+    patch_parser.add_argument("-e", "--editor", default=None, help="Path to editor installation root (e.g. /opt/Antigravity)")
+    patch_parser.add_argument("--port", type=int, default=8000, help="Port where agy-proxy is running (default: 8000)")
+    patch_parser.add_argument("--host", default="127.0.0.1", help="Host where agy-proxy is running (default: 127.0.0.1)")
+    patch_parser.add_argument("--url", default=None, help="Full proxy URL (e.g. http://127.0.0.1:8000)")
+    patch_parser.add_argument("--timeout", type=int, default=2, help="Seconds to wait for agy-proxy before falling back to Google (default: 2)")
+    patch_parser.add_argument("--no-wait", action="store_true", help="Disable waiting for agy-proxy before launching")
+    patch_parser.add_argument("--no-watchdog", action="store_true", help="Disable background watchdog for dynamic live switching")
+    patch_parser.add_argument("-y", "--yes", action="store_true", help="Automatically confirm prompts")
+
+    patch_sub = patch_parser.add_subparsers(dest="patch_action", help="Patch action")
+
+    p_inst = patch_sub.add_parser("install", aliases=["patch"], help="Install wrapper script to route language_server through agy-proxy")
+    p_inst.add_argument("target", nargs="?", default=None, help="Path to editor directory or language_server file")
+    p_inst.add_argument("-f", "--file", "--path", "--ls-path", dest="ls_path", default=None, help="Direct path to language_server file or editor directory")
+    p_inst.add_argument("-e", "--editor", default=None, help="Path to editor installation root (e.g. /opt/Antigravity)")
+    p_inst.add_argument("--port", type=int, default=8000, help="Port where agy-proxy is running (default: 8000)")
+    p_inst.add_argument("--host", default="127.0.0.1", help="Host where agy-proxy is running (default: 127.0.0.1)")
+    p_inst.add_argument("--url", default=None, help="Full proxy URL (e.g. http://127.0.0.1:8000)")
+    p_inst.add_argument("--timeout", type=int, default=2, help="Seconds to wait for agy-proxy before falling back to Google (default: 2)")
+    p_inst.add_argument("--no-wait", action="store_true", help="Disable waiting for agy-proxy before launching")
+    p_inst.add_argument("--no-watchdog", action="store_true", help="Disable background watchdog for dynamic live switching")
+    p_inst.add_argument("-y", "--yes", action="store_true", help="Automatically confirm prompts")
+
+    p_rest = patch_sub.add_parser("restore", aliases=["unpatch"], help="Restore original language_server binary")
+    p_rest.add_argument("target", nargs="?", default=None, help="Path to editor directory or language_server file")
+    p_rest.add_argument("-f", "--file", "--path", "--ls-path", dest="ls_path", default=None, help="Path to language_server binary or directory")
+    p_rest.add_argument("-e", "--editor", default=None, help="Path to editor installation directory")
+    p_rest.add_argument("-y", "--yes", action="store_true", help="Automatically confirm prompts")
+
+    p_stat = patch_sub.add_parser("status", help="Display current patching and process status")
+    p_stat.add_argument("target", nargs="?", default=None, help="Path to editor directory or language_server file")
+    p_stat.add_argument("-f", "--file", "--path", "--ls-path", dest="ls_path", default=None, help="Path to language_server binary or directory")
+    p_stat.add_argument("-e", "--editor", default=None, help="Path to editor installation directory")
+    p_stat.add_argument("--url", default=None, help="Proxy URL to test")
+
+    p_re = patch_sub.add_parser("restart", aliases=["kill"], help="Restart running language_server so Antigravity respawns it")
+    p_re.add_argument("target", nargs="?", default=None, help="Path to editor directory or language_server file")
+    p_re.add_argument("-f", "--file", "--path", "--ls-path", dest="ls_path", default=None, help="Path to language_server binary or directory")
+    p_re.add_argument("-e", "--editor", default=None, help="Path to editor installation directory")
 
     # config subcommand (agy-proxy config [get|set|list|reset])
     config_parser = subparsers.add_parser("config", help="Manage persistent user configuration (e.g. language_server and editor paths)")
@@ -1200,6 +1337,9 @@ def main():
     elif args.subcommand == "service":
         handle_service_command(args)
         return
+    elif args.subcommand in ("patch", "ide-patch"):
+        handle_patch_command(args)
+        return
     elif args.subcommand in ("web", "antigravity-web", "web-mode"):
         from agy_proxy.web_launcher import launch_antigravity_web, get_web_status
         if getattr(args, "status", False):
@@ -1232,6 +1372,9 @@ def main():
             verbose=getattr(args, "verbose", False),
             direct=getattr(args, "direct", False),
             restart=getattr(args, "restart", False),
+            patched=getattr(args, "patched", False),
+            force_patch=getattr(args, "force_patch", False),
+            bundle_dir=getattr(args, "bundle_dir", None),
         )
         sys.exit(code)
 

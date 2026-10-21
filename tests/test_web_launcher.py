@@ -241,3 +241,76 @@ def test_server_api_web_launch():
         data = resp.json()
         assert data["status"] == "ok"
         assert data["url"] == "https://127.0.0.1:44741/"
+
+
+def test_build_web_args_with_bundle(tmp_path):
+    fake_bin = tmp_path / "language_server"
+    bundle_dir = tmp_path / "web_ui"
+    args = build_web_args(
+        ls_path=fake_bin,
+        port=44741,
+        csrf_token="my-token",
+        web_bundle_path=bundle_dir,
+    )
+    assert "--web_bundle_path" in args
+    assert str(bundle_dir) in args
+
+
+def test_extract_and_patch_web_bundle(tmp_path):
+    import io
+    import zipfile
+    from agy_proxy.web_launcher import (
+        extract_web_bundle,
+        patch_web_bundle,
+        is_bundle_patched,
+        prepare_patched_web_bundle,
+    )
+
+    # 1. Create a dummy zip archive containing main.js and index.html
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as z:
+        dummy_js = (
+            'restrictToCorpDomain:!0; '
+            'var tk=a=>a.modelOrAlias?{label:a.label,value:a.modelOrAlias.choice.case==="model"?a.modelOrAlias.choice.value:I.Model.UNSPECIFIED,modelAlias:a.modelOrAlias.choice.case==="alias"?a.modelOrAlias.choice.value:void 0; '
+            'function gMa({children:a,userStatus:b}){return .Provider,{value:g},a)}'
+        )
+        z.writestr("main.js", dummy_js)
+        z.writestr("index.html", '<html><head><title>Test</title></head><body></body></html>')
+
+    zip_bytes = zip_buffer.getvalue()
+
+    # 2. Embed this zip inside a dummy binary
+    fake_bin = tmp_path / "language_server"
+    fake_bin.write_bytes(b"\x7fELF_PREFIX_HEADER" + zip_bytes)
+    os.chmod(fake_bin, 0o755)
+
+    out_bundle = tmp_path / "extracted_bundle"
+    assert not is_bundle_patched(out_bundle)
+
+    # 3. Test prepare_patched_web_bundle
+    res_dir = prepare_patched_web_bundle(fake_bin, bundle_dir=out_bundle, force=True)
+    assert res_dir == out_bundle
+    assert is_bundle_patched(out_bundle)
+
+    # Check patched main.js content
+    main_js_content = (out_bundle / "main.js").read_text()
+    assert "MODEL_ENUM_MAP" in main_js_content
+    assert "_sep_ordered_v8" in main_js_content
+    assert "agy.selectedModelLabel" in main_js_content
+
+    # Check patched index.html content
+    index_html_content = (out_bundle / "index.html").read_text()
+    assert "Auto-unlock Developer" in index_html_content
+    assert "enable-jetbox-terminal-v2" in index_html_content
+
+
+def test_cli_web_patched_flags():
+    parser = build_parser()
+    args_p = parser.parse_args(["web", "--patched", "-f", "-d", "/tmp/custom_bundle"])
+    assert args_p.subcommand == "web"
+    assert args_p.patched is True
+    assert args_p.force_patch is True
+    assert args_p.bundle_dir == "/tmp/custom_bundle"
+
+    args_p_short = parser.parse_args(["web", "-P"])
+    assert args_p_short.patched is True
