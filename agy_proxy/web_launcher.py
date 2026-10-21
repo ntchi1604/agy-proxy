@@ -242,8 +242,17 @@ def find_language_server(
     # 3. Persistent user configuration
     try:
         cfg_ls = get_configured_ls_path()
-        if cfg_ls and Path(cfg_ls).is_file():
-            return Path(cfg_ls).resolve()
+        if cfg_ls:
+            p_cfg = Path(cfg_ls).resolve()
+            # If configured path is inside a temporary directory, prefer standard system install if present
+            if any(part.startswith("tmp") for part in p_cfg.parts) or not p_cfg.is_file():
+                for opt_path in ("/opt/Antigravity/resources/bin/language_server", "/opt/Antigravity IDE/resources/bin/language_server"):
+                    opt_cand = Path(opt_path)
+                    if opt_cand.is_file():
+                        set_configured_ls_path(str(opt_cand))
+                        return opt_cand
+            if p_cfg.is_file():
+                return p_cfg
         cfg_ed = get_configured_editor_path()
         if cfg_ed and Path(cfg_ed).is_dir():
             found = search_dir_for_language_server(Path(cfg_ed))
@@ -959,6 +968,24 @@ def prepare_patched_web_bundle(
     return target_dir
 
 
+def binary_supports_web_bundle(ls_bin: Path) -> bool:
+    """Checks if the language_server binary supports the -web_bundle_path flag."""
+    try:
+        from agy_proxy.patcher import is_wrapper_script
+        real_bin = ls_bin
+        if is_wrapper_script(ls_bin):
+            cand = ls_bin.parent / f"{ls_bin.name}.real"
+            if cand.is_file():
+                real_bin = cand
+        if not real_bin.is_file():
+            return True
+        with open(real_bin, "rb") as f:
+            data = f.read(120 * 1024 * 1024)
+            return b"web_bundle_path" in data
+    except Exception:
+        return True
+
+
 def build_web_args(
     ls_path: Path,
     port: int = DEFAULT_WEB_PORT,
@@ -994,7 +1021,10 @@ def build_web_args(
         ])
 
     if web_bundle_path:
-        args.extend(["--web_bundle_path", str(web_bundle_path)])
+        if binary_supports_web_bundle(Path(ls_path)):
+            args.extend(["--web_bundle_path", str(web_bundle_path)])
+        else:
+            logger.warning(f"Language server binary at {ls_path} does not support --web_bundle_path; skipping custom web bundle.")
 
     return args
 
@@ -1299,6 +1329,25 @@ def launch_antigravity_web(
 
         signal.signal(signal.SIGINT, _signal_handler)
         signal.signal(signal.SIGTERM, _signal_handler)
+
+        # Health check: verify process didn't terminate immediately at startup
+        try:
+            exit_code = proc.wait(timeout=1.2)
+            if exit_code != 0:
+                console.print(f"[bold red]❌ Antigravity Web exited immediately with code {exit_code}.[/bold red]")
+                if effective_log_path.is_file():
+                    try:
+                        log_lines = effective_log_path.read_text(encoding="utf-8").splitlines()[-15:]
+                        if log_lines:
+                            console.print("[bold yellow]Recent server log output:[/bold yellow]")
+                            for line in log_lines:
+                                console.print(f"[dim]{line}[/dim]")
+                    except Exception:
+                        pass
+                return exit_code
+        except subprocess.TimeoutExpired:
+            # Process started successfully and is still running normally
+            pass
 
         return proc.wait()
     except KeyboardInterrupt:

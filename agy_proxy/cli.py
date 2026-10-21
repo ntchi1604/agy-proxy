@@ -1010,7 +1010,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--detach", action="store_true", help="Run in background daemon mode")
     web_parser.add_argument("--status", "-s", action="store_true", help="Check current status of Antigravity Web Mode")
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
-    web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
+    web_parser.add_argument("--direct", "--no-proxy", "-D", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--restart", "-r", action="store_true", help="Force restart Antigravity Web even if already running")
     web_parser.add_argument("--ide-version", type=str, default="2.25.0", help="Reported IDE version (default: 2.25.0)")
     web_parser.add_argument("--patched", "-P", action="store_true", help="Launch with feature-patched Web UI bundle (unlocks Web Terminal, custom models, and UI enhancements)")
