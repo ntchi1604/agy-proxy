@@ -103,7 +103,11 @@ class TestClaudeHelper(unittest.TestCase):
         self.assertIn("claude-opus-4-6-thinking", models)
         self.assertIn("claude-3-7-sonnet", models)
         self.assertIn("anthropic.gemini-3.8-flash-high", models)
+        self.assertIn("gemini-4-argon-web-high", models)
+        self.assertIn("gemini-4-argon-web-spark", models)
+        self.assertIn("gemini-4-argon-high", models)
         self.assertEqual(models["claude-sonnet-4-6"]["effortLevel"], "high")
+        self.assertEqual(models["gemini-4-argon-web-high"]["effortLevel"], "high")
 
 
 if __name__ == "__main__":

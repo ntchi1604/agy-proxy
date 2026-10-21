@@ -40,9 +40,39 @@ CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
         "description": "Ultra fast lightweight model alias",
         "effortLevel": "low",
     },
+    "gemini-4-argon-web-high": {
+        "displayName": "Gemini 4 Argon (Web High)",
+        "description": "Google Next-Gen Gemini 4 Argon via Gemini Web session (High Reasoning)",
+        "effortLevel": "high",
+    },
+    "gemini-4-argon-web-spark": {
+        "displayName": "Gemini 4 Argon (Web Spark Agent)",
+        "description": "Google Next-Gen Gemini 4 Argon autonomous agent preset with Spark tools",
+        "effortLevel": "high",
+    },
+    "anthropic.gemini-4-argon-web-high": {
+        "displayName": "Gemini 4 Argon (Web High - Anthropic Alias)",
+        "description": "Google Next-Gen Gemini 4 Argon Web model with extended thinking",
+        "effortLevel": "high",
+    },
+    "gemini-4-argon-high": {
+        "displayName": "Gemini 4 Argon (High Reasoning)",
+        "description": "Google Next-Gen Gemini 4 Argon CloudCode Flagship with deep reasoning",
+        "effortLevel": "high",
+    },
     "anthropic.gemini-3.8-flash-high": {
         "displayName": "Gemini 3.8 Flash (High Reasoning)",
         "description": "Google Flagship model with deep thinking & reasoning capabilities",
+        "effortLevel": "high",
+    },
+    "gemini-3.8-flash-high": {
+        "displayName": "Gemini 3.8 Flash (High Reasoning)",
+        "description": "Google Flagship model with deep thinking & reasoning capabilities",
+        "effortLevel": "high",
+    },
+    "gemini-3.8-flash-web-spark": {
+        "displayName": "Gemini 3.8 Flash (Web Spark Agent)",
+        "description": "Gemini 3.8 Flash autonomous agent preset with Spark Web execution",
         "effortLevel": "high",
     },
     "gemini-3.8-flash-deepagent": {

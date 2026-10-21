@@ -46,6 +46,12 @@ class TestCodexHelper(unittest.TestCase):
         self.assertIn("claude-3-5-sonnet-latest", slugs)
         self.assertIn("deepseek-r1", slugs)
         self.assertIn("gpt-oss-120b-medium", slugs)
+        self.assertIn("gemini-4-argon-high", slugs)
+        self.assertIn("gemini-4-argon-web-high", slugs)
+        self.assertIn("gemini-4-argon-web-spark", slugs)
+        self.assertIn("gemini-3.8-flash-web-spark", slugs)
+        self.assertNotIn("gpt-daybreak-blue-latest", slugs)
+        self.assertNotIn("gpt-daybreak-red-latest", slugs)
 
     def test_update_toml_content(self):
         initial = '# Header comment\nexisting_key = "value"\nmodel = "old-model"\n'

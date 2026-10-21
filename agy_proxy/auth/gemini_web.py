@@ -211,37 +211,31 @@ class GeminiWebSession(AccountSession):
 
     MODEL_CONFIGS: dict[str, dict[str, Any]] = {
         # -------------------------------------------------------------
-        # Canonical web-* models (primary standard for Gemini Web)
+        # Canonical 14 Gemini Web models (*-web-*)
         # -------------------------------------------------------------
-        "web-gemini-4-argon": {
-            "model_id": 8,
-            "mode": 2,
-            "budget": 2,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon (Web Flagship)",
-        },
-        "web-gemini-4-argon-high": {
+        # Gemini 4 Argon Web (4)
+        "gemini-4-argon-web-high": {
             "model_id": 8,
             "mode": 2,
             "budget": 2,
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon High (Web Thinking)",
         },
-        "web-gemini-4-argon-medium": {
+        "gemini-4-argon-web-medium": {
             "model_id": 8,
             "mode": 4,
             "budget": 1,
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Medium (Web Thinking)",
         },
-        "web-gemini-4-argon-low": {
+        "gemini-4-argon-web-low": {
             "model_id": 8,
             "mode": 1,
             "budget": 0,
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Low (Web)",
         },
-        "web-gemini-4-argon-spark": {
+        "gemini-4-argon-web-spark": {
             "model_id": 8,
             "mode": 1,
             "budget": 0,
@@ -249,72 +243,30 @@ class GeminiWebSession(AccountSession):
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Spark (Web Agent)",
         },
-        "web-gemini-4-argon-task": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Web Agent)",
-        },
-        "web-gemini-3.5-flash-lite": {
-            "model_id": 6,
-            "mode": 1,
-            "budget": 0,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite (Web)",
-        },
-        "web-gemini-3.5-flash-lite-high": {
-            "model_id": 6,
-            "mode": 2,
-            "budget": 2,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)",
-        },
-        "web-gemini-3.5-flash-lite-medium": {
-            "model_id": 6,
-            "mode": 4,
-            "budget": 1,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
-        },
-        "web-gemini-3.5-flash-lite-low": {
-            "model_id": 6,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 0,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
-        },
-        "web-gemini-3.8-flash": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash (Web)",
-        },
-        "web-gemini-3.8-flash-high": {
+
+        # Gemini 3.8 Flash Web (4)
+        "gemini-3.8-flash-web-high": {
             "model_id": 1,
             "mode": 2,
             "budget": 2,
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash High (Web Thinking)",
         },
-        "web-gemini-3.8-flash-medium": {
+        "gemini-3.8-flash-web-medium": {
             "model_id": 1,
             "mode": 4,
             "budget": 1,
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Medium (Web Thinking)",
         },
-        "web-gemini-3.8-flash-low": {
+        "gemini-3.8-flash-web-low": {
             "model_id": 1,
             "mode": 1,
             "budget": 0,
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Low (Web)",
         },
-        "web-gemini-3.8-flash-spark": {
+        "gemini-3.8-flash-web-spark": {
             "model_id": 1,
             "mode": 1,
             "budget": 0,
@@ -322,36 +274,23 @@ class GeminiWebSession(AccountSession):
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
         },
-        "web-gemini-3.8-flash-task": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
-        },
-        "web-gemini-3.1-pro": {
-            "model_id": 3,
-            "mode": 1,
-            "budget": 0,
-            "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro (Web)",
-        },
-        "web-gemini-3.1-pro-high": {
+
+        # Gemini 3.1 Pro Web (3)
+        "gemini-3.1-pro-web-high": {
             "model_id": 3,
             "mode": 2,
             "budget": 2,
             "hash": "e6fa609c3fa255c0",
             "displayName": "Gemini 3.1 Pro High (Web Thinking)",
         },
-        "web-gemini-3.1-pro-medium": {
+        "gemini-3.1-pro-web-medium": {
             "model_id": 3,
             "mode": 4,
             "budget": 1,
             "hash": "e6fa609c3fa255c0",
             "displayName": "Gemini 3.1 Pro Medium (Web Thinking)",
         },
-        "web-gemini-3.1-pro-low": {
+        "gemini-3.1-pro-web-low": {
             "model_id": 3,
             "mode": 1,
             "budget": 0,
@@ -359,10 +298,65 @@ class GeminiWebSession(AccountSession):
             "displayName": "Gemini 3.1 Pro Low (Web)",
         },
 
+        # Gemini 3.5 Flash-Lite Web (3)
+        "gemini-3.5-flash-lite-web-high": {
+            "model_id": 6,
+            "mode": 2,
+            "budget": 2,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)",
+        },
+        "gemini-3.5-flash-lite-web-medium": {
+            "model_id": 6,
+            "mode": 4,
+            "budget": 1,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
+        },
+        "gemini-3.5-flash-lite-web-low": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
+        },
+
         # -------------------------------------------------------------
-        # Legacy *-web and standard browser models
+        # Base Web aliases
         # -------------------------------------------------------------
-        # Gemini 4 Argon (Web flagship)
+        "gemini-4-argon-web": {
+            "model_id": 8,
+            "mode": 2,
+            "budget": 2,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon (Web Flagship)",
+        },
+        "gemini-3.8-flash-web": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash (Web)",
+        },
+        "gemini-3.1-pro-web": {
+            "model_id": 3,
+            "mode": 1,
+            "budget": 0,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro (Web)",
+        },
+        "gemini-3.5-flash-lite-web": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite (Web)",
+        },
+
+        # -------------------------------------------------------------
+        # Reverse-engineered browser session fallbacks
+        # -------------------------------------------------------------
         "gemini-4-argon": {
             "model_id": 8,
             "mode": 2,
@@ -391,15 +385,13 @@ class GeminiWebSession(AccountSession):
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Low (Web)",
         },
-        "gemini-4-argon-task": {
-            "model_id": 8,
+        "gemini-3.8-flash": {
+            "model_id": 1,
             "mode": 1,
             "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Task (Agent)",
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash (Web)",
         },
-        # Gemini 3.8 Flash
         "gemini-3.8-flash-high": {
             "model_id": 1,
             "mode": 2,
@@ -414,13 +406,6 @@ class GeminiWebSession(AccountSession):
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Medium (Web Thinking)",
         },
-        "gemini-3.8-flash": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash (Web)",
-        },
         "gemini-3.8-flash-low": {
             "model_id": 1,
             "mode": 1,
@@ -428,7 +413,13 @@ class GeminiWebSession(AccountSession):
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Low (Web)",
         },
-        # Gemini 3.1 Pro
+        "gemini-3.1-pro": {
+            "model_id": 3,
+            "mode": 1,
+            "budget": 0,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro (Web)",
+        },
         "gemini-3.1-pro-high": {
             "model_id": 3,
             "mode": 2,
@@ -443,13 +434,6 @@ class GeminiWebSession(AccountSession):
             "hash": "e6fa609c3fa255c0",
             "displayName": "Gemini 3.1 Pro Medium (Web Thinking)",
         },
-        "gemini-3.1-pro": {
-            "model_id": 3,
-            "mode": 1,
-            "budget": 0,
-            "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro (Web)",
-        },
         "gemini-3.1-pro-low": {
             "model_id": 3,
             "mode": 1,
@@ -457,7 +441,13 @@ class GeminiWebSession(AccountSession):
             "hash": "e6fa609c3fa255c0",
             "displayName": "Gemini 3.1 Pro Low (Web)",
         },
-        # Gemini 3.5 Flash-Lite
+        "gemini-3.5-flash-lite": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite (Web)",
+        },
         "gemini-3.5-flash-lite-high": {
             "model_id": 6,
             "mode": 2,
@@ -472,13 +462,6 @@ class GeminiWebSession(AccountSession):
             "hash": "8c46e95b1a07cecc",
             "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
         },
-        "gemini-3.5-flash-lite": {
-            "model_id": 6,
-            "mode": 1,
-            "budget": 0,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite (Web)",
-        },
         "gemini-3.5-flash-lite-low": {
             "model_id": 6,
             "mode": 1,
@@ -486,248 +469,6 @@ class GeminiWebSession(AccountSession):
             "feature_mode": 0,
             "hash": "8c46e95b1a07cecc",
             "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
-        },
-        # Gemini Spark Mode Models (Autonomous Agent feature_mode=40)
-        "gemini-4-argon-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "gemini-4-argon-task": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "gemini-3.8-flash-spark": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Agent)",
-        },
-        "gemini-3.8-flash-task": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Agent)",
-        },
-        # Web Aliases matching exact model strings
-        "gemini-4-argon-web-high": {
-            "model_id": 8,
-            "mode": 2,
-            "budget": 2,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon High (Web Thinking)",
-        },
-        "gemini-4-argon-web-medium": {
-            "model_id": 8,
-            "mode": 4,
-            "budget": 1,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Medium (Web Thinking)",
-        },
-        "gemini-4-argon-web-low": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Low (Web)",
-        },
-        "gemini-4-argon-web-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon (Web) (Spark Agent)",
-        },
-        "gemini-4-argon-web-task": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon (Web) (Spark Agent)",
-        },
-        "gemini-3.8-flash-web-high": {
-            "model_id": 1,
-            "mode": 2,
-            "budget": 2,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash High (Web Thinking)",
-        },
-        "gemini-3.8-flash-web-medium": {
-            "model_id": 1,
-            "mode": 4,
-            "budget": 1,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Medium (Web Thinking)",
-        },
-        "gemini-3.8-flash-web-low": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Low (Web)",
-        },
-        "gemini-3.8-flash-web-spark": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash (Web) (Spark Agent)",
-        },
-        "gemini-3.8-flash-web-task": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash (Web) (Spark Agent)",
-        },
-        "gemini-3.1-pro-web-high": {
-            "model_id": 3,
-            "mode": 2,
-            "budget": 2,
-            "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro High (Web Thinking)",
-        },
-        "gemini-3.1-pro-web-medium": {
-            "model_id": 3,
-            "mode": 4,
-            "budget": 1,
-            "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro Medium (Web Thinking)",
-        },
-        "gemini-3.1-pro-web-low": {
-            "model_id": 3,
-            "mode": 1,
-            "budget": 0,
-            "hash": "e6fa609c3fa255c0",
-            "displayName": "Gemini 3.1 Pro Low (Web)",
-        },
-        "gemini-3.5-flash-lite-web-high": {
-            "model_id": 6,
-            "mode": 2,
-            "budget": 2,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)",
-        },
-        "gemini-3.5-flash-lite-web-medium": {
-            "model_id": 6,
-            "mode": 4,
-            "budget": 1,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
-        },
-        "gemini-3.5-flash-lite-web-low": {
-            "model_id": 6,
-            "mode": 1,
-            "budget": 0,
-            "hash": "8c46e95b1a07cecc",
-            "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
-        },
-
-        # -------------------------------------------------------------
-        # Spark / Autonomous Agent task aliases
-        # -------------------------------------------------------------
-        "spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "spark-argon": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "web-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Web Agent)",
-        },
-        "web-spark-argon": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Web Agent)",
-        },
-        "gemini-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "spark-flash": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Agent)",
-        },
-        "web-spark-flash": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
-        },
-        "gemini-spark-flash": {
-            "model_id": 1,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Spark (Agent)",
-        },
-        "spark-task": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "task-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Agent)",
-        },
-        "web-task-spark": {
-            "model_id": 8,
-            "mode": 1,
-            "budget": 0,
-            "feature_mode": 40,
-            "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Spark (Web Agent)",
         },
     }
 
@@ -782,42 +523,35 @@ class GeminiWebSession(AccountSession):
         self.region_code: str | None = region_code
         self.expiry_timestamp: float = expiry_timestamp or (time.time() + 86400.0)
         self.available_models: dict[str, Any] = {
-            # Canonical web-* models (primary for Gemini Web browser sessions)
-            "web-gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-4-argon-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-4-argon-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-4-argon-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-4-argon-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-4-argon-task": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash-Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash-spark": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.1-pro": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            # Canonical 14 Gemini Web models (*-web-*)
+            "gemini-4-argon-web-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-spark": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            # Base Web aliases
+            "gemini-4-argon-web": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web": {"displayName": "Gemini 3.5 Flash-Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             # Reverse-engineered models matching browser session capabilities
             "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-web-spark": {"displayName": "Gemini 4 Argon (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-web-task": {"displayName": "Gemini 4 Argon (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4.0": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-spark": {"displayName": "Gemini 3.8 Flash (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-task": {"displayName": "Gemini 3.8 Flash (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
@@ -828,35 +562,6 @@ class GeminiWebSession(AccountSession):
             "gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            # Legacy *-web models
-            "gemini-4-argon-web-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-web-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-web-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.1-pro-web-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.1-pro-web-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.1-pro-web-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.5-flash-lite-web-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.5-flash-lite-web-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.5-flash-lite-web-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            # Spark & Task agent models
-            "spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "spark-argon": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-spark-argon": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "spark-task": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "task-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "web-task-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-spark": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
         }
         self.quota_summary: dict[str, Any] = {}
         self.tier_info: dict[str, Any] = {"name": "Gemini Web (Browser)"}
@@ -958,62 +663,53 @@ class GeminiWebSession(AccountSession):
                             if token:
                                 if is_task or mode_hint == "task" or mode_hint == "spark":
                                     if model_id == 1 or ("flash" in fn and model_id != 8):
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-web-spark", token)
                                         self._botguard_tokens.setdefault("gemini-3.8-flash-spark", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-spark", token)
-                                        self._botguard_tokens.setdefault("spark-flash", token)
-                                        self._botguard_tokens.setdefault("web-spark-flash", token)
-                                        self._botguard_tokens.setdefault("gemini-3.8-flash-task", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-task", token)
                                     else:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-web-spark", token)
                                         self._botguard_tokens.setdefault("gemini-4-argon-spark", token)
-                                        self._botguard_tokens.setdefault("web-gemini-4-argon-spark", token)
-                                        self._botguard_tokens.setdefault("spark", token)
-                                        self._botguard_tokens.setdefault("spark-argon", token)
-                                        self._botguard_tokens.setdefault("web-spark", token)
-                                        self._botguard_tokens.setdefault("gemini-4-argon-task", token)
-                                        self._botguard_tokens.setdefault("web-gemini-4-argon-task", token)
                                         self._botguard_tokens.setdefault("default", token)
                                 elif model_id == 8 or ("argon" in fn or "gemini-4" in fn):
                                     if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-web-high", token)
                                         self._botguard_tokens.setdefault("gemini-4-argon-high", token)
-                                        self._botguard_tokens.setdefault("web-gemini-4-argon-high", token)
                                     elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-web-medium", token)
                                         self._botguard_tokens.setdefault("gemini-4-argon-medium", token)
-                                        self._botguard_tokens.setdefault("web-gemini-4-argon-medium", token)
                                     elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-web-low", token)
                                         self._botguard_tokens.setdefault("gemini-4-argon-low", token)
-                                        self._botguard_tokens.setdefault("web-gemini-4-argon-low", token)
                                     self._botguard_tokens.setdefault("default", token)
                                 elif model_id == 6 or ("flash-lite" in fn or "3.5" in fn):
                                     if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-web-high", token)
                                         self._botguard_tokens.setdefault("gemini-3.5-flash-lite-high", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-high", token)
                                     elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-web-medium", token)
                                         self._botguard_tokens.setdefault("gemini-3.5-flash-lite-medium", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-medium", token)
                                     elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-web-low", token)
                                         self._botguard_tokens.setdefault("gemini-3.5-flash-lite-low", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-low", token)
                                 elif model_id == 1 or ("3.8" in fn or "flash" in fn):
                                     if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-web-high", token)
                                         self._botguard_tokens.setdefault("gemini-3.8-flash-high", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-high", token)
                                     elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-web-medium", token)
                                         self._botguard_tokens.setdefault("gemini-3.8-flash-medium", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-medium", token)
                                     elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-web-low", token)
                                         self._botguard_tokens.setdefault("gemini-3.8-flash-low", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-low", token)
                                 elif model_id == 3 or ("3.1" in fn or "pro" in fn):
                                     if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-web-high", token)
                                         self._botguard_tokens.setdefault("gemini-3.1-pro-high", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-high", token)
                                     elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-web-medium", token)
                                         self._botguard_tokens.setdefault("gemini-3.1-pro-medium", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-medium", token)
                                     elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-web-low", token)
                                         self._botguard_tokens.setdefault("gemini-3.1-pro-low", token)
-                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-low", token)
                 except Exception as e:
                     logger.debug("Failed loading tokens from %s: %s", traffic_dir, e)
 
@@ -1022,7 +718,7 @@ class GeminiWebSession(AccountSession):
         if not self._botguard_tokens:
             self._load_botguard_tokens()
         default_tok = (
-            self._botguard_tokens.get("web-gemini-4-argon-high")
+            self._botguard_tokens.get("gemini-4-argon-web-high")
             or self._botguard_tokens.get("gemini-4-argon-high")
             or self._botguard_tokens.get("default")
         )
@@ -1036,7 +732,7 @@ class GeminiWebSession(AccountSession):
             return self._botguard_tokens[m]
         if clean_m in self._botguard_tokens and self._botguard_tokens[clean_m]:
             return self._botguard_tokens[clean_m]
-        canonical_m = f"web-{clean_m}"
+        canonical_m = f"{clean_m}-web"
         if canonical_m in self._botguard_tokens and self._botguard_tokens[canonical_m]:
             return self._botguard_tokens[canonical_m]
 
@@ -1044,17 +740,24 @@ class GeminiWebSession(AccountSession):
         if any(k in m for k in ("spark", "task", "agent")):
             if "3.8" in m or ("flash" in m and "lite" not in m):
                 return (
-                    self._botguard_tokens.get("gemini-3.8-flash-spark")
-                    or self._botguard_tokens.get("web-gemini-3.8-flash-spark")
+                    self._botguard_tokens.get("gemini-3.8-flash-web-spark")
+                    or self._botguard_tokens.get("gemini-3.8-flash-spark")
+                    or self._botguard_tokens.get("gemini-3.8-flash-web-task")
                     or self._botguard_tokens.get("gemini-3.8-flash-task")
+                    or self._botguard_tokens.get("spark-flash")
+                    or self._botguard_tokens.get("gemini-3.8-flash-web-high")
                     or self._botguard_tokens.get("gemini-3.8-flash-high")
                     or default_tok
                 )
             return (
-                self._botguard_tokens.get("gemini-4-argon-spark")
-                or self._botguard_tokens.get("web-gemini-4-argon-spark")
-                or self._botguard_tokens.get("spark")
+                self._botguard_tokens.get("gemini-4-argon-web-spark")
+                or self._botguard_tokens.get("gemini-4-argon-spark")
+                or self._botguard_tokens.get("gemini-4-argon-web-task")
                 or self._botguard_tokens.get("gemini-4-argon-task")
+                or self._botguard_tokens.get("spark")
+                or self._botguard_tokens.get("task-spark")
+                or self._botguard_tokens.get("spark-argon")
+                or self._botguard_tokens.get("gemini-4-argon-web-high")
                 or self._botguard_tokens.get("gemini-4-argon-high")
                 or default_tok
             )
@@ -1146,9 +849,9 @@ class GeminiWebSession(AccountSession):
         is_spark = any(k in m for k in ("spark", "task", "agent"))
         if is_spark:
             if "3.8" in m or ("flash" in m and "lite" not in m):
-                return self.MODEL_CONFIGS.get("web-gemini-3.8-flash-spark", self.MODEL_CONFIGS["gemini-3.8-flash-task"])
+                return self.MODEL_CONFIGS["gemini-3.8-flash-web-spark"]
             # Default spark/task model in Gemini Web is Gemini 4 Argon
-            return self.MODEL_CONFIGS.get("web-gemini-4-argon-spark", self.MODEL_CONFIGS["gemini-4-argon-task"])
+            return self.MODEL_CONFIGS["gemini-4-argon-web-spark"]
 
         # Check for explicit thinking modifier (e.g. @think=high, -high, -medium, -low, -extended)
         is_high = any(k in m for k in ("high", "extend", "think"))
@@ -1156,7 +859,7 @@ class GeminiWebSession(AccountSession):
         is_low = any(k in m for k in ("low", "none", "off"))
 
         # Gemini 4 Argon
-        if any(k in m for k in ("argon", "gemini-4", "gemini-4.0", "gemini-4-pro")):
+        if "argon" in m:
             if is_high:
                 return self.MODEL_CONFIGS["gemini-4-argon-high"]
             if is_med:
@@ -2328,7 +2031,7 @@ class GeminiWebSession(AccountSession):
         if ok:
             return {
                 "ok": True,
-                "message": "Gemini Web session active! AT token verified. Ready for Gemini Web models (web-gemini-4-argon, web-gemini-3.5-flash-lite, etc.).",
+                "message": "Gemini Web session active! AT token verified. Ready for Gemini Web models (gemini-4-argon-web-high, gemini-3.8-flash-web-spark, etc.).",
                 "has_cookies": bool(self._cookies.get("__Secure-1PSID")),
                 "cookies_count": len(self._cookies),
                 "has_at_token": bool(self._at_token),

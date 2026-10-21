@@ -167,10 +167,12 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIn("o1", model_ids)
         self.assertIn("o3-mini", model_ids)
         self.assertIn("deepseek-r1", model_ids)
-        self.assertIn("claude-5-5", model_ids)
-        self.assertIn("anthropic.claude-sonnet-5-5-high", model_ids)
+        self.assertIn("claude-sonnet-4-6", model_ids)
+        self.assertIn("anthropic.claude-sonnet-4-6", model_ids)
+        self.assertIn("gemini-4-argon-web-spark", model_ids)
 
         # Non-existent / fake models should NOT be advertised in /v1/models
+        self.assertNotIn("claude-5-5", model_ids)
         self.assertNotIn("claude-5-fable", model_ids)
         self.assertNotIn("anthropic.claude-5-fable", model_ids)
         self.assertNotIn("claude-opus-5", model_ids)

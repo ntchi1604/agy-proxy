@@ -1346,16 +1346,12 @@ class TestGeminiWebSession(unittest.TestCase):
 
     def test_argon_model_normalization_and_routing(self):
         from agy_proxy.models import normalize_model_name, is_3p_model
-        self.assertEqual(normalize_model_name("argon"), "gemini-4-argon")
-        self.assertEqual(normalize_model_name("gemini-4"), "gemini-4-argon")
-        self.assertEqual(normalize_model_name("gemini-4.0"), "gemini-4-argon")
+        self.assertEqual(normalize_model_name("gemini-4-argon"), "gemini-4-argon")
         self.assertEqual(normalize_model_name("gemini-4-argon-low"), "gemini-4-argon-low")
         self.assertEqual(normalize_model_name("gemini-4-argon-medium"), "gemini-4-argon-medium")
+        self.assertEqual(normalize_model_name("gemini-4-argon-web-spark"), "gemini-4-argon-web-spark")
 
         self.assertFalse(is_3p_model("gemini-4-argon"))
-        self.assertFalse(is_3p_model("argon"))
-        self.assertFalse(is_3p_model("gemini-4"))
-        self.assertTrue(is_3p_model("claude-sonnet-5-5-high"))
 
     def test_gemini_web_grounding_sources_extraction(self):
         gw = GeminiWebSession(
