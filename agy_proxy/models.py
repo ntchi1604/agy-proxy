@@ -329,7 +329,7 @@ CLOUDCODE_PLACEHOLDER_MAP: dict[str, str] = {
     "gemini-4-argon": "MODEL_PLACEHOLDER_M421",
     "gemini-4-argon-disabled": "MODEL_PLACEHOLDER_M421",
     "gpt-oss-120b-medium": "MODEL_OPENAI_GPT_OSS_120B_MEDIUM",
-    # Official Authentic CloudCode Enums from Antigravity Hub v2.24.0 / cl=1000335682
+    # Official Authentic CloudCode Enums from Antigravity Hub v2.25.0 / cl=1003475615
     "gemini-3.1-flash-image": "MODEL_PLACEHOLDER_M21",
     "gemini-3.1-flash-lite": "MODEL_PLACEHOLDER_M50",
     "gemini-3.5-flash-lite": "MODEL_PLACEHOLDER_M198",
@@ -498,10 +498,10 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     "gemini-3.5-flash-extra-low": {"displayName": "Gemini 3.5 Flash (Low)", "maxTokens": 1048576},
     "gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash Lite", "maxTokens": 1048576},
     "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite", "maxTokens": 1048576},
-    "gemini-3.1-flash-image": {"displayName": "Gemini 3.1 Flash Image", "maxTokens": 65536, "maxOutputTokens": 65536},
+    "gemini-3.1-flash-image": {"displayName": "Gemini 3.1 Flash Image", "maxTokens": 65536, "maxOutputTokens": 65536, "supportsImages": True},
     "gemini-4-argon-disabled": {"displayName": "Gemini 4 Argon", "maxTokens": 1048576, "maxOutputTokens": 65536, "supportsThinking": True, "thinkingBudget": -1, "thinkingLevel": 2},
     "models/proactive-observer-v10": {"displayName": "Proactive Observer v10", "maxTokens": 65536},
-    "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576},
+    "gemini-3-flash": {"displayName": "Gemini 3 Flash", "maxTokens": 1048576, "minThinkingBudget": 128},
     "gemini-3-flash-agent": {"displayName": "Gemini 3 Flash Agent", "maxTokens": 1048576},
     "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro", "maxTokens": 1048576},
     "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash", "maxTokens": 1048576},

@@ -1212,6 +1212,26 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "sdlc_models",
         "desc": "v2.23.0 Flag: Shows all available Gemini, Claude, and GPT-OSS models in model picker",
     },
+    "enable-browser-subagent-auto-invoke": {
+        "value": True,
+        "category": "agents",
+        "desc": "v2.25.0 Flag: Enables automatic invocation of browser subagent for web tasks",
+    },
+    "enable-plugin-card-auto-resume": {
+        "value": True,
+        "category": "agents",
+        "desc": "v2.25.0 Flag: Automatically resumes agent turn when user adds a plugin via interactive card",
+    },
+    "enable-rpc-sandbox-proxy": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "v2.25.0 Flag: Enables secure sandbox proxy for outbound tool and MCP requests",
+    },
+    "memory_source_attribution": {
+        "value": True,
+        "category": "rag_context",
+        "desc": "v2.25.0 Flag: Tracks memory origin and attribution for Cortex memory entries",
+    },
 }
 
 # Optimized non-bool flag overrides
@@ -1887,6 +1907,14 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
             tiered["flash"] = ["gemini-3.8-flash-tiered"]
         if "pro" in tiered and "gemini-3.8-flash-tiered" not in tiered["pro"]:
             tiered["pro"] = ["gemini-3.8-flash-tiered"]
+
+    # 6. Apply v2.25.0 model configurations
+    if isinstance(models, dict):
+        if "gemini-3-flash" in models and isinstance(models["gemini-3-flash"], dict):
+            models["gemini-3-flash"]["minThinkingBudget"] = 128
+        if "gemini-3.1-flash-image" in models and isinstance(models["gemini-3.1-flash-image"], dict):
+            models["gemini-3.1-flash-image"]["supportsImages"] = True
+            models["gemini-3.1-flash-image"]["maxOutputTokens"] = 65536
 
     return data
 

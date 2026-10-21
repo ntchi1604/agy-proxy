@@ -341,7 +341,7 @@ FINAL_ARGS=(
     "--standalone"
     "--override_ide_name" "antigravity"
     "--subclient_type" "hub"
-    "--override_ide_version" "2.24.0"
+    "--override_ide_version" "2.25.0"
     "--override_user_agent_name" "antigravity"
     "--https_server_port" "$PORT"
     "--csrf_token" "$CSRF_TOKEN"

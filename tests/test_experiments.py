@@ -310,14 +310,15 @@ def test_enhance_list_experiments_input_immutability():
     assert enhanced["flags"] != original_input["flags"]
 
 
-def test_v2_24_0_updates():
-    """Verify v2.24.0 User-Agent, new experiment IDs, and experimental flags."""
+def test_v2_25_0_updates():
+    """Verify v2.25.0 User-Agent, new experiment IDs, and experimental flags."""
     from agy_proxy.auth.constants import USER_AGENT
-    assert "2.24.0" in USER_AGENT
-    assert "cl=1000335682" in USER_AGENT
+    assert "2.25.0" in USER_AGENT
+    assert "cl=1003475615" in USER_AGENT
 
     payload = get_default_experiments_payload()
     exp_ids = payload["experimentIds"]
+    assert 106712040 in exp_ids
     assert 106712041 in exp_ids
     assert 106761937 in exp_ids
     assert 106793467 in exp_ids
@@ -331,6 +332,10 @@ def test_v2_24_0_updates():
     assert flags_dict.get("enable-resource-manager") is True
     assert flags_dict.get("enable-fast-output-close") is True
     assert flags_dict.get("show-all-models-in-gemini-app") is True
+    assert flags_dict.get("enable-browser-subagent-auto-invoke") is True
+    assert flags_dict.get("enable-plugin-card-auto-resume") is True
+    assert flags_dict.get("enable-rpc-sandbox-proxy") is True
+    assert flags_dict.get("memory_source_attribution") is True
 
     # Test enhanced optimizations
     enhanced = enhance_list_experiments({"experimentIds": [], "flags": []})
@@ -497,7 +502,7 @@ def test_enhance_available_models_argon_unlocking():
 
 
 def test_new_curated_safe_flags_activation():
-    """Verify newly added safe flags from Antigravity Hub v2.24.0 are activated."""
+    """Verify newly added safe flags from Antigravity Hub v2.24.0 and v2.25.0 are activated."""
     from agy_proxy.experiments import CURATED_SAFE_FLAGS
 
     new_flag_names = [
@@ -507,6 +512,10 @@ def test_new_curated_safe_flags_activation():
         "enable-omni-mention-search",
         "enable-remote-control-audio-transcription",
         "use-component-rewrite",
+        "enable-browser-subagent-auto-invoke",
+        "enable-plugin-card-auto-resume",
+        "enable-rpc-sandbox-proxy",
+        "memory_source_attribution",
     ]
 
     for name in new_flag_names:
@@ -526,7 +535,7 @@ def test_new_curated_safe_flags_activation():
 
 
 def test_default_experiments_catalog_completeness():
-    """Verify default_experiments.json contains exactly 491 flags and updated experimentIds."""
+    """Verify default_experiments.json contains exactly 495 flags and updated experimentIds."""
     payload = get_default_experiments_payload()
     assert 106712040 in payload["experimentIds"]
 
@@ -542,6 +551,10 @@ def test_default_experiments_catalog_completeness():
     assert "science-plugin-split-targets" in flag_names
     assert "enable-remote-control-audio-transcription" in flag_names
     assert "use-component-rewrite" in flag_names
+    assert "enable-browser-subagent-auto-invoke" in flag_names
+    assert "enable-plugin-card-auto-resume" in flag_names
+    assert "enable-rpc-sandbox-proxy" in flag_names
+    assert "memory_source_attribution" in flag_names
 
     # Check raw default file
     import json
@@ -549,10 +562,33 @@ def test_default_experiments_catalog_completeness():
     with open(DEFAULT_EXPERIMENTS_FILE, "r", encoding="utf-8") as f:
         raw_data = json.load(f)
 
-    assert len(raw_data["flags"]) == 491
+    assert len(raw_data["flags"]) == 495
     raw_flag_names = {f["name"] for f in raw_data["flags"]}
     assert "ReturnAdminControls__enable_for_cli" not in raw_flag_names
     assert "enable-swarm" not in raw_flag_names
     assert 106712040 in raw_data["experimentIds"]
+    assert "enable-browser-subagent-auto-invoke" in raw_flag_names
+    assert "enable-plugin-card-auto-resume" in raw_flag_names
+    assert "enable-rpc-sandbox-proxy" in raw_flag_names
+    assert "memory_source_attribution" in raw_flag_names
+
+
+def test_v2_25_0_model_enhancements():
+    """Verify v2.25.0 model catalog adjustments in enhance_available_models."""
+    raw_models = {
+        "models": {
+            "gemini-3-flash": {
+                "displayName": "Gemini 3 Flash",
+                "minThinkingBudget": 32,
+            },
+            "gemini-3.1-flash-image": {
+                "displayName": "Gemini 3.1 Flash Image",
+            },
+        }
+    }
+    enhanced = enhance_available_models(raw_models)
+    assert enhanced["models"]["gemini-3-flash"]["minThinkingBudget"] == 128
+    assert enhanced["models"]["gemini-3.1-flash-image"]["supportsImages"] is True
+    assert enhanced["models"]["gemini-3.1-flash-image"]["maxOutputTokens"] == 65536
 
 

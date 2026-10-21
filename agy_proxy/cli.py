@@ -925,7 +925,7 @@ def build_parser() -> argparse.ArgumentParser:
     web_parser.add_argument("--debug", "--verbose", "-v", dest="verbose", action="store_true", help="Show raw language_server debug output in console (default: hidden, logged to file)")
     web_parser.add_argument("--direct", "--no-proxy", action="store_true", help="Bypass agy-proxy and connect directly to official Google backend")
     web_parser.add_argument("--restart", "-r", action="store_true", help="Force restart Antigravity Web even if already running")
-    web_parser.add_argument("--ide-version", type=str, default="2.24.0", help="Reported IDE version (default: 2.24.0)")
+    web_parser.add_argument("--ide-version", type=str, default="2.25.0", help="Reported IDE version (default: 2.25.0)")
 
     # config subcommand (agy-proxy config [get|set|list|reset])
     config_parser = subparsers.add_parser("config", help="Manage persistent user configuration (e.g. language_server and editor paths)")
@@ -1228,7 +1228,7 @@ def main():
             ls_path=getattr(args, "ls_path", None),
             editor_path=getattr(args, "editor", None),
             detach=getattr(args, "detach", False),
-            ide_version=getattr(args, "ide_version", "2.24.0"),
+            ide_version=getattr(args, "ide_version", "2.25.0"),
             verbose=getattr(args, "verbose", False),
             direct=getattr(args, "direct", False),
             restart=getattr(args, "restart", False),

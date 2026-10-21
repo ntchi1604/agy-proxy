@@ -2141,6 +2141,22 @@
     {
       "name": "science-plugin-split-targets",
       "stringListValue": {}
+    },
+    {
+      "name": "enable-browser-subagent-auto-invoke",
+      "boolValue": false
+    },
+    {
+      "name": "enable-plugin-card-auto-resume",
+      "boolValue": false
+    },
+    {
+      "name": "enable-rpc-sandbox-proxy",
+      "boolValue": false
+    },
+    {
+      "name": "memory_source_attribution",
+      "boolValue": false
     }
   ]
 }
