@@ -92,8 +92,17 @@ def parse_gemini_sse_candidate(
             thought_text += p.get("text", "")
             if part_sig:
                 save_thought_signature(None, None, None, part_sig)
-        elif "text" in p:
-            text += p.get("text", "")
+        else:
+            if "text" in p:
+                text += p.get("text", "")
+            if "inlineData" in p or "inline_data" in p:
+                inline = p.get("inlineData") or p.get("inline_data") or {}
+                if isinstance(inline, dict):
+                    mime = inline.get("mimeType") or inline.get("mime_type") or "image/jpeg"
+                    b64_data = inline.get("data") or ""
+                    if b64_data:
+                        img_md = f"![Generated Image](data:{mime};base64,{b64_data})"
+                        text = f"{text}\n\n{img_md}\n\n" if text else img_md
 
     return text, thought_text, tool_calls, finish_reason, latest_thought_sig
 

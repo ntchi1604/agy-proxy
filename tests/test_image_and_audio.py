@@ -12,6 +12,7 @@ from agy_proxy.models import (
 )
 from agy_proxy.server import create_app
 from agy_proxy.experiments import enhance_available_models
+from agy_proxy.converters.streaming import parse_gemini_sse_candidate
 
 
 class TestImageAndAudioCapabilities(unittest.TestCase):
@@ -162,6 +163,44 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         self.assertEqual(enhanced["tieredModelIds"]["flashLite"], ["gemini-3.5-flash-lite"])
         self.assertEqual(enhanced["tieredModelIds"]["flash"], ["gemini-3.8-flash-tiered"])
         self.assertEqual(enhanced["tieredModelIds"]["pro"], ["gemini-3.8-flash-tiered"])
+
+    def test_parse_gemini_sse_candidate_with_inline_image(self):
+        cand = {
+            "content": {
+                "role": "model",
+                "parts": [
+                    {"text": "Here is your generated image:"},
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": "aW1hZ2VkYXRh",
+                        }
+                    },
+                ],
+            },
+            "finishReason": "STOP",
+        }
+        text, thought, tool_calls, finish_reason, _ = parse_gemini_sse_candidate(cand)
+        self.assertIn("Here is your generated image:", text)
+        self.assertIn("![Generated Image](data:image/jpeg;base64,aW1hZ2VkYXRh)", text)
+        self.assertEqual(finish_reason, "STOP")
+
+        # Also test snake_case inline_data
+        cand_snake = {
+            "content": {
+                "role": "model",
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": "image/png",
+                            "data": "cG5nZGF0YQ==",
+                        }
+                    }
+                ],
+            }
+        }
+        text_s, _, _, _, _ = parse_gemini_sse_candidate(cand_snake)
+        self.assertIn("![Generated Image](data:image/png;base64,cG5nZGF0YQ==)", text_s)
 
 
 if __name__ == "__main__":
