@@ -314,3 +314,59 @@ def test_cli_web_patched_flags():
 
     args_p_short = parser.parse_args(["web", "-P"])
     assert args_p_short.patched is True
+
+
+def test_patch_web_bundle_dynamic_structural(tmp_path):
+    from agy_proxy.web_launcher import patch_web_bundle
+
+    bundle_dir = tmp_path / "dynamic_bundle"
+    bundle_dir.mkdir()
+
+    # JS with completely arbitrary minified identifiers
+    dummy_js = (
+        'restrictToCorpDomain:!0; '
+        'var myConv=p=>p.modelOrAlias?{label:p.label,value:p.modelOrAlias.choice.case==="model"?p.modelOrAlias.choice.value:EnumNs.Model.UNSPECIFIED,modelAlias:p.modelOrAlias.choice.case==="alias"?p.modelOrAlias.choice.value:void 0; '
+        'return ReactLib.createElement(ArbitraryItemComp,{"data-testid":"model-selector-item",value:123}); '
+        'function customStateProv({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){'
+        'var [l,m]=(0,ReactLib.useState)(null),u=(0,ReactLib.useMemo)(()=>customHelper(k),[k]);'
+        'return ReactLib.createElement(CustomContext.Provider,{value:g},a)}'
+    )
+    (bundle_dir / "main.js").write_text(dummy_js, encoding="utf-8")
+    (bundle_dir / "index.html").write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    assert patch_web_bundle(bundle_dir) is True
+
+    patched_js = (bundle_dir / "main.js").read_text(encoding="utf-8")
+    # Verify dynamic converter patched
+    assert "MODEL_ENUM_MAP[p.modelId||p.label]" in patched_js
+    # Verify dynamic item renderer patched
+    assert "ArbitraryItemComp" in patched_js
+    assert "cleanTitle" in patched_js
+    # Verify dynamic state provider patched
+    assert "function customStateProv({" in patched_js
+    assert "CustomContext.Provider" in patched_js
+    assert "__enhanceUserStatus(b)" in patched_js
+    assert "MODEL_ENUM_MAP" in patched_js
+
+
+def test_patch_web_bundle_graceful_degradation(tmp_path):
+    from agy_proxy.web_launcher import patch_web_bundle
+
+    bundle_dir = tmp_path / "unrecognized_bundle"
+    bundle_dir.mkdir()
+
+    # JS with no recognizable state provider at all
+    dummy_js = (
+        'restrictToCorpDomain:!0; '
+        'console.log("Unrecognized bundle with different layout");'
+    )
+    (bundle_dir / "main.js").write_text(dummy_js, encoding="utf-8")
+    (bundle_dir / "index.html").write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    # Should succeed without throwing exception
+    assert patch_web_bundle(bundle_dir) is True
+
+    patched_js = (bundle_dir / "main.js").read_text(encoding="utf-8")
+    assert "restrictToCorpDomain:!1" in patched_js
+    assert (bundle_dir / ".patched").is_file()
+

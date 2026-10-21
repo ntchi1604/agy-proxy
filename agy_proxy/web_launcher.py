@@ -629,23 +629,48 @@ def patch_web_bundle(bundle_dir: Path) -> bool:
         flags=re.DOTALL,
     )
 
-    # 1.6 Inject real proxied models and fix model selection (supports v2.25 Ck and v2.24 tk)
-    old_tk_pat = r'var\s+(tk|Ck)=a=>a\.modelOrAlias\?\{label:a\.label,value:a\.modelOrAlias\.choice\.case==="model"\?a\.modelOrAlias\.choice\.value:I\.Model\.UNSPECIFIED,modelAlias:a\.modelOrAlias\.choice\.case==="alias"\?a\.modelOrAlias\.choice\.value:void 0'
-    new_tk_repl = r'var \1=a=>a.modelOrAlias?{label:a.label,value:a.value??(a.modelOrAlias.choice.case==="model"?a.modelOrAlias.choice.value:(typeof MODEL_ENUM_MAP!=="undefined"&&MODEL_ENUM_MAP[a.modelId||a.label]?MODEL_ENUM_MAP[a.modelId||a.label]:I.Model.UNSPECIFIED)),modelAlias:a.modelOrAlias.choice.case==="alias"?a.modelOrAlias.choice.value:void 0'
-    js = re.sub(old_tk_pat, new_tk_repl, js)
+    # 1.6 Inject real proxied models and fix model selection (dynamic converter matching with static fallback)
+    converter_pat = re.compile(
+        r'var\s+([A-Za-z0-9_$]+)\s*=\s*([A-Za-z0-9_$]+)\s*=>\s*\2\.modelOrAlias\?\{label:\s*\2\.label,\s*value:\s*\2\.modelOrAlias\.choice\.case\s*===\s*"model"\?\s*\2\.modelOrAlias\.choice\.value:\s*([A-Za-z0-9_$]+)\.Model\.UNSPECIFIED,\s*modelAlias:\s*\2\.modelOrAlias\.choice\.case\s*===\s*"alias"\?\s*\2\.modelOrAlias\.choice\.value:\s*void 0'
+    )
+    converter_repl = (
+        r'var \g<1>=\g<2>=>\g<2>.modelOrAlias?{label:\g<2>.label,value:\g<2>.value??(\g<2>.modelOrAlias.choice.case==="model"?\g<2>.modelOrAlias.choice.value:(typeof MODEL_ENUM_MAP!=="undefined"&&MODEL_ENUM_MAP[\g<2>.modelId||\g<2>.label]?MODEL_ENUM_MAP[\g<2>.modelId||\g<2>.label]:\g<3>.Model.UNSPECIFIED)),modelAlias:\g<2>.modelOrAlias.choice.case==="alias"?\g<2>.modelOrAlias.choice.value:void 0'
+    )
+    js, conv_count = converter_pat.subn(converter_repl, js)
+    if conv_count == 0:
+        # Fallback to static tk/Ck pattern
+        old_tk_pat = r'var\s+(tk|Ck)=a=>a\.modelOrAlias\?\{label:a\.label,value:a\.modelOrAlias\.choice\.case==="model"\?a\.modelOrAlias\.choice\.value:I\.Model\.UNSPECIFIED,modelAlias:a\.modelOrAlias\.choice\.case==="alias"\?a\.modelOrAlias\.choice\.value:void 0'
+        new_tk_repl = r'var \1=a=>a.modelOrAlias?{label:a.label,value:a.value??(a.modelOrAlias.choice.case==="model"?a.modelOrAlias.choice.value:(typeof MODEL_ENUM_MAP!=="undefined"&&MODEL_ENUM_MAP[a.modelId||a.label]?MODEL_ENUM_MAP[a.modelId||a.label]:I.Model.UNSPECIFIED)),modelAlias:a.modelOrAlias.choice.case==="alias"?a.modelOrAlias.choice.value:void 0'
+        js = re.sub(old_tk_pat, new_tk_repl, js)
 
     # Fallback: guarantee planModel in WX hook is never void 0 if enum value (r) is present
     js = js.replace('planModel:w.choice?.case==="model"?w.choice.value:void 0', 'planModel:(w.choice?.case==="model"?w.choice.value:void 0)??r')
 
-    # 1.7 Render clean section headers in V3b (both zM for v2.25 and WM for v2.24)
-    for item_comp in ["zM", "WM"]:
-        target_v3b_ret = f'return A.createElement({item_comp},{{"data-testid":"model-selector-item"'
-        replacement_v3b_ret = f'if(t&&typeof a.label==="string"&&(a.label.startsWith("──")||a.label.includes("────"))){{var cleanTitle=a.label.replace(/^[─\\s]+|[─\\s]+$/g,"");var icon=cleanTitle==="Default"?"★ ":(cleanTitle==="Web"?"✦ ":(cleanTitle==="Antigravity"?"⚡ ":""));return A.createElement("div",{{key:a.label,className:"px-2 pt-2.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider select-none flex items-center gap-2 opacity-85"}},cleanTitle?A.createElement("span",{{className:"shrink-0 font-medium flex items-center gap-1"}},icon+cleanTitle):null,A.createElement("div",{{className:"h-px flex-1 bg-border/60"}}))}}return A.createElement({item_comp},{{"data-testid":"model-selector-item"'
-        if target_v3b_ret in js:
-            js = js.replace(target_v3b_ret, replacement_v3b_ret, 1)
-            break
+    # 1.7 Render clean section headers in V3b (dynamic item renderer discovery with zM/WM fallback)
+    item_pat = re.compile(r'return\s+([A-Za-z0-9_$]+)\.createElement\(([A-Za-z0-9_$]+),\{(?:\s*"data-testid"\s*:\s*"model-selector-item")')
+    m_item = item_pat.search(js)
+    if m_item:
+        react_id = m_item.group(1)
+        item_comp = m_item.group(2)
+        replacement_v3b_ret = (
+            f'if(t&&typeof a.label==="string"&&(a.label.startsWith("──")||a.label.includes("────"))){{'
+            f'var cleanTitle=a.label.replace(/^[─\\s]+|[─\\s]+$/g,"");'
+            f'var icon=cleanTitle==="Default"?"★ ":(cleanTitle==="Web"?"✦ ":(cleanTitle==="Antigravity"?"⚡ ":""));'
+            f'return {react_id}.createElement("div",{{key:a.label,className:"px-2 pt-2.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider select-none flex items-center gap-2 opacity-85"}},'
+            f'cleanTitle?{react_id}.createElement("span",{{className:"shrink-0 font-medium flex items-center gap-1"}},icon+cleanTitle):null,'
+            f'{react_id}.createElement("div",{{className:"h-px flex-1 bg-border/60"}}))}}'
+            f'return {react_id}.createElement({item_comp},{{"data-testid":"model-selector-item"'
+        )
+        js = js[:m_item.start()] + replacement_v3b_ret + js[m_item.end():]
+    else:
+        for item_comp in ["zM", "WM"]:
+            target_v3b_ret = f'return A.createElement({item_comp},{{"data-testid":"model-selector-item"'
+            replacement_v3b_ret = f'if(t&&typeof a.label==="string"&&(a.label.startsWith("──")||a.label.includes("────"))){{var cleanTitle=a.label.replace(/^[─\\s]+|[─\\s]+$/g,"");var icon=cleanTitle==="Default"?"★ ":(cleanTitle==="Web"?"✦ ":(cleanTitle==="Antigravity"?"⚡ ":""));return A.createElement("div",{{key:a.label,className:"px-2 pt-2.5 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider select-none flex items-center gap-2 opacity-85"}},cleanTitle?A.createElement("span",{{className:"shrink-0 font-medium flex items-center gap-1"}},icon+cleanTitle):null,A.createElement("div",{{className:"h-px flex-1 bg-border/60"}}))}}return A.createElement({item_comp},{{"data-testid":"model-selector-item"'
+            if target_v3b_ret in js:
+                js = js.replace(target_v3b_ret, replacement_v3b_ret, 1)
+                break
 
-    # 1.8 Inject Model Enum Map, __enhanceUserStatus and state provider (gMa/ALa)
+    # 1.8 Inject Model Enum Map, __enhanceUserStatus and state provider (dynamic structural matching + static fallback)
     if "_agyEnhanced" not in js or "_sep_ordered_v8" not in js or "agy.selectedModelLabel" not in js:
         enhancer_common = '''var MODEL_ENUM_MAP={
 "gemini-3.8-flash-high":1318,"gemini-3.8-flash-medium":1319,"gemini-3.8-flash-low":1320,"gemini-3.8-flash-tiered":1322,"gemini-3.8-flash-deepagent":1522,
@@ -665,27 +690,120 @@ def patch_web_bundle(bundle_dir: Path) -> bool:
 };
 var __enhanceUserStatus=function(b){if(!b||!b.cascadeModelConfigData||b._agyEnhanced)return b;try{var d=b.cascadeModelConfigData,origConfigs=d.clientModelConfigs||[],origSorts=d.clientModelSorts||[],newConfigs=[...origConfigs],existingLabels=new Set(newConfigs.map(m=>m.label)),template=origConfigs.find(m=>!m.disabled)||origConfigs[0]||{},newSorts=JSON.parse(JSON.stringify(origSorts)),recGroup=newSorts.find(s=>s.name&&s.name.toLowerCase()==="recommended")?.groups?.[0];!recGroup&&newSorts.length>0&&newSorts[0].groups&&(recGroup=newSorts[0].groups[0]);var webModels=[{label:"Gemini 4 Argon (Web) (High)",alias:"gemini-4-argon-web-high"},{label:"Gemini 4 Argon (Web) (Medium)",alias:"gemini-4-argon-web-medium"},{label:"Gemini 4 Argon (Web) (Low)",alias:"gemini-4-argon-web-low"},{label:"Gemini 4 Argon (Web) (Agent)",alias:"gemini-4-argon-web-task"},{label:"Gemini 3.8 Flash (Web) (High)",alias:"gemini-3.8-flash-web-high"},{label:"Gemini 3.8 Flash (Web) (Medium)",alias:"gemini-3.8-flash-web-medium"},{label:"Gemini 3.8 Flash (Web) (Low)",alias:"gemini-3.8-flash-web-low"},{label:"Gemini 3.8 Flash (Web) (Agent)",alias:"gemini-3.8-flash-web-task"},{label:"Gemini 3.1 Pro (Web) (High)",alias:"gemini-3.1-pro-web-high"},{label:"Gemini 3.1 Pro (Web) (Medium)",alias:"gemini-3.1-pro-web-medium"},{label:"Gemini 3.1 Pro (Web) (Low)",alias:"gemini-3.1-pro-web-low"},{label:"Gemini 3.5 Flash-Lite (Web) (High)",alias:"gemini-3.5-flash-lite-web-high"},{label:"Gemini 3.5 Flash-Lite (Web) (Medium)",alias:"gemini-3.5-flash-lite-web-medium"},{label:"Gemini 3.5 Flash-Lite (Web) (Low)",alias:"gemini-3.5-flash-lite-web-low"}],agyModels=[{label:"Gemini 3.8 Flash (High)",alias:"gemini-3.8-flash-high"},{label:"Gemini 3.8 Flash (Medium)",alias:"gemini-3.8-flash-medium"},{label:"Gemini 3.8 Flash (Low)",alias:"gemini-3.8-flash-low"},{label:"Gemini 3.8 Flash (Tiered)",alias:"gemini-3.8-flash-tiered"},{label:"Gemini 3.8 Flash (DeepAgent)",alias:"gemini-3.8-flash-deepagent"},{label:"Claude Sonnet 4.6 (Thinking)",alias:"claude-sonnet-4-6"},{label:"Claude Opus 4.6 (Thinking)",alias:"claude-opus-4-6-thinking"},{label:"Claude Sonnet 5.5 (High)",alias:"claude-sonnet-5-5-high"},{label:"Claude Opus 5.5 (High)",alias:"claude-opus-5-5-high"},{label:"Gemini 3.5 Flash (High)",alias:"gemini-3-flash-agent"},{label:"Gemini 3.5 Flash (Medium)",alias:"gemini-3.5-flash-low"},{label:"Gemini 3.5 Flash (Low)",alias:"gemini-3.5-flash-extra-low"},{label:"Gemini 3.5 Flash Lite",alias:"gemini-3.5-flash-lite"},{label:"Gemini 3.1 Flash Lite",alias:"gemini-3.1-flash-lite"},{label:"Gemini 3 Flash",alias:"gemini-3-flash"},{label:"Gemini 2.5 Pro",alias:"gemini-2.5-pro"},{label:"Gemini 2.5 Flash",alias:"gemini-2.5-flash"},{label:"Gemini 2.5 Flash Lite",alias:"gemini-2.5-flash-lite"},{label:"Gemini 2.5 Flash (Thinking)",alias:"gemini-2.5-flash-thinking"},{label:"GPT-OSS 120B",alias:"gpt-oss-120b-medium"}];var addSep=function(secLabel,secId){if(!existingLabels.has(secLabel)){var sepEntry=Object.assign({},template,{label:secLabel,disabled:!0,isRecommended:!1,modelId:secId,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"alias",value:secId}},supportedMimeTypes:{}});delete sepEntry.tagTitle;delete sepEntry.tagDescription;newConfigs.push(sepEntry);existingLabels.add(secLabel)}};addSep("── Default ──────────────────","sep_default");addSep("── Web ──────────────────","sep_web");addSep("── Antigravity ───────────","sep_agy");var addModels=function(items){for(var item of items){if(!existingLabels.has(item.label)){var enumVal=MODEL_ENUM_MAP[item.alias]||1500;var entry=Object.assign({},template,{label:item.label,disabled:!1,isRecommended:!0,modelId:item.alias,value:enumVal,modelOrAlias:{"$typeName":"exa.codeium_common_pb.ModelOrAlias",choice:{case:"model",value:enumVal}},supportedMimeTypes:{}});delete entry.modelAlias;delete entry.tagTitle;delete entry.tagDescription;newConfigs.push(entry);existingLabels.add(item.label)}}};addModels(webModels);addModels(agyModels);if(recGroup){var ordered=[];var origRecLabels=(recGroup&&Array.isArray(recGroup.modelLabels))?[...recGroup.modelLabels]:origConfigs.map(m=>m.label);var defaultLabels=[];origRecLabels.forEach(lbl=>{lbl&&!lbl.startsWith("──")&&!defaultLabels.includes(lbl)&&defaultLabels.push(lbl)});origConfigs.forEach(m=>{m.label&&!m.label.startsWith("──")&&!defaultLabels.includes(m.label)&&defaultLabels.push(m.label)});ordered.push("── Default ──────────────────");defaultLabels.forEach(lbl=>{!ordered.includes(lbl)&&ordered.push(lbl)});ordered.push("── Web ──────────────────");webModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)});ordered.push("── Antigravity ───────────");agyModels.forEach(m=>{!ordered.includes(m.label)&&ordered.push(m.label)});recGroup.modelLabels=ordered}return Object.assign({},b,{_agyEnhanced:!0,_sep_ordered_v8:!0,cascadeModelConfigData:Object.assign({},d,{clientModelConfigs:newConfigs,clientModelSorts:newSorts})})}catch(err){console.error("[AGY-Proxy] enhanceUserStatus failed:",err);return b}};
 '''
-        patched_gma = enhancer_common + '''function gMa({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){b=__enhanceUserStatus(b);var [_selLabel,_setSelLabel]=(0,A.useState)(()=>{try{return localStorage.getItem("agy.selectedModelLabel")||null}catch(E){return null}}),[l,m]=(0,A.useState)(null),[n,q]=(0,A.useState)({}),[r,t]=(0,A.useState)(void 0),u=(0,A.useMemo)(()=>{var J=dMa(k);for(let L of J)L.disabled=!f;return J},[k,f]),v=(0,A.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map(Ck).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),w=(0,A.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);cMa(v,w,g,h,e);var x=(0,A.useMemo)(()=>{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],N=J?.clientModelSorts||[];J=L.map(Ck).filter(O=>O!==null).filter(O=>!O.disabled);L=dma(L,N);return L.length>0?L:cma(J)},[b?.cascadeModelConfigData]),y=(0,A.useCallback)((J,L)=>{if(v.length!==0||u.length!==0){if(L){let N=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(N)return N}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J=Dk(J,v)))return J;if(_selLabel){let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}return v[0]??u.at(0)}},[v,u,_selLabel]),B=(0,A.useMemo)(()=>{if(v.length!==0||u.length!==0){if(_selLabel){let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}return y(c,l)}},[y,c,v,u,l,_selLabel]),C=(0,A.useCallback)(J=>{if(J!==void 0&&(J=n[J],J!==void 0)){if(J.customLabel){let N=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(N)return N}return y(J.model,J.customLabel)}return B},[n,y,B,v,u]),D=(0,A.useCallback)((J,L,N,O,M)=>{J!==void 0&&q(Q=>{var P=Q[J],R={model:L,customLabel:O,contextWindow:Cz(P??r,L,M)};return P?.model===L&&P?.customLabel===O&&P?.contextWindow===R.contextWindow?Q:{...Q,[J]:R}});if(N||J===void 0)e(L),t(Q=>{var P=Cz(Q,L,M);return Q?.model===L&&Q?.contextWindow===P?Q:{model:L,contextWindow:P}}),m(O??null)},[e,r]),E=(0,A.useCallback)((J,L,N,O)=>{var M=eMa(v,u,J);if(M){_setSelLabel(J);try{localStorage.setItem("agy.selectedModelLabel",J)}catch(err){}var Q=u.some(P=>P.label===J);D(L,M.value,N,Q?J:O,O)}else console.error(`[Model Select] Invalid model label: ${J}`)},[v,u,D]),G=(0,A.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:Cz(r,B?.value),[n,r,B]),F=(0,A.useCallback)((J,L,N)=>{var O=Cz(r,L);q(M=>J in M?M:{...M,[J]:{model:L,customLabel:N,contextWindow:O}})},[r]),H=(0,A.useCallback)(J=>{E(J,void 0,!0)},[E]),K=(0,A.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);g=(0,A.useMemo)(()=>({modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:G,ensureConversationModelSeeded:F}),[x,v,u,B,e,H,f,K,C,D,E,G,F]);return A.createElement(fMa.Provider,{value:g},a)}'''
-        patched_ala = enhancer_common + '''function ALa({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){b=__enhanceUserStatus(b);var [_selLabel,_setSelLabel]=(0,A.useState)(()=>{try{return localStorage.getItem("agy.selectedModelLabel")||null}catch(E){return null}}),[l,m]=(0,A.useState)(null),[n,q]=(0,A.useState)({}),[r,t]=(0,A.useState)(void 0),u=(0,A.useMemo)(()=>{var J=xLa(k);for(let L of J)L.disabled=!f;return J},[k,f]),v=(0,A.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map(tk).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),w=(0,A.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);wLa(v,w,g,h,e);var x=(0,A.useMemo)(()=>{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],M=J?.clientModelSorts||[];J=L.map(tk).filter(O=>O!==null).filter(O=>!O.disabled);L=wla(L,M);return L.length>0?L:vla(J)},[b?.cascadeModelConfigData]),y=(0,A.useCallback)((J,L)=>{if(v.length!==0||u.length!==0){if(L){let M=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(M)return M}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J=uk(J,v)))return J;if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(M)return M}return v[0]??u.at(0)}},[v,u,_selLabel]),B=(0,A.useMemo)(()=>{if(v.length!==0||u.length!==0){if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(M)return M}return y(c,l)}},[y,c,v,u,l,_selLabel]),C=(0,A.useCallback)(J=>{if(J!==void 0&&(J=n[J],J!==void 0)){if(J.customLabel){let M=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(M)return M}return y(J.model,J.customLabel)}return B},[n,y,B,v,u]),D=(0,A.useCallback)((J,L,M,O,N)=>{J!==void 0&&q(P=>{var Q=P[J],R={model:L,customLabel:O,contextWindow:Gz(Q??r,L,N)};return Q?.model===L&&Q?.customLabel===O&&Q?.contextWindow===R.contextWindow?P:{...P,[J]:R}});if(M||J===void 0){e(L);t(P=>{var Q=Gz(P,L,N);return P?.model===L&&P?.contextWindow===Q?P:{model:L,contextWindow:Q}});m(O??null)}},[e,r]),E=(0,A.useCallback)((J,L,M,O)=>{var N=yLa(v,u,J);if(N){_setSelLabel(J);try{localStorage.setItem("agy.selectedModelLabel",J)}catch(err){}D(L,N.value,M,J,O)}else console.error(`[Model Select] Invalid model label: ${J}`)},[v,u,D]),F=(0,A.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:Gz(r,B?.value),[n,r,B]),G=(0,A.useCallback)((J,L,M)=>{var O=Gz(r,L);q(N=>J in N?N:{...N,[J]:{model:L,customLabel:M,contextWindow:O}})},[r]),H=(0,A.useCallback)(J=>{E(J,void 0,!0)},[E]),K=(0,A.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);g=(0,A.useMemo)(()=>({modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:F,ensureConversationModelSeeded:G}),[x,v,u,B,e,H,f,K,C,D,E,F,G]);return A.createElement(zLa.Provider,{value:g},a)}'''
+        # Dynamic structural matching for React State Provider
+        prov_re = re.compile(
+            r"function\s+([A-Za-z0-9_$]+)\(\{\s*"
+            r"children:\s*([A-Za-z0-9_$]+),\s*"
+            r"userStatus:\s*([A-Za-z0-9_$]+)"
+            r"(?:,\s*lastSelectedAgentModel:\s*([A-Za-z0-9_$]+))?"
+            r"(?:,\s*setLastSelectedAgentModel:\s*([A-Za-z0-9_$]+))?"
+            r"(?:,\s*supportsCustomModels:\s*([A-Za-z0-9_$]+))?"
+            r"(?:,\s*lastModelDefaultOverrideVersionId:\s*([A-Za-z0-9_$]+))?"
+            r"(?:,\s*setLastModelDefaultOverrideVersionId:\s*([A-Za-z0-9_$]+))?"
+            r"(?:,\s*customModelsState:\s*([A-Za-z0-9_$]+))?"
+            r"[^)]*\}\)\{"
+        )
+        m_prov = prov_re.search(js)
+        applied_provider_patch = False
 
-        if 'function gMa({' in js:
-            target_start = 'function gMa({'
-            target_end = '.Provider,{value:g},a)}'
-            pos_start = js.find(target_start)
-            if pos_start != -1:
-                pos_end = js.find(target_end, pos_start)
-                if pos_end != -1:
-                    pos_end += len(target_end)
-                    js = js[:pos_start] + patched_gma + js[pos_end:]
-        elif 'function ALa({' in js:
-            target_start = 'function ALa({'
-            target_end = '.Provider,{value:g},a)}'
-            pos_start = js.find(target_start)
-            if pos_start != -1:
-                pos_end = js.find(target_end, pos_start)
-                if pos_end != -1:
-                    pos_end += len(target_end)
-                    js = js[:pos_start] + patched_ala + js[pos_end:]
+        if m_prov:
+            fn_name = m_prov.group(1)
+            p_custom_models = m_prov.group(9) or "k"
+            p_override_v_id = m_prov.group(7) or "g"
+            p_set_override_v_id = m_prov.group(8) or "h"
+            p_set_last_model = m_prov.group(5) or "e"
+
+            start_idx = m_prov.start()
+            end_pat = re.compile(r"(?:return\s+([A-Za-z0-9_$]+)\.createElement\(([A-Za-z0-9_$]+))?\.Provider,\{value:\s*([A-Za-z0-9_$]+)\},\s*([A-Za-z0-9_$]+)\)\}")
+            end_m = end_pat.search(js[start_idx:start_idx+6000])
+            end_idx = -1
+            react_var = "A"
+            provider_ctx = "fMa" if fn_name == "gMa" else "zLa"
+
+            if end_m:
+                end_idx = start_idx + end_m.end()
+                if end_m.group(1):
+                    react_var = end_m.group(1)
+                if end_m.group(2):
+                    provider_ctx = end_m.group(2)
+            else:
+                pos = js.find(".Provider,{value:g},a)}", start_idx)
+                if pos != -1:
+                    end_idx = pos + len(".Provider,{value:g},a)}")
+
+            if end_idx != -1:
+                full_fn_body = js[start_idx:end_idx]
+                m_custom = re.search(r"([A-Za-z0-9_$]+)\(" + p_custom_models + r"\)", full_fn_body)
+                m_conv = re.search(r"\.map\(([A-Za-z0-9_$]+)\)\.filter", full_fn_body)
+                m_override = re.search(r"([A-Za-z0-9_$]+)\([A-Za-z0-9_$]+,\s*[A-Za-z0-9_$]+,\s*" + p_override_v_id + r",\s*" + p_set_override_v_id + r",\s*" + p_set_last_model + r"\)", full_fn_body)
+                m_sort = re.search(r"=([A-Za-z0-9_$]+)\([A-Za-z0-9_$]+,\s*[A-Za-z0-9_$]+\);return\s+[A-Za-z0-9_$]+\.length>0\?[A-Za-z0-9_$]+:([A-Za-z0-9_$]+)\([A-Za-z0-9_$]+\)", full_fn_body)
+                m_find = re.search(r"Model\.GOOGLE_GEMINI_INTERNAL_BYOM&&\([A-Za-z0-9_$]+=([A-Za-z0-9_$]+)\([A-Za-z0-9_$]+,\s*[A-Za-z0-9_$]+\)\)", full_fn_body)
+                m_ctx_w = re.search(r"contextWindow:([A-Za-z0-9_$]+)\(", full_fn_body)
+                m_lbl = re.search(r"([A-Za-z0-9_$]+)\([A-Za-z0-9_$]+,\s*[A-Za-z0-9_$]+,\s*[A-Za-z0-9_$]+\);if\([A-Za-z0-9_$]+\)\{", full_fn_body)
+
+                custom_models_fn = m_custom.group(1) if m_custom else ("dMa" if fn_name == "gMa" else "xLa")
+                converter_fn = m_conv.group(1) if m_conv else ("Ck" if fn_name == "gMa" else "tk")
+                override_fn = m_override.group(1) if m_override else ("cMa" if fn_name == "gMa" else "wLa")
+                sort1_fn = m_sort.group(1) if m_sort else ("dma" if fn_name == "gMa" else "wla")
+                sort2_fn = m_sort.group(2) if m_sort else ("cma" if fn_name == "gMa" else "vla")
+                find_model_fn = m_find.group(1) if m_find else ("Dk" if fn_name == "gMa" else "uk")
+                ctx_w_fn = m_ctx_w.group(1) if m_ctx_w else ("Cz" if fn_name == "gMa" else "Gz")
+                label_resolve_fn = m_lbl.group(1) if m_lbl else ("eMa" if fn_name == "gMa" else "yLa")
+
+                body = (
+                    f'function {fn_name}({{children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}}){{'
+                    f'b=__enhanceUserStatus(b);'
+                    f'var [_selLabel,_setSelLabel]=(0,{react_var}.useState)(()=>{{try{{return localStorage.getItem("agy.selectedModelLabel")||null}}catch(E){{return null}}}}),'
+                    f'[l,m]=(0,{react_var}.useState)(null),[n,q]=(0,{react_var}.useState)({{}}),[r,t]=(0,{react_var}.useState)(void 0),'
+                    f'u=(0,{react_var}.useMemo)(()=>{{var J={custom_models_fn}(k);for(let L of J)L.disabled=!f;return J}},[k,f]),'
+                    f'v=(0,{react_var}.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map({converter_fn}).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),'
+                    f'w=(0,{react_var}.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);'
+                    f'{override_fn}(v,w,g,h,e);'
+                    f'var x=(0,{react_var}.useMemo)(()=>{{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],N=J?.clientModelSorts||[];J=L.map({converter_fn}).filter(O=>O!==null).filter(O=>!O.disabled);L={sort1_fn}(L,N);return L.length>0?L:{sort2_fn}(J)}},[b?.cascadeModelConfigData]),'
+                    f'y=(0,{react_var}.useCallback)((J,L)=>{{if(v.length!==0||u.length!==0){{if(L){{let N=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(N)return N}}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J={find_model_fn}(J,v)))return J;if(_selLabel){{let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}}return v[0]??u.at(0)}}}},[v,u,_selLabel]),'
+                    f'B=(0,{react_var}.useMemo)(()=>{{if(v.length!==0||u.length!==0){{if(_selLabel){{let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}}return y(c,l)}}}},[y,c,v,u,l,_selLabel]),'
+                    f'C=(0,{react_var}.useCallback)(J=>{{if(J!==void 0&&(J=n[J],J!==void 0)){{if(J.customLabel){{let N=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(N)return N}}return y(J.model,J.customLabel)}}return B}},[n,y,B,v,u]),'
+                    f'D=(0,{react_var}.useCallback)((J,L,N,O,M)=>{{J!==void 0&&q(Q=>{{var P=Q[J],R={{model:L,customLabel:O,contextWindow:{ctx_w_fn}(P??r,L,M)}};return P?.model===L&&P?.customLabel===O&&P?.contextWindow===R.contextWindow?Q:{{...Q,[J]:R}}}});if(N||J===void 0)e(L),t(Q=>{{var P={ctx_w_fn}(Q,L,M);return Q?.model===L&&Q?.contextWindow===P?Q:{{model:L,contextWindow:P}}}}),m(O??null)}},[e,r]),'
+                    f'E=(0,{react_var}.useCallback)((J,L,N,O)=>{{var M={label_resolve_fn}(v,u,J);if(M){{_setSelLabel(J);try{{localStorage.setItem("agy.selectedModelLabel",J)}}catch(err){{}}var Q=u.some(P=>P.label===J);D(L,M.value,N,Q?J:O,O)}}else console.error(`[Model Select] Invalid model label: ${{J}}`)}},[v,u,D]),'
+                    f'G=(0,{react_var}.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:{ctx_w_fn}(r,B?.value),[n,r,B]),'
+                    f'F=(0,{react_var}.useCallback)((J,L,N)=>{{var O={ctx_w_fn}(r,L);q(M=>J in M?M:{{...M,[J]:{{model:L,customLabel:N,contextWindow:O}}}})}},[r]),'
+                    f'H=(0,{react_var}.useCallback)(J=>{{E(J,void 0,!0)}},[E]),'
+                    f'K=(0,{react_var}.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);'
+                    f'g=(0,{react_var}.useMemo)(()=>({{modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:G,ensureConversationModelSeeded:F}}),[x,v,u,B,e,H,f,K,C,D,E,G,F]);'
+                    f'return {react_var}.createElement({provider_ctx}.Provider,{{value:g}},a)}}'
+                )
+                js = js[:start_idx] + enhancer_common + body + js[end_idx:]
+                applied_provider_patch = True
+                logger.info(f"Applied dynamic structural patch to React state provider ({fn_name})")
+
+        if not applied_provider_patch:
+            # Fallback to static version profiles
+            patched_gma = enhancer_common + '''function gMa({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){b=__enhanceUserStatus(b);var [_selLabel,_setSelLabel]=(0,A.useState)(()=>{try{return localStorage.getItem("agy.selectedModelLabel")||null}catch(E){return null}}),[l,m]=(0,A.useState)(null),[n,q]=(0,A.useState)({}),[r,t]=(0,A.useState)(void 0),u=(0,A.useMemo)(()=>{var J=dMa(k);for(let L of J)L.disabled=!f;return J},[k,f]),v=(0,A.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map(Ck).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),w=(0,A.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);cMa(v,w,g,h,e);var x=(0,A.useMemo)(()=>{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],N=J?.clientModelSorts||[];J=L.map(Ck).filter(O=>O!==null).filter(O=>!O.disabled);L=dma(L,N);return L.length>0?L:cma(J)},[b?.cascadeModelConfigData]),y=(0,A.useCallback)((J,L)=>{if(v.length!==0||u.length!==0){if(L){let N=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(N)return N}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J=Dk(J,v)))return J;if(_selLabel){let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}return v[0]??u.at(0)}},[v,u,_selLabel]),B=(0,A.useMemo)(()=>{if(v.length!==0||u.length!==0){if(_selLabel){let N=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}return y(c,l)}},[y,c,v,u,l,_selLabel]),C=(0,A.useCallback)(J=>{if(J!==void 0&&(J=n[J],J!==void 0)){if(J.customLabel){let N=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(N)return N}return y(J.model,J.customLabel)}return B},[n,y,B,v,u]),D=(0,A.useCallback)((J,L,N,O,M)=>{J!==void 0&&q(Q=>{var P=Q[J],R={model:L,customLabel:O,contextWindow:Cz(P??r,L,M)};return P?.model===L&&P?.customLabel===O&&P?.contextWindow===R.contextWindow?Q:{...Q,[J]:R}});if(N||J===void 0)e(L),t(Q=>{var P=Cz(Q,L,M);return Q?.model===L&&Q?.contextWindow===P?Q:{model:L,contextWindow:P}}),m(O??null)},[e,r]),E=(0,A.useCallback)((J,L,N,O)=>{var M=eMa(v,u,J);if(M){_setSelLabel(J);try{localStorage.setItem("agy.selectedModelLabel",J)}catch(err){}var Q=u.some(P=>P.label===J);D(L,M.value,N,Q?J:O,O)}else console.error(`[Model Select] Invalid model label: ${J}`)},[v,u,D]),G=(0,A.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:Cz(r,B?.value),[n,r,B]),F=(0,A.useCallback)((J,L,N)=>{var O=Cz(r,L);q(M=>J in M?M:{...M,[J]:{model:L,customLabel:N,contextWindow:O}})},[r]),H=(0,A.useCallback)(J=>{E(J,void 0,!0)},[E]),K=(0,A.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);g=(0,A.useMemo)(()=>({modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:G,ensureConversationModelSeeded:F}),[x,v,u,B,e,H,f,K,C,D,E,G,F]);return A.createElement(fMa.Provider,{value:g},a)}'''
+            patched_ala = enhancer_common + '''function ALa({children:a,userStatus:b,lastSelectedAgentModel:c,setLastSelectedAgentModel:e,supportsCustomModels:f,lastModelDefaultOverrideVersionId:g,setLastModelDefaultOverrideVersionId:h,customModelsState:k}){b=__enhanceUserStatus(b);var [_selLabel,_setSelLabel]=(0,A.useState)(()=>{try{return localStorage.getItem("agy.selectedModelLabel")||null}catch(E){return null}}),[l,m]=(0,A.useState)(null),[n,q]=(0,A.useState)({}),[r,t]=(0,A.useState)(void 0),u=(0,A.useMemo)(()=>{var J=xLa(k);for(let L of J)L.disabled=!f;return J},[k,f]),v=(0,A.useMemo)(()=>[...(b?.cascadeModelConfigData?.clientModelConfigs||[]).map(tk).filter(J=>J!==null).filter(J=>!J.disabled)],[b?.cascadeModelConfigData]),w=(0,A.useMemo)(()=>b?.cascadeModelConfigData?.defaultOverrideModelConfig,[b?.cascadeModelConfigData]);wLa(v,w,g,h,e);var x=(0,A.useMemo)(()=>{var J=b?.cascadeModelConfigData,L=J?.clientModelConfigs||[],M=J?.clientModelSorts||[];J=L.map(tk).filter(O=>O!==null).filter(O=>!O.disabled);L=wla(L,M);return L.length>0?L:vla(J)},[b?.cascadeModelConfigData]),y=(0,A.useCallback)((J,L)=>{if(v.length!==0||u.length!==0){if(L){let M=v.find(O=>O.label===L||O.modelAlias===L)||u.find(O=>O.label===L);if(M)return M}if(J===I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&u.length>0)return u[0];if(J!==void 0&&J!==I.Model.GOOGLE_GEMINI_INTERNAL_BYOM&&(J=uk(J,v)))return J;if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(M)return M}return v[0]??u.at(0)}},[v,u,_selLabel]),B=(0,A.useMemo)(()=>{if(v.length!==0||u.length!==0){if(_selLabel){let M=v.find(O=>O.label===_selLabel||O.modelAlias===_selLabel)||u.find(O=>O.label===_selLabel);if(N)return N}return y(c,l)}},[y,c,v,u,l,_selLabel]),C=(0,A.useCallback)(J=>{if(J!==void 0&&(J=n[J],J!==void 0)){if(J.customLabel){let M=v.find(O=>O.label===J.customLabel||O.modelAlias===J.customLabel)||u.find(O=>O.label===J.customLabel);if(M)return M}return y(J.model,J.customLabel)}return B},[n,y,B,v,u]),D=(0,A.useCallback)((J,L,M,O,N)=>{J!==void 0&&q(P=>{var Q=P[J],R={model:L,customLabel:O,contextWindow:Gz(Q??r,L,N)};return Q?.model===L&&Q?.customLabel===O&&Q?.contextWindow===R.contextWindow?P:{...P,[J]:R}});if(M||J===void 0){e(L);t(P=>{var Q=Gz(P,L,N);return P?.model===L&&P?.contextWindow===Q?P:{model:L,contextWindow:Q}});m(O??null)}},[e,r]),E=(0,A.useCallback)((J,L,M,O)=>{var N=yLa(v,u,J);if(N){_setSelLabel(J);try{localStorage.setItem("agy.selectedModelLabel",J)}catch(err){}D(L,N.value,M,J,O)}else console.error(`[Model Select] Invalid model label: ${J}`)},[v,u,D]),F=(0,A.useCallback)(J=>(J=J===void 0?void 0:n[J])?J.contextWindow:Gz(r,B?.value),[n,r,B]),G=(0,A.useCallback)((J,L,M)=>{var O=Gz(r,L);q(N=>J in N?N:{...N,[J]:{model:L,customLabel:M,contextWindow:O}})},[r]),H=(0,A.useCallback)(J=>{E(J,void 0,!0)},[E]),K=(0,A.useMemo)(()=>b?.cascadeModelConfigData===void 0,[b?.cascadeModelConfigData]);g=(0,A.useMemo)(()=>({modelSorts:x,visibleModelConfigs:v,customModels:u,currentModelConfig:B,setLastSelectedAgentModel:e,setCurrentModelConfigByLabel:H,supportsCustomModels:f,isModelListLoading:K,getModelConfigForConversation:C,setModelForConversation:D,setModelConfigByLabelForConversation:E,getContextWindowForConversation:F,ensureConversationModelSeeded:G}),[x,v,u,B,e,H,f,K,C,D,E,F,G]);return A.createElement(zLa.Provider,{value:g},a)}'''
+
+            if 'function gMa({' in js:
+                target_start = 'function gMa({'
+                target_end = '.Provider,{value:g},a)}'
+                pos_start = js.find(target_start)
+                if pos_start != -1:
+                    pos_end = js.find(target_end, pos_start)
+                    if pos_end != -1:
+                        pos_end += len(target_end)
+                        js = js[:pos_start] + patched_gma + js[pos_end:]
+                        applied_provider_patch = True
+            elif 'function ALa({' in js:
+                target_start = 'function ALa({'
+                target_end = '.Provider,{value:g},a)}'
+                pos_start = js.find(target_start)
+                if pos_start != -1:
+                    pos_end = js.find(target_end, pos_start)
+                    if pos_end != -1:
+                        pos_end += len(target_end)
+                        js = js[:pos_start] + patched_ala + js[pos_end:]
+                        applied_provider_patch = True
+
+            if not applied_provider_patch:
+                logger.warning("Could not identify React state provider structure; proceeding with graceful degradation.")
 
     with open(main_js_path, "w", encoding="utf-8") as f:
         f.write(js)
