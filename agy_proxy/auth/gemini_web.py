@@ -105,6 +105,62 @@ def extract_cookies_from_raw(raw: str | dict[str, Any] | list[Any]) -> dict[str,
     return cookies
 
 
+def extract_auth_user_from_raw(raw: str | dict[str, Any] | list[Any] | None) -> int | None:
+    """
+    Extracts the Google auth_user index (0, 1, 2...) from:
+      - HAR export dict or JSON (checks URLs like /u/1/ and headers X-Goog-AuthUser)
+      - cURL command (checks URL or -H 'X-Goog-AuthUser: 1')
+      - Plain string containing /u/1/ or authuser=1
+    """
+    if not raw:
+        return None
+
+    if isinstance(raw, dict):
+        if "log" in raw and isinstance(raw["log"], dict) and "entries" in raw["log"]:
+            for entry in raw["log"]["entries"]:
+                if not isinstance(entry, dict):
+                    continue
+                req = entry.get("request", {})
+                url = req.get("url", "")
+                m = re.search(r'/u/(\d+)(?:/|$)', url)
+                if m:
+                    return int(m.group(1))
+                for h in req.get("headers", []):
+                    if isinstance(h, dict) and h.get("name", "").lower() == "x-goog-authuser":
+                        val = str(h.get("value", "")).strip()
+                        if val.isdigit():
+                            return int(val)
+                post = req.get("postData", {}).get("text", "")
+                if post:
+                    m2 = re.search(r'X-Goog-AuthUser:(\d+)', post)
+                    if m2:
+                        return int(m2.group(1))
+        return None
+
+    if isinstance(raw, str):
+        text = raw.strip()
+        if (text.startswith("{") and text.endswith("}")) or (text.startswith("[") and text.endswith("]")):
+            try:
+                parsed = json.loads(text)
+                res = extract_auth_user_from_raw(parsed)
+                if res is not None:
+                    return res
+            except Exception:
+                pass
+
+        m = re.search(r'/u/(\d+)(?:/|$|\?)', text)
+        if m:
+            return int(m.group(1))
+        m = re.search(r'(?i)x-goog-authuser[\s:=]+(\d+)', text)
+        if m:
+            return int(m.group(1))
+        m = re.search(r'(?:[?&]|\b)authuser=(\d+)', text)
+        if m:
+            return int(m.group(1))
+
+    return None
+
+
 def clean_gemini_text(text: str) -> str:
     """Strips internal web UI code interpreter execution wrappers and temporary card content URLs."""
     if not text:
@@ -151,9 +207,161 @@ class GeminiWebSession(AccountSession):
         "SEARCH_SAMESITE",
     ]
     # Build label — extracted from first StreamGenerate response or hard-coded fallback
-    _DEFAULT_BL = "boq_gemini-web-uiserver_20261012.19_p1"
+    _DEFAULT_BL = "boq_gemini-web-uiserver_20261019.15_p0"
 
     MODEL_CONFIGS: dict[str, dict[str, Any]] = {
+        # -------------------------------------------------------------
+        # Canonical web-* models (primary standard for Gemini Web)
+        # -------------------------------------------------------------
+        "web-gemini-4-argon": {
+            "model_id": 8,
+            "mode": 2,
+            "budget": 2,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon (Web Flagship)",
+        },
+        "web-gemini-4-argon-high": {
+            "model_id": 8,
+            "mode": 2,
+            "budget": 2,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon High (Web Thinking)",
+        },
+        "web-gemini-4-argon-medium": {
+            "model_id": 8,
+            "mode": 4,
+            "budget": 1,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Medium (Web Thinking)",
+        },
+        "web-gemini-4-argon-low": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Low (Web)",
+        },
+        "web-gemini-4-argon-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Web Agent)",
+        },
+        "web-gemini-4-argon-task": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Web Agent)",
+        },
+        "web-gemini-3.5-flash-lite": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite (Web)",
+        },
+        "web-gemini-3.5-flash-lite-high": {
+            "model_id": 6,
+            "mode": 2,
+            "budget": 2,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)",
+        },
+        "web-gemini-3.5-flash-lite-medium": {
+            "model_id": 6,
+            "mode": 4,
+            "budget": 1,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)",
+        },
+        "web-gemini-3.5-flash-lite-low": {
+            "model_id": 6,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 0,
+            "hash": "8c46e95b1a07cecc",
+            "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
+        },
+        "web-gemini-3.8-flash": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash (Web)",
+        },
+        "web-gemini-3.8-flash-high": {
+            "model_id": 1,
+            "mode": 2,
+            "budget": 2,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash High (Web Thinking)",
+        },
+        "web-gemini-3.8-flash-medium": {
+            "model_id": 1,
+            "mode": 4,
+            "budget": 1,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Medium (Web Thinking)",
+        },
+        "web-gemini-3.8-flash-low": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Low (Web)",
+        },
+        "web-gemini-3.8-flash-spark": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
+        },
+        "web-gemini-3.8-flash-task": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
+        },
+        "web-gemini-3.1-pro": {
+            "model_id": 3,
+            "mode": 1,
+            "budget": 0,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro (Web)",
+        },
+        "web-gemini-3.1-pro-high": {
+            "model_id": 3,
+            "mode": 2,
+            "budget": 2,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro High (Web Thinking)",
+        },
+        "web-gemini-3.1-pro-medium": {
+            "model_id": 3,
+            "mode": 4,
+            "budget": 1,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro Medium (Web Thinking)",
+        },
+        "web-gemini-3.1-pro-low": {
+            "model_id": 3,
+            "mode": 1,
+            "budget": 0,
+            "hash": "e6fa609c3fa255c0",
+            "displayName": "Gemini 3.1 Pro Low (Web)",
+        },
+
+        # -------------------------------------------------------------
+        # Legacy *-web and standard browser models
+        # -------------------------------------------------------------
         # Gemini 4 Argon (Web flagship)
         "gemini-4-argon": {
             "model_id": 8,
@@ -182,6 +390,14 @@ class GeminiWebSession(AccountSession):
             "budget": 0,
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Low (Web)",
+        },
+        "gemini-4-argon-task": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Task (Agent)",
         },
         # Gemini 3.8 Flash
         "gemini-3.8-flash-high": {
@@ -271,14 +487,30 @@ class GeminiWebSession(AccountSession):
             "hash": "8c46e95b1a07cecc",
             "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
         },
-        # Gemini Task Mode Models (Autonomous Agent feature_mode=40)
+        # Gemini Spark Mode Models (Autonomous Agent feature_mode=40)
+        "gemini-4-argon-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
         "gemini-4-argon-task": {
             "model_id": 8,
             "mode": 1,
             "budget": 0,
             "feature_mode": 40,
             "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon Task (Agent)",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "gemini-3.8-flash-spark": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Agent)",
         },
         "gemini-3.8-flash-task": {
             "model_id": 1,
@@ -286,7 +518,7 @@ class GeminiWebSession(AccountSession):
             "budget": 0,
             "feature_mode": 40,
             "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash Task (Agent)",
+            "displayName": "Gemini 3.8 Flash Spark (Agent)",
         },
         # Web Aliases matching exact model strings
         "gemini-4-argon-web-high": {
@@ -310,13 +542,21 @@ class GeminiWebSession(AccountSession):
             "hash": "95a4c0abcba24364",
             "displayName": "Gemini 4 Argon Low (Web)",
         },
+        "gemini-4-argon-web-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon (Web) (Spark Agent)",
+        },
         "gemini-4-argon-web-task": {
             "model_id": 8,
             "mode": 1,
             "budget": 0,
             "feature_mode": 40,
             "hash": "95a4c0abcba24364",
-            "displayName": "Gemini 4 Argon (Web) (Agent)",
+            "displayName": "Gemini 4 Argon (Web) (Spark Agent)",
         },
         "gemini-3.8-flash-web-high": {
             "model_id": 1,
@@ -339,13 +579,21 @@ class GeminiWebSession(AccountSession):
             "hash": "56fdd199312815e2",
             "displayName": "Gemini 3.8 Flash Low (Web)",
         },
+        "gemini-3.8-flash-web-spark": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash (Web) (Spark Agent)",
+        },
         "gemini-3.8-flash-web-task": {
             "model_id": 1,
             "mode": 1,
             "budget": 0,
             "feature_mode": 40,
             "hash": "56fdd199312815e2",
-            "displayName": "Gemini 3.8 Flash (Web) (Agent)",
+            "displayName": "Gemini 3.8 Flash (Web) (Spark Agent)",
         },
         "gemini-3.1-pro-web-high": {
             "model_id": 3,
@@ -389,6 +637,98 @@ class GeminiWebSession(AccountSession):
             "hash": "8c46e95b1a07cecc",
             "displayName": "Gemini 3.5 Flash-Lite Low (Web)",
         },
+
+        # -------------------------------------------------------------
+        # Spark / Autonomous Agent task aliases
+        # -------------------------------------------------------------
+        "spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "spark-argon": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "web-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Web Agent)",
+        },
+        "web-spark-argon": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Web Agent)",
+        },
+        "gemini-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "spark-flash": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Agent)",
+        },
+        "web-spark-flash": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Web Agent)",
+        },
+        "gemini-spark-flash": {
+            "model_id": 1,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "56fdd199312815e2",
+            "displayName": "Gemini 3.8 Flash Spark (Agent)",
+        },
+        "spark-task": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "task-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Agent)",
+        },
+        "web-task-spark": {
+            "model_id": 8,
+            "mode": 1,
+            "budget": 0,
+            "feature_mode": 40,
+            "hash": "95a4c0abcba24364",
+            "displayName": "Gemini 4 Argon Spark (Web Agent)",
+        },
     }
 
     def __init__(
@@ -409,6 +749,7 @@ class GeminiWebSession(AccountSession):
         cookies: dict[str, str] | None = None,
         cdp_port: int = 9222,
         proxy_url: str | None = None,
+        auth_user: int = 0,
         **kwargs,
     ):
         super().__init__(
@@ -423,6 +764,7 @@ class GeminiWebSession(AccountSession):
             proxy_url=proxy_url or kwargs.get("proxy_url"),
             **kwargs,
         )
+        self.auth_user: int = int(auth_user or kwargs.get("account_index", 0) or 0)
         self._cookies: dict[str, str] = cookies or {}
         self._at_token: str | None = None
         self._f_sid: str | None = None
@@ -440,18 +782,42 @@ class GeminiWebSession(AccountSession):
         self.region_code: str | None = region_code
         self.expiry_timestamp: float = expiry_timestamp or (time.time() + 86400.0)
         self.available_models: dict[str, Any] = {
+            # Canonical web-* models (primary for Gemini Web browser sessions)
+            "web-gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-4-argon-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-4-argon-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-4-argon-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-4-argon-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-4-argon-task": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.5-flash-lite": {"displayName": "Gemini 3.5 Flash-Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash-spark": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.1-pro": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-gemini-3.1-pro-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            # Reverse-engineered models matching browser session capabilities
             "gemini-4-argon": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4-argon-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-4-argon-web-task": {"displayName": "Gemini 4 Argon (Web) (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-spark": {"displayName": "Gemini 4 Argon (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-task": {"displayName": "Gemini 4 Argon (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-4.0": {"displayName": "Gemini 4 Argon (Web Flagship)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash": {"displayName": "Gemini 3.8 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.8-flash-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.8-flash-web-task": {"displayName": "Gemini 3.8 Flash (Web) (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-spark": {"displayName": "Gemini 3.8 Flash (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-task": {"displayName": "Gemini 3.8 Flash (Web) (Spark Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro": {"displayName": "Gemini 3.1 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.1-pro-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
@@ -460,11 +826,37 @@ class GeminiWebSession(AccountSession):
             "gemini-3.5-flash-lite-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.5-flash-lite-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-3.5-flash-lite-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            # Backwards-compatible aliases
-            "gemini-3-pro": {"displayName": "Gemini 3 Pro (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
-            "gemini-3.1-flash-lite": {"displayName": "Gemini 3.1 Flash Lite (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-pro": {"displayName": "Gemini 2.5 Pro (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
             "gemini-2.5-flash": {"displayName": "Gemini 2.5 Flash (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            # Legacy *-web models
+            "gemini-4-argon-web-high": {"displayName": "Gemini 4 Argon High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-medium": {"displayName": "Gemini 4 Argon Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-web-low": {"displayName": "Gemini 4 Argon Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-high": {"displayName": "Gemini 3.8 Flash High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-medium": {"displayName": "Gemini 3.8 Flash Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-web-low": {"displayName": "Gemini 3.8 Flash Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-high": {"displayName": "Gemini 3.1 Pro High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-medium": {"displayName": "Gemini 3.1 Pro Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.1-pro-web-low": {"displayName": "Gemini 3.1 Pro Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-high": {"displayName": "Gemini 3.5 Flash-Lite High (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-medium": {"displayName": "Gemini 3.5 Flash-Lite Medium (Web Thinking)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.5-flash-lite-web-low": {"displayName": "Gemini 3.5 Flash-Lite Low (Web)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            # Spark & Task agent models
+            "spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "spark-argon": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-spark-argon": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-spark-flash": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "spark-task": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "task-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "web-task-spark": {"displayName": "Gemini 4 Argon Spark (Web Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-spark": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-spark": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-4-argon-task": {"displayName": "Gemini 4 Argon Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
+            "gemini-3.8-flash-task": {"displayName": "Gemini 3.8 Flash Spark (Agent)", "maxTokens": 1048576, "quotaInfo": {"remainingFraction": 1.0}},
         }
         self.quota_summary: dict[str, Any] = {}
         self.tier_info: dict[str, Any] = {"name": "Gemini Web (Browser)"}
@@ -480,7 +872,13 @@ class GeminiWebSession(AccountSession):
                 with open(pkg_tokens_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict):
-                        self._botguard_tokens.update(data.get("models", {}))
+                        models_dict = data.get("models", data)
+                        for k, v in models_dict.items():
+                            if isinstance(v, str):
+                                self._botguard_tokens[k] = v
+                                clean_k = k.replace("web-", "").replace("-web", "")
+                                self._botguard_tokens[clean_k] = v
+                                self._botguard_tokens[f"web-{clean_k}"] = v
             except Exception as e:
                 logger.debug("Failed loading %s: %s", pkg_tokens_path, e)
         # 2. From ~/.config/agy-proxy/botguard_tokens.json
@@ -490,61 +888,210 @@ class GeminiWebSession(AccountSession):
                 with open(cfg_tokens_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, dict):
-                        self._botguard_tokens.update(data.get("models", data))
+                        models_dict = data.get("models", data)
+                        for k, v in models_dict.items():
+                            if isinstance(v, str):
+                                self._botguard_tokens[k] = v
+                                clean_k = k.replace("web-", "").replace("-web", "")
+                                self._botguard_tokens[clean_k] = v
+                                self._botguard_tokens[f"web-{clean_k}"] = v
             except Exception as e:
                 logger.debug("Failed loading %s: %s", cfg_tokens_path, e)
-        # 3. From /home/qumhab/tmp_gemini/trafic if available
-        traffic_dir = Path("/home/qumhab/tmp_gemini/trafic")
-        if traffic_dir.is_dir() and not self._botguard_tokens.get("gemini-4-argon-high"):
-            try:
-                from urllib.parse import parse_qs
-                for p in traffic_dir.glob("*Argon*.har"):
-                    with open(p, "r", encoding="utf-8") as f:
-                        har = json.load(f)
-                    for entry in har.get("log", {}).get("entries", []):
-                        if "StreamGenerate" in entry.get("request", {}).get("url", ""):
-                            qs = parse_qs(entry["request"].get("postData", {}).get("text", ""))
-                            if "f.req" in qs:
-                                f_req = json.loads(qs["f.req"][0])
-                                inner3 = json.loads(f_req[1])[3]
-                                if inner3:
-                                    if "high" in p.name.lower():
-                                        self._botguard_tokens["gemini-4-argon-high"] = inner3
-                                    elif "medium" in p.name.lower():
-                                        self._botguard_tokens["gemini-4-argon-medium"] = inner3
-                                    elif "low" in p.name.lower():
-                                        self._botguard_tokens["gemini-4-argon-low"] = inner3
-                                    elif "spark" in p.name.lower():
-                                        self._botguard_tokens["gemini-4-argon-task"] = inner3
-                                    self._botguard_tokens.setdefault("default", inner3)
-                                    break
-            except Exception as e:
-                logger.debug("Failed loading tokens from traffic dir: %s", e)
+        # 3. From traffic directories if available (fallback only — does not overwrite JSON config)
+        search_dirs = [
+            Path("/home/qumhab/tmp_gemini/trafic"),
+        ]
+        for traffic_dir in search_dirs:
+            if traffic_dir.is_dir():
+                try:
+                    import base64
+                    from urllib.parse import parse_qs, unquote
+                    for p in traffic_dir.rglob("*.har"):
+                        fn = p.name.lower()
+                        with open(p, "r", encoding="utf-8") as f:
+                            har = json.load(f)
+                        for entry in har.get("log", {}).get("entries", []):
+                            req = entry.get("request", {})
+                            url = req.get("url", "")
+                            token = None
+                            mode_hint = None
+                            is_task = False
+                            model_id = None
+
+                            if "StreamGenerate" in url:
+                                qs = parse_qs(req.get("postData", {}).get("text", ""))
+                                if "f.req" in qs:
+                                    try:
+                                        f_req = json.loads(qs["f.req"][0])
+                                        inner = json.loads(f_req[1])
+                                        if len(inner) > 3 and inner[3]:
+                                            token = inner[3]
+                                            is_task = (
+                                                (len(inner) > 49 and inner[49] == 40)
+                                                or (len(inner) > 83 and inner[83] == 1)
+                                                or ("spark" in fn or "task" in fn or "agent" in fn)
+                                            )
+                                            model_id = inner[79] if len(inner) > 79 and inner[79] is not None else None
+                                            budget = inner[17][0][0] if len(inner) > 17 and inner[17] and inner[17][0] else 0
+                                            mode_hint = "task" if is_task else ("high" if budget == 2 else ("medium" if budget == 1 else "low"))
+                                    except Exception:
+                                        pass
+                            elif "processSession" in url:
+                                for param in req.get("postData", {}).get("params", []):
+                                    if "req0" in param.get("name", ""):
+                                        raw_val = unquote(param.get("value", ""))
+                                        try:
+                                            dec = base64.b64decode(raw_val)
+                                            m = re.search(rb'(![a-zA-Z0-9_\-]{100,})', dec)
+                                            if m:
+                                                token = m.group(1).decode("latin1")
+                                                if b"high" in dec:
+                                                    mode_hint = "high"
+                                                elif b"medium" in dec:
+                                                    mode_hint = "medium"
+                                                else:
+                                                    mode_hint = "low"
+                                                break
+                                        except Exception:
+                                            pass
+
+                            if token:
+                                if is_task or mode_hint == "task" or mode_hint == "spark":
+                                    if model_id == 1 or ("flash" in fn and model_id != 8):
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-spark", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-spark", token)
+                                        self._botguard_tokens.setdefault("spark-flash", token)
+                                        self._botguard_tokens.setdefault("web-spark-flash", token)
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-task", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-task", token)
+                                    else:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-spark", token)
+                                        self._botguard_tokens.setdefault("web-gemini-4-argon-spark", token)
+                                        self._botguard_tokens.setdefault("spark", token)
+                                        self._botguard_tokens.setdefault("spark-argon", token)
+                                        self._botguard_tokens.setdefault("web-spark", token)
+                                        self._botguard_tokens.setdefault("gemini-4-argon-task", token)
+                                        self._botguard_tokens.setdefault("web-gemini-4-argon-task", token)
+                                        self._botguard_tokens.setdefault("default", token)
+                                elif model_id == 8 or ("argon" in fn or "gemini-4" in fn):
+                                    if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-high", token)
+                                        self._botguard_tokens.setdefault("web-gemini-4-argon-high", token)
+                                    elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-medium", token)
+                                        self._botguard_tokens.setdefault("web-gemini-4-argon-medium", token)
+                                    elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-4-argon-low", token)
+                                        self._botguard_tokens.setdefault("web-gemini-4-argon-low", token)
+                                    self._botguard_tokens.setdefault("default", token)
+                                elif model_id == 6 or ("flash-lite" in fn or "3.5" in fn):
+                                    if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-high", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-high", token)
+                                    elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-medium", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-medium", token)
+                                    elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.5-flash-lite-low", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.5-flash-lite-low", token)
+                                elif model_id == 1 or ("3.8" in fn or "flash" in fn):
+                                    if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-high", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-high", token)
+                                    elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-medium", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-medium", token)
+                                    elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.8-flash-low", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.8-flash-low", token)
+                                elif model_id == 3 or ("3.1" in fn or "pro" in fn):
+                                    if mode_hint == "high" or "high" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-high", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-high", token)
+                                    elif mode_hint == "medium" or "medium" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-medium", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-medium", token)
+                                    elif mode_hint == "low" or "low" in fn:
+                                        self._botguard_tokens.setdefault("gemini-3.1-pro-low", token)
+                                        self._botguard_tokens.setdefault("web-gemini-3.1-pro-low", token)
+                except Exception as e:
+                    logger.debug("Failed loading tokens from %s: %s", traffic_dir, e)
 
     def get_botguard_token(self, model: str | None = None) -> str | None:
         """Retrieves a client integrity / Botguard token for inner[3]."""
         if not self._botguard_tokens:
             self._load_botguard_tokens()
-        default_tok = self._botguard_tokens.get("gemini-4-argon-high") or self._botguard_tokens.get("default")
+        default_tok = (
+            self._botguard_tokens.get("web-gemini-4-argon-high")
+            or self._botguard_tokens.get("gemini-4-argon-high")
+            or self._botguard_tokens.get("default")
+        )
         if not model:
             return default_tok
         m = model.lower().strip()
-        # For Argon models, high token is verified to work across all modes
-        if "argon" in m or "gemini-4" in m:
-            return self._botguard_tokens.get("gemini-4-argon-high") or default_tok
+        clean_m = m.replace("web-", "").replace("-web", "").replace("_web", "")
+
+        # 1. Exact match in loaded botguard tokens
         if m in self._botguard_tokens and self._botguard_tokens[m]:
             return self._botguard_tokens[m]
-        if "3.8" in m or "flash" in m:
-            if "high" in m:
-                return self._botguard_tokens.get("gemini-3.8-flash-high")
+        if clean_m in self._botguard_tokens and self._botguard_tokens[clean_m]:
+            return self._botguard_tokens[clean_m]
+        canonical_m = f"web-{clean_m}"
+        if canonical_m in self._botguard_tokens and self._botguard_tokens[canonical_m]:
+            return self._botguard_tokens[canonical_m]
+
+        # 2. Autonomous Spark / Task Agent models
+        if any(k in m for k in ("spark", "task", "agent")):
+            if "3.8" in m or ("flash" in m and "lite" not in m):
+                return (
+                    self._botguard_tokens.get("gemini-3.8-flash-spark")
+                    or self._botguard_tokens.get("web-gemini-3.8-flash-spark")
+                    or self._botguard_tokens.get("gemini-3.8-flash-task")
+                    or self._botguard_tokens.get("gemini-3.8-flash-high")
+                    or default_tok
+                )
+            return (
+                self._botguard_tokens.get("gemini-4-argon-spark")
+                or self._botguard_tokens.get("web-gemini-4-argon-spark")
+                or self._botguard_tokens.get("spark")
+                or self._botguard_tokens.get("gemini-4-argon-task")
+                or self._botguard_tokens.get("gemini-4-argon-high")
+                or default_tok
+            )
+
+        # 3. Argon models (medium, low, or high)
+        if "argon" in m or "gemini-4" in m:
             if "medium" in m:
-                return self._botguard_tokens.get("gemini-3.8-flash-medium")
+                return self._botguard_tokens.get("gemini-4-argon-medium") or self._botguard_tokens.get("gemini-4-argon-high") or default_tok
             if "low" in m:
-                return self._botguard_tokens.get("gemini-3.8-flash-low")
-            return self._botguard_tokens.get("gemini-3.8-flash-high")
+                return self._botguard_tokens.get("gemini-4-argon-low") or self._botguard_tokens.get("gemini-4-argon-high") or default_tok
+            return self._botguard_tokens.get("gemini-4-argon-high") or default_tok
+
+        # 4. 3.8 / Flash models
+        if "3.8" in m or "flash" in m:
+            if "lite" in m or "3.5" in m:
+                if "medium" in m:
+                    return self._botguard_tokens.get("gemini-3.5-flash-lite-medium") or default_tok
+                if "low" in m:
+                    return self._botguard_tokens.get("gemini-3.5-flash-lite-low") or default_tok
+                return self._botguard_tokens.get("gemini-3.5-flash-lite-high") or default_tok
+            if "high" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-high") or default_tok
+            if "medium" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-medium") or default_tok
+            if "low" in m:
+                return self._botguard_tokens.get("gemini-3.8-flash-low") or default_tok
+            return self._botguard_tokens.get("gemini-3.8-flash-high") or default_tok
+
+        # 5. Pro models
         if "pro" in m:
-            return self._botguard_tokens.get("gemini-3.1-pro-high")
-        return self._botguard_tokens.get("default")
+            if "medium" in m:
+                return self._botguard_tokens.get("gemini-3.1-pro-medium") or default_tok
+            if "low" in m:
+                return self._botguard_tokens.get("gemini-3.1-pro-low") or default_tok
+            return self._botguard_tokens.get("gemini-3.1-pro-high") or default_tok
+
+        return self._botguard_tokens.get("default") or default_tok
 
     def get_session_context(self, session_id: str | None = None) -> dict[str, Any]:
         """Gets or initializes the conversation state for a specific session_id."""
@@ -595,13 +1142,13 @@ class GeminiWebSession(AccountSession):
         if m in self.MODEL_CONFIGS:
             return self.MODEL_CONFIGS[m]
 
-        # Check for task / spark agent mode
-        is_task = any(k in m for k in ("task", "spark", "agent"))
-        if is_task:
+        # Check for spark / task agent mode
+        is_spark = any(k in m for k in ("spark", "task", "agent"))
+        if is_spark:
             if "3.8" in m or ("flash" in m and "lite" not in m):
-                return self.MODEL_CONFIGS["gemini-3.8-flash-task"]
-            # Default task/spark model in Gemini Web is Gemini 4 Argon
-            return self.MODEL_CONFIGS["gemini-4-argon-task"]
+                return self.MODEL_CONFIGS.get("web-gemini-3.8-flash-spark", self.MODEL_CONFIGS["gemini-3.8-flash-task"])
+            # Default spark/task model in Gemini Web is Gemini 4 Argon
+            return self.MODEL_CONFIGS.get("web-gemini-4-argon-spark", self.MODEL_CONFIGS["gemini-4-argon-task"])
 
         # Check for explicit thinking modifier (e.g. @think=high, -high, -medium, -low, -extended)
         is_high = any(k in m for k in ("high", "extend", "think"))
@@ -653,6 +1200,10 @@ class GeminiWebSession(AccountSession):
     # ------------------------------------------------------------------ #
     # Property compatibility shims
     # ------------------------------------------------------------------ #
+    @property
+    def account_prefix(self) -> str:
+        return f"/u/{self.auth_user}" if self.auth_user > 0 else ""
+
     @property
     def refresh_token(self) -> str:
         return ""
@@ -724,7 +1275,11 @@ class GeminiWebSession(AccountSession):
                 tabs_url = f"http://127.0.0.1:{self.cdp_port}/json"
                 with _urllib_req.urlopen(tabs_url, timeout=3) as resp:
                     tabs = json.loads(resp.read().decode())
-                gemini_tab = next((t for t in tabs if "gemini.google.com" in t.get("url", "")), None)
+                target_match = f"/u/{self.auth_user}/" if self.auth_user > 0 else "gemini.google.com"
+                gemini_tab = next((t for t in tabs if target_match in t.get("url", "")), None)
+                if not gemini_tab and self.auth_user > 0:
+                    gemini_tab = next((t for t in tabs if "gemini.google.com" in t.get("url", "")), None)
+
                 if gemini_tab and gemini_tab.get("webSocketDebuggerUrl"):
                     tab_ws_url = gemini_tab["webSocketDebuggerUrl"]
                     async with websockets.connect(tab_ws_url, ping_interval=None) as tab_ws:
@@ -737,7 +1292,7 @@ class GeminiWebSession(AccountSession):
                             "      if (typeof w[k] === 'string' && w[k].startsWith('AFWLbD')) { at = w[k]; break; }"
                             "    }"
                             "  }"
-                            "  return JSON.stringify({at: at || null, sid: w.FdrFJe || null, bl: w.cfb2h || null});"
+                            "  return JSON.stringify({at: at || null, sid: w.FdrFJe || null, bl: w.cfb2h || null, email: w.oPEP7c || null});"
                             "})()"
                         )
                         eval_msg = json.dumps({
@@ -752,7 +1307,7 @@ class GeminiWebSession(AccountSession):
                         eval_data = json.loads(eval_raw)
                         res_val = eval_data.get("result", {}).get("result", {}).get("value")
                         if res_val:
-                            tab_info = json.loads(res_val)
+                            tab_info = json.loads(res_val) if isinstance(res_val, str) else res_val
                             if tab_info.get("at"):
                                 self._at_token = tab_info["at"]
                                 logger.info("[GeminiWeb] Live AT token extracted from browser tab via CDP (%d chars)", len(self._at_token))
@@ -760,6 +1315,9 @@ class GeminiWebSession(AccountSession):
                                 self._f_sid = str(tab_info["sid"])
                             if tab_info.get("bl"):
                                 self._bl_token = tab_info["bl"]
+                            if tab_info.get("email") and (not self.email or self.email == "gemini-web@browser.local"):
+                                self.email = str(tab_info["email"]).strip()
+                                logger.info("[GeminiWeb] Identified account email from CDP tab: %s", self.email)
             except Exception as tab_err:
                 logger.debug("[GeminiWeb] Could not extract live tokens from browser tab: %s", tab_err)
 
@@ -833,15 +1391,20 @@ class GeminiWebSession(AccountSession):
         if not self._cookies.get("__Secure-1PSID"):
             return None
         client = await self.get_http_client()
+        app_url = f"{self.GEMINI_WEB_BASE}{self.account_prefix}/app"
+        app_headers = {
+            "Cookie": self._build_cookie_header(),
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        if self.auth_user > 0:
+            app_headers["X-Goog-AuthUser"] = str(self.auth_user)
+
         try:
             resp = await client.get(
-                f"{self.GEMINI_WEB_BASE}/app",
-                headers={
-                    "Cookie": self._build_cookie_header(),
-                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.9",
-                },
+                app_url,
+                headers=app_headers,
                 timeout=15.0,
                 follow_redirects=True,
             )
@@ -849,20 +1412,15 @@ class GeminiWebSession(AccountSession):
                 await self._notify_token_refreshed()
 
             if resp.status_code != 200:
-                logger.warning("[GeminiWeb] /app returned HTTP %d (cookies may be expired)", resp.status_code)
+                logger.warning("[GeminiWeb] %s returned HTTP %d (cookies may be expired)", app_url, resp.status_code)
                 if self.cdp_port and (self.enabled or force):
                     logger.info("[GeminiWeb] Attempting cookie refresh via CDP (port %d)...", self.cdp_port)
                     if await self.refresh_cookies_from_browser(force=force):
                         await self._notify_token_refreshed()
                         # Retry /app with fresh cookies
                         retry_resp = await client.get(
-                            f"{self.GEMINI_WEB_BASE}/app",
-                            headers={
-                                "Cookie": self._build_cookie_header(),
-                                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
-                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                                "Accept-Language": "en-US,en;q=0.9",
-                            },
+                            app_url,
+                            headers=app_headers,
                             timeout=15.0,
                             follow_redirects=True,
                         )
@@ -976,14 +1534,23 @@ class GeminiWebSession(AccountSession):
 
     def is_model_supported(self, model_name: str) -> bool:
         """
-        GeminiWeb only supports explicit Gemini Web models (*-web) and Gemini 4 Argon.
-        Standard CloudCode models (gemini-3.8-flash-high, gemini-2.5-pro, etc.) MUST NOT
-        be handled by browser sessions to prevent crosstalk, session hijacking, or 404s.
+        GeminiWeb supports explicit Gemini Web models (web-* or *-web) and reverse-engineered browser models.
+        Claude / 3P models are strictly rejected.
         """
         if not model_name:
             return False
-        from agy_proxy.models import is_gemini_web_model, is_argon_model
-        return is_gemini_web_model(model_name) or is_argon_model(model_name)
+        from agy_proxy.models import is_3p_model, normalize_model_name, is_gemini_web_model
+        if is_3p_model(model_name):
+            return False
+        if is_gemini_web_model(model_name):
+            return True
+        norm = normalize_model_name(model_name)
+        if is_gemini_web_model(norm):
+            return True
+        m = model_name.lower().strip()
+        if any(k in m for k in ("spark", "task", "agent")):
+            return True
+        return norm in self.available_models or model_name in self.available_models
 
     def get_quota_details(self) -> dict[str, Any]:
         is_gemini_limited = self.is_rate_limited("gemini")
@@ -1052,7 +1619,7 @@ class GeminiWebSession(AccountSession):
         active_resp_id = resp_id if resp_id is not None else self._resp_id
         active_rc_id = rc_id if rc_id is not None else self._rc_id
         active_continuation = continuation_token if continuation_token is not None else self._continuation_token
-        active_turn_index = turn_index if (turn_index != 0 or not active_conv_id) else self._turn_index
+        active_turn_index = turn_index if (turn_index != 0 or not active_conv_id) else (self._turn_index or (1 if active_conv_id else 0))
 
         # Initialize 99 elements to None
         inner: list[Any] = [None] * 99
@@ -1076,30 +1643,53 @@ class GeminiWebSession(AccountSession):
         inner[7] = 1
         inner[10] = 1
         inner[11] = 0
-        inner[17] = [[model_config.get("budget", 2 if model_config.get("mode") == 2 else 0)]]
+        is_task_model = (
+            model_config.get("feature_mode") == 40
+            or (bool(model_name) and any(k in str(model_name).lower() for k in ("task", "spark", "agent")))
+        )
+        if is_task_model:
+            inner[17] = [[active_turn_index]]
+        else:
+            inner[17] = [[model_config.get("budget", 2 if model_config.get("mode") == 2 else 0)]]
         inner[18] = 0
         inner[27] = 1
         inner[30] = [4, 16, 19]
         inner[41] = [2]
-        inner[49] = model_config.get("feature_mode", 0)
+        inner[49] = 40 if is_task_model else model_config.get("feature_mode", 0)
         inner[53] = 0
         inner[59] = client_uuid
         inner[61] = []
-        inner[67] = 0
+        if is_task_model and model_config.get("model_id") == 1:
+            inner[67] = None
+        else:
+            inner[67] = 0
         inner[68] = 2
 
         # Multi-turn continuation context
-        if active_conv_id and active_continuation:
-            inner[71] = [active_conv_id, None, None, None, None, None, None, active_continuation]
-        elif active_conv_id:
-            inner[71] = [active_conv_id, None, None, None, None, None, None, None]
+        if active_conv_id:
+            cont_val = (active_continuation or "") if is_task_model else active_continuation
+            inner[71] = [active_conv_id, None, None, None, None, None, None, cont_val]
         else:
             inner[71] = None
 
         inner[79] = model_config["model_id"]
         inner[80] = model_config["mode"]
+
+        if is_task_model and (not active_conv_id or active_turn_index == 0):
+            inner[83] = 1
+        else:
+            inner[83] = None
+
         inner[91] = 1
-        inner[96] = 1
+
+        if is_task_model:
+            if active_conv_id or active_turn_index > 0:
+                inner[96] = 0
+            else:
+                inner[96] = 0 if model_config.get("model_id") == 1 else 1
+        else:
+            inner[96] = 1
+
         inner[98] = 1
 
         outer = [None, json.dumps(inner)]
@@ -1200,7 +1790,7 @@ class GeminiWebSession(AccountSession):
 
             req_id = self._next_req_id()
             url = (
-                f"{self.GEMINI_WEB_BASE}{self.STREAM_GENERATE_PATH}"
+                f"{self.GEMINI_WEB_BASE}{self.account_prefix}{self.STREAM_GENERATE_PATH}"
                 f"?bl={self._bl_token}"
                 + (f"&f.sid={self._f_sid}" if self._f_sid else "")
                 + f"&hl=en&_reqid={req_id}&rt=c"
@@ -1212,7 +1802,7 @@ class GeminiWebSession(AccountSession):
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
                 "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
                 "Origin": self.GEMINI_WEB_BASE,
-                "Referer": f"{self.GEMINI_WEB_BASE}/",
+                "Referer": f"{self.GEMINI_WEB_BASE}{self.account_prefix}/app" if self.auth_user > 0 else f"{self.GEMINI_WEB_BASE}/",
                 "Accept": "*/*",
                 "Accept-Language": "en-US,en;q=0.9",
                 "Cache-Control": "no-cache",
@@ -1243,6 +1833,8 @@ class GeminiWebSession(AccountSession):
                 "x-goog-ext-73010990-jspb": "[0,0,0]",
                 "x-same-domain": "1",
             }
+            if self.auth_user > 0:
+                headers["X-Goog-AuthUser"] = str(self.auth_user)
 
             client = await self.get_http_client()
 
@@ -1397,19 +1989,7 @@ class GeminiWebSession(AccountSession):
                                                             if len(cand0) > 0 and isinstance(cand0[0], str) and cand0[0].startswith("rc_"):
                                                                 new_rc_id = cand0[0]
 
-                                                            # Text delta (response body) with clean_gemini_text sanitization
-                                                            if len(cand0) > 1 and isinstance(cand0[1], list) and cand0[1]:
-                                                                full_text = cand0[1][0]
-                                                                if isinstance(full_text, str):
-                                                                    cleaned_full = clean_gemini_text(full_text)
-                                                                    if cleaned_full != prev_text:
-                                                                        delta = cleaned_full[len(prev_text):]
-                                                                        if delta:
-                                                                            accumulated_text += delta
-                                                                            yield {"type": "text", "text": delta}
-                                                                        prev_text = cleaned_full
-
-                                                            # Thinking delta
+                                                            # Thinking delta (yielded BEFORE text delta for Claude Code / Anthropic SSE order)
                                                             th_text = None
                                                             if len(cand0) > 37 and isinstance(cand0[37], list) and cand0[37] and isinstance(cand0[37][0], list) and cand0[37][0]:
                                                                 th_text = cand0[37][0][0]
@@ -1425,6 +2005,18 @@ class GeminiWebSession(AccountSession):
                                                                 if th_delta:
                                                                     accumulated_thinking += th_delta
                                                                     yield {"type": "thinking", "text": th_delta}
+
+                                                            # Text delta (response body) with clean_gemini_text sanitization
+                                                            if len(cand0) > 1 and isinstance(cand0[1], list) and cand0[1]:
+                                                                full_text = cand0[1][0]
+                                                                if isinstance(full_text, str):
+                                                                    cleaned_full = clean_gemini_text(full_text)
+                                                                    if cleaned_full != prev_text:
+                                                                        delta = cleaned_full[len(prev_text):]
+                                                                        if delta:
+                                                                            accumulated_text += delta
+                                                                            yield {"type": "text", "text": delta}
+                                                                        prev_text = cleaned_full
                                                     except Exception:
                                                         pass
                                 except (json.JSONDecodeError, IndexError, TypeError):
@@ -1448,6 +2040,17 @@ class GeminiWebSession(AccountSession):
                                                     and isinstance(inner[4], list) and inner[4]
                                                     and isinstance(inner[4][0], list)):
                                                 cand0 = inner[4][0]
+                                                # Thinking delta in leftover
+                                                th_text = None
+                                                if len(cand0) > 37 and isinstance(cand0[37], list) and cand0[37] and isinstance(cand0[37][0], list) and cand0[37][0]:
+                                                    th_text = cand0[37][0][0]
+                                                if th_text and isinstance(th_text, str) and th_text != accumulated_thinking:
+                                                    th_delta = th_text[len(accumulated_thinking):]
+                                                    if th_delta:
+                                                        accumulated_thinking += th_delta
+                                                        yield {"type": "thinking", "text": th_delta}
+
+                                                # Text delta in leftover
                                                 if len(cand0) > 1 and isinstance(cand0[1], list) and cand0[1]:
                                                     full_text = cand0[1][0]
                                                     if isinstance(full_text, str):
@@ -1478,6 +2081,14 @@ class GeminiWebSession(AccountSession):
                         self._continuation_token = detected_continuation
                     sess_ctx["last_active"] = time.time()
                     self._turn_index = turn_index
+
+                    # Acknowledge response via Google batchexecute RPC PCck7e
+                    ack_resp_id = new_resp_id or sess_ctx.get("resp_id") or self._resp_id
+                    if ack_resp_id:
+                        try:
+                            await self.acknowledge_response(ack_resp_id, sess_ctx.get("conv_id") or self._conv_id)
+                        except Exception as ack_err:
+                            logger.debug("[GeminiWeb] acknowledge_response failed: %s", ack_err)
 
                     yield {
                         "type": "done",
@@ -1559,14 +2170,149 @@ class GeminiWebSession(AccountSession):
             logger.debug("[GeminiWeb] Failed to get Remy Goal for %s: %s", conv_id, e)
         return None
 
+    async def acknowledge_response(self, resp_id: str, conv_id: str | None = None) -> bool:
+        """
+        Sends response acknowledgment to Google's batchexecute RPC PCck7e.
+        Confirms completion of generation to prevent model stall, orphaned turns, or session timeout.
+        """
+        if not resp_id or not self._cookies.get("__Secure-1PSID"):
+            return False
+        at_token = await self.get_at_token()
+        if not at_token:
+            return False
+
+        rpc_args = [resp_id] if not conv_id else [resp_id, conv_id]
+        req_payload = json.dumps([[["PCck7e", json.dumps(rpc_args), None, "generic"]]])
+        url = (
+            f"{self.GEMINI_WEB_BASE}/_/BardChatUi/data/batchexecute"
+            f"?rpcids=PCck7e&bl={self._bl_token}"
+            + (f"&f.sid={self._f_sid}" if self._f_sid else "")
+            + f"&hl=en&_reqid={self._next_req_id()}&rt=c"
+        )
+        headers = {
+            "Cookie": self._build_cookie_header(),
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Origin": self.GEMINI_WEB_BASE,
+            "Referer": f"{self.GEMINI_WEB_BASE}/",
+        }
+        client = await self.get_http_client()
+        try:
+            resp = await client.post(url, headers=headers, data={"f.req": req_payload, "at": at_token}, timeout=5.0)
+            return resp.status_code == 200
+        except Exception as e:
+            logger.debug("[GeminiWeb] acknowledge_response (%s) failed: %s", resp_id, e)
+            return False
+
+    @classmethod
+    def _extract_model_hashes_from_data(cls, data: Any) -> dict[str, str]:
+        """
+        Recursively extracts dynamic model hashes (16-char hex strings)
+        associated with model identifiers or model_ids from batchexecute RPC qpEbW response.
+        """
+        found_hashes: dict[str, str] = {}
+        hex16_regex = re.compile(r"^[0-9a-f]{16}$")
+
+        def walk(node: Any, context: list[Any]) -> None:
+            if isinstance(node, str) and hex16_regex.match(node):
+                ctx_strs = [str(x).lower() for x in context if isinstance(x, (str, int))]
+                if any("argon" in s or "gemini-4" in s for s in ctx_strs) or 8 in context:
+                    found_hashes["gemini-4-argon"] = node
+                elif any("flash-lite" in s or "3.5" in s for s in ctx_strs) or 6 in context:
+                    found_hashes["gemini-3.5-flash-lite"] = node
+                elif any("pro" in s or "3.1" in s for s in ctx_strs) or 3 in context:
+                    found_hashes["gemini-3.1-pro"] = node
+                elif any("flash" in s or "3.8" in s for s in ctx_strs) or 1 in context:
+                    found_hashes["gemini-3.8-flash"] = node
+
+            if isinstance(node, list):
+                for item in node:
+                    walk(item, context + [node[0]] if node and not isinstance(node[0], (dict, list)) else context)
+            elif isinstance(node, dict):
+                for k, v in node.items():
+                    walk(v, context + [k])
+
+        walk(data, [])
+        return found_hashes
+
+    async def fetch_dynamic_model_hashes(self) -> dict[str, str]:
+        """
+        Fetches the latest dynamic model hashes via Google batchexecute RPC otAQ7b (or legacy qpEbW).
+        Updates MODEL_CONFIGS in-place and returns mapped hashes.
+        """
+        if not self._cookies.get("__Secure-1PSID"):
+            return {}
+        at_token = await self.get_at_token()
+        if not at_token:
+            return {}
+
+        rpc_id = "otAQ7b"
+        req_payload = json.dumps([[[rpc_id, json.dumps([]), None, "generic"]]])
+        url = (
+            f"{self.GEMINI_WEB_BASE}/_/BardChatUi/data/batchexecute"
+            f"?rpcids={rpc_id}&bl={self._bl_token}"
+            + (f"&f.sid={self._f_sid}" if self._f_sid else "")
+            + f"&hl=en&_reqid={self._next_req_id()}&rt=c"
+        )
+        headers = {
+            "Cookie": self._build_cookie_header(),
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Origin": self.GEMINI_WEB_BASE,
+            "Referer": f"{self.GEMINI_WEB_BASE}/",
+        }
+        client = await self.get_http_client()
+        try:
+            resp = await client.post(url, headers=headers, data={"f.req": req_payload, "at": at_token}, timeout=10.0)
+            if resp.status_code != 200:
+                # Fallback to legacy qpEbW if otAQ7b returned non-200
+                rpc_id = "qpEbW"
+                req_payload = json.dumps([[[rpc_id, json.dumps([]), None, "generic"]]])
+                url = (
+                    f"{self.GEMINI_WEB_BASE}/_/BardChatUi/data/batchexecute"
+                    f"?rpcids={rpc_id}&bl={self._bl_token}"
+                    + (f"&f.sid={self._f_sid}" if self._f_sid else "")
+                    + f"&hl=en&_reqid={self._next_req_id()}&rt=c"
+                )
+                resp = await client.post(url, headers=headers, data={"f.req": req_payload, "at": at_token}, timeout=10.0)
+                if resp.status_code != 200:
+                    return {}
+
+            extracted: dict[str, str] = {}
+            for line in resp.text.split("\n"):
+                line = line.strip()
+                if line.startswith("["):
+                    try:
+                        outer = json.loads(line)
+                        if isinstance(outer, list):
+                            for item in outer:
+                                if isinstance(item, list) and len(item) >= 3 and item[0] == "wrb.fr" and item[1] in ("otAQ7b", "qpEbW") and item[2]:
+                                    inner = json.loads(item[2])
+                                    h_map = self._extract_model_hashes_from_data(inner)
+                                    extracted.update(h_map)
+                    except Exception:
+                        pass
+
+            for base_model, new_hash in extracted.items():
+                for cfg_key, cfg in self.MODEL_CONFIGS.items():
+                    if base_model in cfg_key:
+                        cfg["hash"] = new_hash
+            return extracted
+        except Exception as e:
+            logger.debug("[GeminiWeb] Failed to fetch dynamic model hashes: %s", e)
+            return {}
+
     async def validate_live(self) -> dict[str, Any]:
         """Validates by attempting to fetch the AT token from Gemini Web."""
         result: dict[str, Any] = {"token_ok": None, "error": "", "quota_summary": {}}
         try:
-            if not self._cookies.get("__Secure-1PSID"):
-                await self.refresh_cookies_from_browser()
+            if not self._cookies.get("__Secure-1PSID") or (not self._at_token and self.cdp_port):
+                await self.refresh_cookies_from_browser(force=True)
 
             at = await self.get_at_token(force_refresh=True)
+            if not at and self.cdp_port:
+                if await self.refresh_cookies_from_browser(force=True):
+                    at = self._at_token
             result["token_ok"] = bool(at)
             if not at:
                 result["error"] = "No AT token returned — cookies expired or not logged in"
@@ -1582,7 +2328,7 @@ class GeminiWebSession(AccountSession):
         if ok:
             return {
                 "ok": True,
-                "message": "Gemini Web session active! AT token verified. Ready for Gemini models (Gemini 4 Argon, Gemini 3.8 Flash, Gemini 3.1 Pro, Gemini 3.5 Flash-Lite).",
+                "message": "Gemini Web session active! AT token verified. Ready for Gemini Web models (web-gemini-4-argon, web-gemini-3.5-flash-lite, etc.).",
                 "has_cookies": bool(self._cookies.get("__Secure-1PSID")),
                 "cookies_count": len(self._cookies),
                 "has_at_token": bool(self._at_token),
@@ -1608,6 +2354,7 @@ class GeminiWebSession(AccountSession):
         d["tier_name"] = "Gemini Web (Browser)"
         d["auth_method"] = "gemini_web"
         d["cdp_port"] = getattr(self, "cdp_port", 9222)
+        d["auth_user"] = getattr(self, "auth_user", 0)
         return d
 
     def to_save_dict(self) -> dict[str, Any]:
@@ -1616,7 +2363,6 @@ class GeminiWebSession(AccountSession):
             "account_id": self.account_id,
             "email": self.email,
             "name": self.name,
-            "picture": self.picture,
             "auth_method": "gemini_web",
             "cdp_port": self.cdp_port,
             "cookies": self._cookies,
@@ -1626,4 +2372,5 @@ class GeminiWebSession(AccountSession):
             "last_used_timestamp": getattr(self, "last_used_timestamp", 0.0),
             "last_used_model": getattr(self, "last_used_model", None),
             "last_client_type": getattr(self, "last_client_type", None),
+            "auth_user": getattr(self, "auth_user", 0),
         }

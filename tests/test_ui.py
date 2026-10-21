@@ -2,6 +2,7 @@
 Unit tests for the Web UI dashboard template loader.
 """
 
+import subprocess
 import unittest
 from pathlib import Path
 from agy_proxy.ui import DASHBOARD_HTML, get_dashboard_html
@@ -111,6 +112,47 @@ class TestDashboardTemplate(unittest.TestCase):
         self.assertIn("Free Tier", html)
         self.assertIn("AI Studio", html)
         self.assertIn("g1-pro-tier", html)
+
+    def test_dashboard_renders_hub_for_standalone_active_account(self):
+        html = get_dashboard_html()
+        # Verify renderSection creates Hub pill
+        node_script = """
+        const html = require('fs').readFileSync('agy_proxy/templates/dashboard.html', 'utf8');
+        const sectionMatch = html.match(/function renderSection\\(title, icon, iconColor, count, desc, addType, items, isGrid\\) \\{([\\s\\S]*?)\\n    \\}/);
+        if (!sectionMatch) throw new Error("Could not extract renderSection");
+
+        const cliActiveAccountId = null;
+        const ideActiveAccountId = null;
+        const standaloneActiveAccountId = 'acc_hub_1';
+        const collapsedSections = new Set();
+        const toggleSection = () => {};
+        const toggleSectionAccounts = () => {};
+        const openAddAccountModal = () => {};
+        const renderAccountCard = () => '<div>card</div>';
+        const renderAccountRow = () => '<tr>row</tr>';
+
+        const renderSection = new Function(
+            'title', 'icon', 'iconColor', 'count', 'desc', 'addType', 'items', 'isGrid',
+            'cliActiveAccountId', 'ideActiveAccountId', 'standaloneActiveAccountId', 'collapsedSections',
+            'renderAccountCard', 'renderAccountRow',
+            sectionMatch[1]
+        );
+
+        const items = [
+            { account_id: 'acc_hub_1', name: 'Viktor Bevzyuk', email: 'vitay200@gmail.com', auth_method: 'consumer', enabled: true }
+        ];
+        const iconColor = { bg: '', border: '', text: '', pillBg: '', pillText: '', pillBorder: '' };
+        const out = renderSection('Google Antigravity Accounts (OAuth)', 'fa-shield', iconColor, 1, 'desc', 'oauth', items, true,
+            cliActiveAccountId, ideActiveAccountId, standaloneActiveAccountId, collapsedSections,
+            renderAccountCard, renderAccountRow);
+
+        if (!out.includes('Hub:')) throw new Error("Expected 'Hub:' pill in renderSection, but got: " + out);
+        if (out.includes('IDE:')) throw new Error("renderSection falsely rendered 'IDE:' for standalone account");
+        console.log("OK");
+        """
+        proc = subprocess.run(["node", "-e", node_script], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, f"Node script failed: {proc.stderr}")
+        self.assertIn("OK", proc.stdout)
 
 
 if __name__ == "__main__":

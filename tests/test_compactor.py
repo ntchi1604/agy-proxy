@@ -275,6 +275,71 @@ class TestSmartToolPruning(unittest.TestCase):
         self.assertEqual(_get_cached_summary("test_key_123"), "Cached summary text")
         self.assertIsNone(_get_cached_summary("non_existent_key"))
 
+    def test_compactor_settings_checkpointer_fields(self):
+        from agy_proxy.compactor import CompactorSettings
+        settings = CompactorSettings(load_from_disk=False)
+        self.assertTrue(settings.checkpointer_enabled)
+        self.assertEqual(settings.checkpointer_threshold, 50000)
+        self.assertEqual(settings.checkpointer_model, "gemini-3.1-flash-lite")
+        d = settings.to_dict()
+        self.assertTrue(d["checkpointer_enabled"])
+        self.assertEqual(d["checkpointer_threshold"], 50000)
+        self.assertEqual(d["checkpointer_model"], "gemini-3.1-flash-lite")
+
+    def test_should_checkpoint_defaults_and_threshold(self):
+        import os
+        from agy_proxy.compactor import should_checkpoint, compactor_settings
+        orig_enabled = compactor_settings.checkpointer_enabled
+        try:
+            compactor_settings.checkpointer_enabled = True
+            # Few messages should return False
+            short_msgs = [{"role": "user", "content": "hello"}]
+            self.assertFalse(should_checkpoint(short_msgs, threshold_tokens=10, min_messages=4))
+
+            # Exceeding threshold with >= 4 messages returns True
+            long_msgs = [
+                {"role": "user", "content": "Turn 1: " + "word " * 500},
+                {"role": "assistant", "content": "Turn 2: " + "word " * 500},
+                {"role": "user", "content": "Turn 3: " + "word " * 500},
+                {"role": "assistant", "content": "Turn 4: " + "word " * 500},
+            ]
+            self.assertTrue(should_checkpoint(long_msgs, threshold_tokens=100, min_messages=4))
+            self.assertFalse(should_checkpoint(long_msgs, threshold_tokens=100000, min_messages=4))
+        finally:
+            compactor_settings.checkpointer_enabled = orig_enabled
+
+    def test_should_checkpoint_env_override(self):
+        import os
+        from agy_proxy.compactor import should_checkpoint, compactor_settings
+        orig_env = os.environ.get("CASCADE_USE_EXPERIMENT_CHECKPOINTER")
+        orig_enabled = compactor_settings.checkpointer_enabled
+        try:
+            compactor_settings.checkpointer_enabled = True
+            long_msgs = [
+                {"role": "user", "content": "Turn 1: " + "word " * 500},
+                {"role": "assistant", "content": "Turn 2: " + "word " * 500},
+                {"role": "user", "content": "Turn 3: " + "word " * 500},
+                {"role": "assistant", "content": "Turn 4: " + "word " * 500},
+            ]
+            os.environ["CASCADE_USE_EXPERIMENT_CHECKPOINTER"] = "false"
+            self.assertFalse(should_checkpoint(long_msgs, threshold_tokens=10))
+
+            os.environ["CASCADE_USE_EXPERIMENT_CHECKPOINTER"] = "0"
+            self.assertFalse(should_checkpoint(long_msgs, threshold_tokens=10))
+
+            os.environ["CASCADE_USE_EXPERIMENT_CHECKPOINTER"] = "true"
+            self.assertTrue(should_checkpoint(long_msgs, threshold_tokens=10))
+
+            # Settings disabled
+            compactor_settings.checkpointer_enabled = False
+            self.assertFalse(should_checkpoint(long_msgs, threshold_tokens=10))
+        finally:
+            compactor_settings.checkpointer_enabled = orig_enabled
+            if orig_env is None:
+                os.environ.pop("CASCADE_USE_EXPERIMENT_CHECKPOINTER", None)
+            else:
+                os.environ["CASCADE_USE_EXPERIMENT_CHECKPOINTER"] = orig_env
+
 
 if __name__ == "__main__":
     unittest.main()

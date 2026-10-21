@@ -34,7 +34,7 @@ from agy_proxy.auth.constants import (
     REDIRECT_URI,
     logger,
 )
-from agy_proxy.auth.gemini_web import GeminiWebSession, extract_cookies_from_raw
+from agy_proxy.auth.gemini_web import GeminiWebSession, extract_cookies_from_raw, extract_auth_user_from_raw
 from agy_proxy.auth.token_utils import (
     _decode_jwt_payload,
     generate_pkce_pair,
@@ -79,35 +79,40 @@ def _web_sessions_match(a: Any, b: Any) -> bool:
         if hasattr(item, "auth_method"):
             am = getattr(item, "auth_method", None)
             if am and am != "gemini_web":
-                return None, "", "", am
+                return None, "", "", am, 0
             aid = getattr(item, "account_id", None)
             cookies = getattr(item, "_cookies", {}) or {}
             psid = str(cookies.get("__Secure-1PSID", "")).strip()
             email = (getattr(item, "email", "") or "").strip().lower()
-            return aid, psid, email, am
+            u = getattr(item, "auth_user", 0) or 0
+            return aid, psid, email, am, u
         elif isinstance(item, dict):
             am = item.get("auth_method")
             if am and am != "gemini_web":
-                return None, "", "", am
+                return None, "", "", am, 0
             aid = item.get("account_id")
             cookies = item.get("cookies", {}) or {}
             psid = str(cookies.get("__Secure-1PSID", "")).strip()
             email = (item.get("email") or "").strip().lower()
-            return aid, psid, email, am
+            u = item.get("auth_user", 0) or 0
+            return aid, psid, email, am, u
         else:
-            return None, "", "", None
+            return None, "", "", None, 0
 
-    a_id, a_psid, a_email, a_am = _extract(a)
-    b_id, b_psid, b_email, b_am = _extract(b)
+    a_id, a_psid, a_email, a_am, a_u = _extract(a)
+    b_id, b_psid, b_email, b_am, b_u = _extract(b)
 
     if (a_am and a_am != "gemini_web") or (b_am and b_am != "gemini_web"):
         return False
 
+    if a_u != b_u:
+        return False
+
     if a_id and b_id and a_id == b_id:
         return True
-    if a_psid and b_psid and a_psid == b_psid:
-        return True
     if a_email and b_email and a_email == b_email and a_email != "gemini-web@browser.local":
+        return True
+    if a_psid and b_psid and a_psid == b_psid:
         return True
     return False
 
@@ -179,7 +184,7 @@ class AccountPool:
 
         self.accounts: dict[str, AccountSession] = {}
         self.round_robin_index = 0
-        self.pending_pkce_flows: dict[str, tuple[str, float]] = {}  # state -> (verifier, timestamp)
+        self.pending_pkce_flows: dict[str, tuple[str, float, str]] = {}  # state -> (verifier, timestamp, redirect_uri)
         self.last_quota_refresh_time: float = 0.0
         self._lock = asyncio.Lock()
         self._save_lock = threading.RLock()
@@ -382,10 +387,8 @@ class AccountPool:
                                     "account_id": k.get("account_id") or f"key_{os.urandom(4).hex()}",
                                     "email": k.get("email"),
                                     "name": k.get("name") or "Gemini API Key",
-                                    "picture": k.get("picture"),
                                     "api_key": raw_k,
                                     "project_id": k.get("project_id", "google-ai-studio"),
-                                    "region_code": k.get("region_code"),
                                     "enabled": k.get("enabled", True),
                                     "is_primary": k.get("is_primary", False),
                                     "total_requests": k.get("total_requests", 0),
@@ -632,6 +635,7 @@ class AccountPool:
                         enabled=item_enabled,
                         on_token_refreshed=self.save_accounts,
                         proxy_url=proxy_val,
+                        auth_user=int(item.get("auth_user", 0) or 0),
                     )
                     _restore_stats(acc, item)
                     self.accounts[acc_id] = acc
@@ -801,8 +805,10 @@ class AccountPool:
                     raw_k = getattr(acc, "api_key", "") or acc.refresh_token or ""
                     dedup_key = ("api_key", raw_k if raw_k else acc.account_id)
                 elif acc.auth_method == "gemini_web":
+                    u = getattr(acc, "auth_user", 0) or 0
                     cookie_seed = str(getattr(acc, "_cookies", {}).get("__Secure-1PSID", ""))
-                    dedup_key = ("gemini_web", acc.email.lower() if (acc.email and acc.email != "gemini-web@browser.local") else (cookie_seed if cookie_seed else acc.account_id))
+                    ident = acc.email.lower() if (acc.email and acc.email != "gemini-web@browser.local") else (cookie_seed if cookie_seed else acc.account_id)
+                    dedup_key = ("gemini_web", u, ident)
                 else:
                     dedup_key = (acc.auth_method, acc.account_id)
 
@@ -818,23 +824,16 @@ class AccountPool:
                         "account_id": acc.account_id,
                         "email": acc.email,
                         "name": acc.name,
-                        "picture": acc.picture,
                         "expiry_timestamp": acc.expiry_timestamp,
-                        "auth_method": "consumer",
                         "project_id": getattr(acc, "project_id", None),
-                        "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
-                        "proxy_url": getattr(acc, "proxy_url", None),
-                        "available_models": list((getattr(acc, "available_models", None) or {}).keys()),
-                        "supports_claude_5_5": getattr(acc, "supports_claude_5_5", False),
-                        "tier_id": getattr(acc, "tier_id", "free-tier"),
-                        "tier_info": getattr(acc, "tier_info", {}),
                     }
+                    if getattr(acc, "proxy_url", None):
+                        entry_dict["proxy_url"] = acc.proxy_url
                     sensitive = {
                         "refresh_token": acc.refresh_token,
                         "access_token": acc.access_token,
-                        "id_token": getattr(acc, "id_token", None),
                     }
                     _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     oauth_list.append(entry_dict)
@@ -844,14 +843,13 @@ class AccountPool:
                         "account_id": acc.account_id,
                         "email": acc.email,
                         "name": acc.name,
-                        "picture": acc.picture,
                         "auth_method": "api_key",
                         "project_id": getattr(acc, "project_id", None),
-                        "region_code": getattr(acc, "region_code", None),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
-                        "proxy_url": getattr(acc, "proxy_url", None),
                     }
+                    if getattr(acc, "proxy_url", None):
+                        entry_dict["proxy_url"] = acc.proxy_url
                     sensitive = {"api_key": raw_key}
                     _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     key_list.append(entry_dict)
@@ -860,17 +858,18 @@ class AccountPool:
                         "account_id": acc.account_id,
                         "email": acc.email,
                         "name": acc.name,
-                        "picture": acc.picture,
                         "auth_method": "gemini_web",
                         "cdp_port": getattr(acc, "cdp_port", 9222),
                         "enabled": acc.enabled,
                         "is_primary": acc.is_primary,
-                        "proxy_url": getattr(acc, "proxy_url", None),
                         "total_requests": getattr(acc, "total_requests", 0),
                         "last_used_timestamp": getattr(acc, "last_used_timestamp", 0.0),
                         "last_used_model": getattr(acc, "last_used_model", None),
                         "last_client_type": getattr(acc, "last_client_type", None),
+                        "auth_user": getattr(acc, "auth_user", 0),
                     }
+                    if getattr(acc, "proxy_url", None):
+                        entry_dict["proxy_url"] = acc.proxy_url
                     sensitive = {"cookies": getattr(acc, "_cookies", {})}
                     _save_sensitive_data(acc.account_id, sensitive, entry_dict)
                     web_list.append(entry_dict)
@@ -1157,11 +1156,24 @@ class AccountPool:
         active_pool = [acc for acc in active_pool if acc.is_model_supported(norm_model)]
 
         from agy_proxy.models import is_argon_model, is_gemini_web_model
-        is_argon = is_argon_model(norm_model)
-        is_web = is_gemini_web_model(norm_model) or is_argon
-        if not is_web:
-            # Strictly exclude browser sessions from serving standard API / CloudCode models
-            active_pool = [acc for acc in active_pool if getattr(acc, "auth_method", "") != "gemini_web"]
+        is_web = is_gemini_web_model(norm_model) or is_gemini_web_model(model)
+        if is_web:
+            active_pool = [acc for acc in active_pool if getattr(acc, "auth_method", "") == "gemini_web"]
+        elif is_argon_model(norm_model):
+            # Prefer OAuth account if it has Argon tier; otherwise automatically route Argon requests to Gemini Web
+            oauth_argon = [
+                acc for acc in active_pool
+                if getattr(acc, "auth_method", "") != "gemini_web"
+                and (norm_model in getattr(acc, "available_models", {}) or "gemini-4-argon" in getattr(acc, "available_models", {}))
+            ]
+            if oauth_argon:
+                active_pool = oauth_argon
+            else:
+                web_pool = [acc for acc in active_pool if getattr(acc, "auth_method", "") == "gemini_web"]
+                if web_pool:
+                    active_pool = web_pool
+                else:
+                    active_pool = [acc for acc in active_pool if getattr(acc, "auth_method", "") != "gemini_web"]
 
         # For Claude 5.5 models: prioritize confirmed accounts first, or auto-fallback to 4.6
         is_c55 = is_claude_5_5_model(norm_model)
@@ -1209,21 +1221,10 @@ class AccountPool:
                             preferred_account_id=preferred_account_id,
                             allow_auto_routing=False,
                         )
-                if is_argon_model(norm_model):
-                    fallback_m = get_argon_fallback_model(norm_model) or "gemini-3.8-flash-high"
-                    fallback_pool = [a for a in self.accounts.values() if a.enabled and a.is_model_supported(fallback_m)]
-                    if fallback_pool:
-                        logger.warning(
-                            "[Model Fallback] Gemini Web session is not available for %s. Auto-routing to %s on available accounts to avoid interruption.",
-                            norm_model,
-                            fallback_m,
-                        )
-                        return self.get_candidate_accounts(
-                            model=fallback_m,
-                            specific_account_id=specific_account_id,
-                            preferred_account_id=preferred_account_id,
-                            allow_auto_routing=False,
-                        )
+                if is_argon_model(norm_model) and not is_gemini_web_model(norm_model):
+                    raise RuntimeError(
+                        f"Model '{norm_model}' is supported in Google CloudCode API, but is not included in the subscription tier of your active accounts. Please connect an account with Argon access or select a Gemini 3.8 / Web model."
+                    )
 
             is_3p = is_3p_model(norm_model)
             if is_3p:
@@ -1320,17 +1321,22 @@ class AccountPool:
             available = not_rate_limited if not_rate_limited else list(active_pool)
 
         from agy_proxy.models import is_argon_model, is_gemini_web_model
-        is_argon = is_argon_model(norm_model)
-        is_web = is_gemini_web_model(norm_model) or is_argon
+        is_web = is_gemini_web_model(norm_model)
         if is_web:
-            # For Gemini Web or Gemini 4 Argon models, gemini_web browser session is the native engine
+            # For Gemini Web models, gemini_web browser session is the native engine
             auth_priority = {"gemini_web": 0, "consumer": 1, "api_key": 2}
         else:
             # Prioritize full API accounts (consumer OAuth, API key) over reverse-engineered browser sessions (gemini_web)
             auth_priority = {"consumer": 0, "api_key": 1, "gemini_web": 2}
 
         # If preferred sticky account is valid and healthy in available pool, place it FIRST
-        if preferred_account_id and any(a.account_id == preferred_account_id for a in available):
+        # Guard: a pinned gemini_web session must not hijack standard non-web API models if OAuth accounts are healthy
+        allow_web_preferred = is_web or is_argon_model(norm_model)
+        if (
+            preferred_account_id
+            and any(a.account_id == preferred_account_id for a in available)
+            and (allow_web_preferred or not any(getattr(a, "auth_method", "") == "gemini_web" and a.account_id == preferred_account_id for a in available))
+        ):
             preferred = [a for a in available if a.account_id == preferred_account_id]
             rest = [a for a in available if a.account_id != preferred_account_id]
             if self.routing_strategy == "primary":
@@ -1456,11 +1462,12 @@ class AccountPool:
 
         return combined_models
 
-    def start_oauth_flow(self) -> dict[str, str]:
-        """Generates PKCE authorization URL and tracks the verifier."""
+    def start_oauth_flow(self, redirect_uri: str | None = None) -> dict[str, str]:
+        """Generates PKCE authorization URL and tracks the verifier and redirect_uri."""
+        actual_redirect = redirect_uri or REDIRECT_URI
         verifier, challenge, state = generate_pkce_pair()
-        auth_url = get_authorization_url(challenge, state)
-        self.pending_pkce_flows[state] = (verifier, time.time())
+        auth_url = get_authorization_url(challenge, state, redirect_uri=actual_redirect)
+        self.pending_pkce_flows[state] = (verifier, time.time(), actual_redirect)
 
         # Clean old flows > 10m
         now = time.time()
@@ -1480,9 +1487,11 @@ class AccountPool:
         verifier: str | None = None,
         state: str | None = None,
         proxy_url: str | None = None,
+        redirect_uri: str | None = None,
     ) -> AccountSession:
         """Exchanges auth code for tokens and registers new AccountSession."""
         code = code_or_url.strip()
+        actual_redirect_uri = redirect_uri or REDIRECT_URI
 
         # 1. Handle JSON token pasted directly
         if code.startswith("{") and ("token" in code.lower() or "refresh" in code.lower() or "bearer" in code.lower() or "access" in code.lower()):
@@ -1584,9 +1593,13 @@ class AccountPool:
             return acc
 
         # 3. Handle full redirect URL pasted
-        if code.startswith("http://") or code.startswith("https://") or "state=" in code or "code=" in code:
+        if code.startswith("http://") or code.startswith("https://") or "state=" in code or "code=" in code or "?" in code:
             parsed = urllib.parse.urlparse(code)
+            if parsed.scheme and parsed.netloc:
+                actual_redirect_uri = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
             query = urllib.parse.parse_qs(parsed.query)
+            if not query and parsed.fragment:
+                query = urllib.parse.parse_qs(parsed.fragment)
             if "error" in query:
                 err_desc = query.get("error_description", [""])[0] or query["error"][0]
                 raise ValueError(f"Google OAuth authorization error: {err_desc}")
@@ -1594,31 +1607,51 @@ class AccountPool:
                 code = query["code"][0]
             else:
                 raise ValueError("The provided URL is missing the 'code' parameter. Make sure you complete the Google consent screen and click 'Continue'/'Allow' before copying the final redirect URL.")
-            if "state" in query and not state:
+            if "state" in query:
+                # Canonical state returned by Google in the redirect query takes precedence
                 state = query["state"][0]
 
-        if not verifier and state and state in self.pending_pkce_flows:
-            verifier = self.pending_pkce_flows[state][0]
+        # Clean up code from quotes, whitespace, or residual url encoding
+        code = urllib.parse.unquote(code.strip().strip("'\""))
+        if "code=" in code:
+            code = code.split("code=")[-1].split("&")[0]
+
+        if state and state in self.pending_pkce_flows:
+            flow_info = self.pending_pkce_flows[state]
+            # Server-tracked verifier for this state takes precedence over potentially stale frontend state
+            verifier = flow_info[0]
+            if not redirect_uri and len(flow_info) > 2 and flow_info[2]:
+                actual_redirect_uri = flow_info[2]
 
         if not verifier:
             # Default fallback verifier if user passes raw code
             if self.pending_pkce_flows:
-                verifier = list(self.pending_pkce_flows.values())[-1][0]
+                last_flow = list(self.pending_pkce_flows.values())[-1]
+                verifier = last_flow[0]
+                if not redirect_uri and len(last_flow) > 2 and last_flow[2]:
+                    actual_redirect_uri = last_flow[2]
             else:
                 raise ValueError("Missing code_verifier for PKCE exchange. Please start login flow first.")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        client_kwargs = {"timeout": 30.0}
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             data = {
                 "client_id": DEFAULT_CLIENT_ID,
                 "client_secret": DEFAULT_CLIENT_SECRET,
                 "code": code,
                 "code_verifier": verifier,
                 "grant_type": "authorization_code",
-                "redirect_uri": REDIRECT_URI,
+                "redirect_uri": actual_redirect_uri,
             }
             resp = await client.post(OAUTH_TOKEN_URL, data=data)
             if resp.status_code != 200:
                 raise RuntimeError(f"OAuth token exchange failed ({resp.status_code}): {resp.text}")
+
+            if state and state in self.pending_pkce_flows:
+                self.pending_pkce_flows.pop(state, None)
 
             token_data = resp.json()
             access_token = token_data.get("access_token")
@@ -1721,6 +1754,8 @@ class AccountPool:
         raw_cookies: str | None = None,
         cookies: dict[str, str] | None = None,
         proxy_url: str | None = None,
+        auth_user: int = 0,
+        force_new: bool = False,
     ) -> "GeminiWebSession":
         """
         Adds a Gemini Web (gemini.google.com browser session) to the pool.
@@ -1734,15 +1769,36 @@ class AccountPool:
             extracted.update(cookies)
         if raw_cookies:
             extracted.update(extract_cookies_from_raw(raw_cookies))
+            # If auth_user was default 0, attempt auto-detecting from raw input
+            if auth_user == 0:
+                detected_u = extract_auth_user_from_raw(raw_cookies)
+                if detected_u is not None:
+                    auth_user = detected_u
+                    logger.info("[GeminiWeb] Auto-detected auth_user=%d from input", auth_user)
 
         # Check if an account with matching __Secure-1PSID cookie already exists in pool
         cand_psid = extracted.get("__Secure-1PSID")
-        if cand_psid:
+        if cand_psid and not force_new:
             for existing in self.accounts.values():
                 if existing.auth_method == "gemini_web":
-                    if getattr(existing, "_cookies", {}).get("__Secure-1PSID") == cand_psid:
+                    if (
+                        getattr(existing, "_cookies", {}).get("__Secure-1PSID") == cand_psid
+                        and getattr(existing, "auth_user", 0) == auth_user
+                    ):
+                        existing_name = (getattr(existing, "name", "") or "").strip()
+                        # If user specifically provided a different custom label, allow creating a separate session
+                        if (
+                            name
+                            and name.strip()
+                            and name.strip() != "Gemini Web"
+                            and existing_name
+                            and existing_name != "Gemini Web"
+                            and name.strip() != existing_name
+                        ):
+                            continue
+
                         existing._cookies.update(extracted)
-                        if name and name.strip():
+                        if name and name.strip() and name.strip() != "Gemini Web":
                             existing.name = name.strip()
                         self.save_accounts()
                         logger.info("Updated existing GeminiWeb account %s with fresh cookies", existing.account_id)
@@ -1756,6 +1812,7 @@ class AccountPool:
             cookies=extracted,
             cdp_port=cdp_port,
             proxy_url=proxy_url,
+            auth_user=auth_user,
         )
 
         if acc._cookies.get("__Secure-1PSID"):
@@ -1789,6 +1846,28 @@ class AccountPool:
                 self.save_accounts(force=True)
                 return True
             return False
+
+    @property
+    def primary_account(self) -> AccountSession | None:
+        """Returns the primary account if available."""
+        if getattr(self, "_primary_account_override", None) is not None:
+            return self._primary_account_override
+        return self.get_primary_account()
+
+    @primary_account.setter
+    def primary_account(self, val: AccountSession | None) -> None:
+        self._primary_account_override = val
+
+    def get_primary_account(self) -> AccountSession | None:
+        """Returns the primary account, or the first available account if none marked primary."""
+        if getattr(self, "_primary_account_override", None) is not None:
+            return self._primary_account_override
+        acc = self.get_account("primary", reload_on_miss=False)
+        if acc:
+            return acc
+        if self.accounts:
+            return next(iter(self.accounts.values()))
+        return None
 
     def get_account(self, identifier: str | None, reload_on_miss: bool = True) -> AccountSession | None:
         """Resolves an account by account_id, email, name, or 'primary' alias.

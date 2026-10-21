@@ -5,7 +5,7 @@ Unit tests for FastAPI endpoints, routing, and security middleware.
 import asyncio
 import json
 import unittest
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
 import httpx
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -249,6 +249,41 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(m_data["tieredModelIds"], dict)
         self.assertIn("flashLite", m_data["tieredModelIds"])
 
+    async def test_cloudcode_passthrough_transport_error_formatting_and_cleanup(self):
+        # Verify that an httpx.RemoteProtocolError or ReadTimeout with empty string message
+        # is formatted cleanly with class name and does not log empty message
+        mock_acc = MagicMock()
+        mock_acc.account_id = "test_err_acc"
+        mock_acc.email = "test_err@example.com"
+        mock_acc.auth_method = "consumer"
+        mock_acc.enabled = True
+        mock_acc.project_id = "test-proj"
+        mock_acc.is_model_supported = MagicMock(return_value=True)
+        mock_acc.get_auth_headers = AsyncMock(return_value={"Authorization": "Bearer test"})
+        mock_acc.close = AsyncMock()
+
+        mock_http_client = MagicMock()
+        mock_http_client.post = AsyncMock(side_effect=httpx.RemoteProtocolError(""))
+        mock_acc.get_http_client = AsyncMock(return_value=mock_http_client)
+
+        with patch.object(self.pool, "get_candidate_accounts", return_value=[mock_acc]):
+            with patch.object(self.pool, "accounts", {mock_acc.account_id: mock_acc}):
+                with patch("agy_proxy.server.logger.warning") as mock_warn:
+                    resp = await self.client.post(
+                        "/v1internal:streamGenerateContent?alt=sse",
+                        json={"model": "gemini-3.8-flash-high", "request": {"contents": []}},
+                    )
+                    self.assertEqual(resp.status_code, 503)
+                    resp_json = resp.json()
+                    self.assertIn("RemoteProtocolError", resp_json["error"]["message"])
+                    # Ensure acc.close() was called to reset dead socket
+                    self.assertTrue(mock_acc.close.called)
+                    # Verify warning log message contains RemoteProtocolError, not empty string
+                    warn_args = [call[0] for call in mock_warn.call_args_list]
+                    passthrough_warns = [a for a in warn_args if "CloudCode passthrough error" in a[0]]
+                    self.assertTrue(len(passthrough_warns) > 0)
+                    self.assertIn("RemoteProtocolError", passthrough_warns[0][3])
+
     async def test_gemini_web_api_routes(self):
         # 1. Add web account with raw cookies
         add_resp = await self.client.post(
@@ -479,6 +514,52 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         saved_acc = next(a for a in disk_data["accounts"] if a["account_id"] == "acc_rename_test")
         self.assertEqual(saved_acc["name"], "New Name")
         self.assertEqual(saved_acc["proxy_url"], "http://user:pass@proxy.example.com:8080")
+
+    async def test_oauth_start_and_callback_endpoints(self):
+        # 1. Start OAuth flow with default redirect_uri
+        resp = await self.client.post("/api/accounts/oauth/start")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("auth_url", data)
+        self.assertIn("state", data)
+        self.assertIn("code_verifier", data)
+        self.assertIn("redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback", data["auth_url"])
+
+        # 2. Start OAuth flow with Hub Desktop redirect_uri
+        hub_redirect = "http://localhost:42555/auth/callback"
+        resp_hub = await self.client.post(f"/api/accounts/oauth/start?redirect_uri={hub_redirect}")
+        self.assertEqual(resp_hub.status_code, 200)
+        data_hub = resp_hub.json()
+        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%3A42555%2Fauth%2Fcallback", data_hub["auth_url"])
+
+        # 3. Complete OAuth callback endpoint with redirect_uri
+        mock_acc = AccountSession(
+            account_id="acc_oauth_cb_test",
+            email="callback_user@gmail.com",
+            refresh_token="rf_cb",
+            name="Callback User",
+        )
+        with unittest.mock.patch.object(self.pool, "complete_oauth_flow", new_callable=unittest.mock.AsyncMock) as mock_complete:
+            mock_complete.return_value = mock_acc
+
+            cb_payload = {
+                "code": "4/0AXcode_from_hub",
+                "state": "state_123",
+                "code_verifier": "verifier_abc",
+                "redirect_uri": hub_redirect,
+            }
+            cb_resp = await self.client.post("/api/accounts/oauth/callback", json=cb_payload)
+            self.assertEqual(cb_resp.status_code, 200)
+            mock_complete.assert_called_once_with(
+                code_or_url="4/0AXcode_from_hub",
+                verifier="verifier_abc",
+                state="state_123",
+                proxy_url=None,
+                redirect_uri=hub_redirect,
+            )
+            cb_data = cb_resp.json()
+            self.assertEqual(cb_data["account_id"], "acc_oauth_cb_test")
+            self.assertEqual(cb_data["email"], "callback_user@gmail.com")
 
     async def test_cloudcode_passthrough_sanitizes_uppercase_roles(self):
         oa = AccountSession(
@@ -1792,6 +1873,86 @@ class TestServerRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(len(sent_messages) >= 1)
         self.assertEqual(sent_messages[0]["type"], "http.response.start")
         self.assertEqual(sent_messages[0]["status"], 499)
+
+    async def test_web_domain_info_endpoint(self):
+        resp = await self.client.get("/api/web/domain_info")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get("allowed"))
+        self.assertTrue(data.get("can_fetch"))
+
+    async def test_event_logging_v2_batch_endpoint(self):
+        resp = await self.client.post("/api/event_logging/v2/batch", json={"events": [{"name": "test"}]})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"success": True})
+
+    async def test_mock_oauth_token_and_userinfo_endpoints(self):
+        # Mock token endpoints
+        for path in ["/token", "/oauth2/v4/token", "/o/oauth2/token"]:
+            resp = await self.client.post(path, data={"grant_type": "client_credentials"})
+            self.assertEqual(resp.status_code, 200, f"Failed on {path}")
+            data = resp.json()
+            self.assertIn("access_token", data)
+            self.assertEqual(data.get("token_type"), "Bearer")
+            self.assertEqual(data.get("expires_in"), 3600)
+
+        # Mock userinfo endpoints
+        for path in ["/oauth2/v2/userinfo", "/userinfo"]:
+            resp = await self.client.get(path)
+            self.assertEqual(resp.status_code, 200, f"Failed on {path}")
+            userinfo = resp.json()
+            self.assertTrue(userinfo.get("verified_email"))
+            self.assertIn("email", userinfo)
+            self.assertIn("name", userinfo)
+            self.assertIn("sub", userinfo)
+
+    async def test_build_with_google_plugins_endpoint(self):
+        resp = await self.client.post("/v1internal:buildWithGooglePlugins", json={})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data.get("success", True))
+
+    async def test_local_mcp_endpoints(self):
+        # RFC 9470 OAuth Protected Resource Metadata
+        meta_resp = await self.client.get("/.well-known/oauth-protected-resource/mcp")
+        self.assertEqual(meta_resp.status_code, 200)
+        meta = meta_resp.json()
+        self.assertIn("resource", meta)
+        self.assertIn("scopes_supported", meta)
+
+        # MCP GET Discovery
+        disc_resp = await self.client.get("/mcp")
+        self.assertEqual(disc_resp.status_code, 200)
+        disc = disc_resp.json()
+        self.assertEqual(disc.get("protocol"), "mcp")
+        self.assertEqual(disc.get("serverInfo", {}).get("name"), "agy-proxy-mcp")
+
+        # MCP JSON-RPC initialize
+        init_resp = await self.client.post("/mcp", json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"clientInfo": {"name": "test-client", "version": "1.0.0"}},
+        })
+        self.assertEqual(init_resp.status_code, 200)
+        init_data = init_resp.json()
+        self.assertEqual(init_data.get("id"), 1)
+        self.assertEqual(init_data["result"]["protocolVersion"], "2024-11-05")
+
+        # MCP JSON-RPC tools/list
+        tools_resp = await self.client.post("/mcp", json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list",
+            "params": {},
+        })
+        self.assertEqual(tools_resp.status_code, 200)
+        tools_data = tools_resp.json()
+        tool_names = [t["name"] for t in tools_data["result"]["tools"]]
+        self.assertIn("web_search", tool_names)
+        self.assertIn("fetch_web_page", tool_names)
+        self.assertIn("compact_conversation", tool_names)
+
 
 
 if __name__ == "__main__":

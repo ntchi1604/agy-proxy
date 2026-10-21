@@ -118,6 +118,7 @@
     106701431,
     106701435,
     106711598,
+    106712040,
     106712041,
     106713377,
     106713379,
@@ -925,11 +926,6 @@
       "boolValue": true
     },
     {
-      "name": "ReturnAdminControls__enable_for_cli",
-      "flagId": 45752213,
-      "boolValue": false
-    },
-    {
       "name": "SDLCAgents__enable_anthropic_model_connection",
       "boolValue": true
     },
@@ -1657,7 +1653,7 @@
     },
     {
       "name": "enable-remote-control-audio-transcription",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "enable-resource-manager",
@@ -1752,10 +1748,6 @@
     {
       "name": "enable-subagent-user-messaging",
       "boolValue": true
-    },
-    {
-      "name": "enable-swarm",
-      "boolValue": false
     },
     {
       "name": "enable-swarm-monitor",
@@ -2051,7 +2043,7 @@
     },
     {
       "name": "use-component-rewrite",
-      "boolValue": false
+      "boolValue": true
     },
     {
       "name": "use-core-direct",
@@ -2124,6 +2116,30 @@
     },
     {
       "name": "cli-seasonal-theme-periods",
+      "stringListValue": {}
+    },
+    {
+      "name": "best-of-n-default-model-id",
+      "stringValue": ""
+    },
+    {
+      "name": "enable-bottom-terminal-panel",
+      "boolValue": false
+    },
+    {
+      "name": "enable-browser-subagent-webview-script",
+      "boolValue": false
+    },
+    {
+      "name": "enable-iwa-builtin-browser",
+      "boolValue": false
+    },
+    {
+      "name": "enable-omni-mention-search",
+      "boolValue": false
+    },
+    {
+      "name": "science-plugin-split-targets",
       "stringListValue": {}
     }
   ]

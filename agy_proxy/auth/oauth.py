@@ -267,6 +267,22 @@ class AntigravityOAuthSession(AccountSession):
             if resp.status_code == 200:
                 self.quota_summary = resp.json()
                 return self.quota_summary
+            elif resp.status_code == 403:
+                try:
+                    body = resp.json()
+                except Exception:
+                    body = {}
+                err_msg = body.get("error", {}).get("message", "")
+                reason = ""
+                for detail in body.get("error", {}).get("details", []):
+                    if isinstance(detail, dict) and detail.get("reason"):
+                        reason = detail.get("reason")
+                if reason == "TOS_VIOLATION" or "Terms of Service" in err_msg:
+                    logger.error("[%s] Account has been suspended by Google for TOS violation. Auto-disabling in pool.", self.email)
+                    self.enabled = False
+                    self.disabled_reason = "TOS_VIOLATION: Service disabled by Google"
+                    self.quota_summary = {"error": "TOS_VIOLATION"}
+                    return self.quota_summary
         except Exception as e:
             logger.debug("[%s] retrieveUserQuotaSummary error: %s", self.email, e)
         return self.quota_summary
@@ -312,8 +328,14 @@ class AntigravityOAuthSession(AccountSession):
             is_claude_4_6_model,
             is_argon_model,
             is_deepagent_model,
+            is_gemini_web_model,
         )
         norm = normalize_model_name(model_name)
+
+        # -1. Gemini Web browser models are EXCLUSIVELY served by GeminiWebSession (CDP/browser).
+        # CloudCode OAuth accounts strictly reject all web models.
+        if is_gemini_web_model(model_name) or is_gemini_web_model(norm):
+            return False
 
         # 0. DeepAgent swarm preset routes through gemini-3.8-flash-high
         if is_deepagent_model(norm):
@@ -333,11 +355,10 @@ class AntigravityOAuthSession(AccountSession):
         if is_claude_5_5_model(norm):
             if flag_5_5:
                 return True
-            if has_5_5:
-                if avail:
-                    return norm in avail or any(is_claude_5_5_model(m) for m in avail.keys())
-                return True
-            return False
+            if avail:
+                return norm in avail or any(is_claude_5_5_model(m) for m in avail.keys())
+            # For unconfirmed accounts with no catalog fetched yet: allow trying unless marked unsupported
+            return True
 
         # 4. If model is a Claude 4.6 variant
         if is_claude_4_6_model(norm):
@@ -363,6 +384,33 @@ class AntigravityOAuthSession(AccountSession):
         """Calculates structured quota fractions, window, reset times, and descriptions for Gemini and Claude/3P."""
         is_gemini_limited = self.is_rate_limited("gemini")
         is_claude_limited = self.is_rate_limited("claude")
+
+        if not self.enabled or getattr(self, "disabled_reason", None) or (isinstance(getattr(self, "quota_summary", None), dict) and self.quota_summary.get("error") == "TOS_VIOLATION"):
+            reason = getattr(self, "disabled_reason", "Account disabled / suspended")
+            return {
+                "gemini": {
+                    "fraction": 0.0,
+                    "percent": 0.0,
+                    "reset_time": None,
+                    "window": "disabled",
+                    "description": reason,
+                    "is_rate_limited": True,
+                    "5h": {"fraction": 0.0, "percent": 0.0, "reset_time": None, "description": reason},
+                    "weekly": {"fraction": 0.0, "percent": 0.0, "reset_time": None, "description": reason},
+                    "cooldown_seconds": 0,
+                },
+                "3p": {
+                    "fraction": 0.0,
+                    "percent": 0.0,
+                    "reset_time": None,
+                    "window": "disabled",
+                    "description": reason,
+                    "is_rate_limited": True,
+                    "5h": {"fraction": 0.0, "percent": 0.0, "reset_time": None, "description": reason},
+                    "weekly": {"fraction": 0.0, "percent": 0.0, "reset_time": None, "description": reason},
+                    "cooldown_seconds": 0,
+                },
+            }
 
         res = {
             "gemini": {
@@ -539,6 +587,9 @@ class AntigravityOAuthSession(AccountSession):
                     pass
             try:
                 result["quota_summary"] = await self.fetch_quota() or {}
+                if getattr(self, "disabled_reason", None) or (isinstance(result["quota_summary"], dict) and result["quota_summary"].get("error") == "TOS_VIOLATION"):
+                    result["token_ok"] = False
+                    result["error"] = getattr(self, "disabled_reason", "CloudCode service disabled for Terms of Service violation")
             except Exception as qe:
                 result["error"] = result["error"] or f"Quota fetch failed: {str(qe)[:40]}"
         except Exception as e:
@@ -550,7 +601,7 @@ class AntigravityOAuthSession(AccountSession):
         """Tests whether the account session is valid and active."""
         res = await self.validate_live()
         ok = bool(res.get("token_ok"))
-        if ok:
+        if ok and not getattr(self, "disabled_reason", None):
             return {
                 "ok": True,
                 "message": f"OAuth connection valid for {self.email}",
@@ -558,7 +609,7 @@ class AntigravityOAuthSession(AccountSession):
                 "quota_summary": res.get("quota_summary", {}),
             }
         else:
-            return {"ok": False, "error": res.get("error") or "OAuth token validation failed"}
+            return {"ok": False, "error": res.get("error") or getattr(self, "disabled_reason", "OAuth token validation failed")}
 
     def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
@@ -566,4 +617,5 @@ class AntigravityOAuthSession(AccountSession):
         d["tier_badge"] = self.tier_badge
         d["has_g1_credits"] = self.has_g1_credits
         d["tier_name"] = self.tier_info.get("name") or self.tier_badge
+        d["disabled_reason"] = getattr(self, "disabled_reason", None)
         return d

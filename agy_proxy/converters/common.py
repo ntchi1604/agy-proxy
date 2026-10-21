@@ -553,11 +553,16 @@ def _apply_thinking_config(
         effort_val = str(reasoning_effort).strip().lower()
     elif output_config and isinstance(output_config, dict) and output_config.get("effort"):
         effort_val = str(output_config["effort"]).strip().lower()
+    elif thinking_req and isinstance(thinking_req, dict) and thinking_req.get("effort"):
+        effort_val = str(thinking_req["effort"]).strip().lower()
 
     if effort_val:
         effort_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH", "xhigh": "HIGH", "max": "HIGH"}
         if effort_val in effort_map:
             thinking_config["thinkingLevel"] = effort_map[effort_val]
+    elif thinking_req and isinstance(thinking_req, dict) and thinking_req.get("type") == "adaptive":
+        if "thinkingLevel" not in thinking_config:
+            thinking_config["thinkingLevel"] = "HIGH"
 
     if is_deepagent_model(backend_model):
         thinking_config["includeThoughts"] = True

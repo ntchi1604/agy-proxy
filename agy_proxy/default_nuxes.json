@@ -1,6 +1,34 @@
 {
   "cascadeNuxes": [
     {
+      "uid": 59,
+      "location": "CASCADE_NUX_LOCATION_MANAGER_BOTTOM_LEFT",
+      "priority": 105,
+      "title": "Gemini 4 Argon",
+      "body": "Gemini 4 Argon is now available to paid Pro plan subscribers.",
+      "imageUrl": "",
+      "videoUrl": "",
+      "filter": {
+        "clients": [
+          "NUX_CLIENT_ANTIGRAVITY"
+        ],
+        "versionFilter": {
+          "minVersion": "2.15.1"
+        },
+        "subclients": [
+          "hub"
+        ],
+        "userTiers": [
+          "g1-pro-tier"
+        ],
+        "requiredExperimentFlags": [
+          "Nux__show_gemini_4_argon_pro_trial_nux"
+        ],
+        "expirationDate": "2026-10-31"
+      },
+      "session": "NUX_SESSION_RETURNING"
+    },
+    {
       "uid": 24,
       "location": "CASCADE_NUX_LOCATION_ALWAYS_MOUNTED",
       "trigger": "CASCADE_NUX_TRIGGER_MANAGER_CREATE_FIRST_PROJECT_DIALOG",

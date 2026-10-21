@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 
-from agy_proxy.auth import AccountPool, AccountSession
+from agy_proxy.auth import AccountPool, AccountSession, AntigravityOAuthSession
 from agy_proxy.client import CloudCodeClient, extract_web_search_query
 from agy_proxy.models import AnthropicMessage, AnthropicRequest, OpenAIChatRequest
 
@@ -331,7 +331,7 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         ]
 
         payload = {
-            "model": "gemini-4-argon",
+            "model": "gemini-4-argon-web-task",
             "request": {
                 "contents": [{"role": "user", "parts": [{"text": "Create /home/qumhab/demo.py"}]}],
                 "tools": declared_tools,
@@ -342,7 +342,7 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
         async for chunk in self.client._post_sse_stream_with_failover(
             endpoint="v1internal:streamGenerateContent?alt=sse",
             payload_builder_fn=lambda proj: payload,
-            model_name="gemini-4-argon",
+            model_name="gemini-4-argon-web-task",
         ):
             results.append(chunk)
 
@@ -564,18 +564,14 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(sent_payloads[0]["model"], "claude-sonnet-4-6")
             self.assertEqual(sent_payloads[1]["model"], "claude-sonnet-5-5-high")
 
-    async def test_post_sse_stream_argon_auto_fallback_on_oauth(self):
-        """Tests that when an Argon model is requested on Antigravity OAuth accounts (no gemini_web session),
-        it automatically falls back to gemini-3.8-flash-high instead of failing."""
+    async def test_post_sse_stream_argon_honest_subscription_error_on_oauth(self):
+        """Tests that when an API Argon model is requested on Antigravity OAuth accounts without Argon subscription tier,
+        it raises a clear subscription error rather than silently downgrading to flash."""
         sent_payloads = []
-
-        async def fake_stream_lines():
-            yield 'data: {"response": {"candidates": [{"content": {"parts": [{"text": "Hello fallback"}]}}]}}'
 
         mock_200_resp = MagicMock()
         mock_200_resp.status_code = 200
         mock_200_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
-        mock_200_resp.aiter_lines = fake_stream_lines
 
         mock_200_ctx = MagicMock()
         mock_200_ctx.__aenter__ = AsyncMock(return_value=mock_200_resp)
@@ -598,15 +594,83 @@ class TestCloudCodeClient(unittest.IsolatedAsyncioTestCase):
                     "model": "gemini-4-argon-high",
                     "request": {"model": "gemini-4-argon-high"},
                 },
-                model_name="anthropic.gemini-4-argon-high",
+                model_name="gemini-4-argon-high",
             )
-            chunks = []
-            async for chunk in gen:
-                chunks.append(chunk)
+            with self.assertRaises(RuntimeError) as ctx:
+                async for chunk in gen:
+                    pass
 
-            self.assertEqual(len(chunks), 1)
-            self.assertEqual(len(sent_payloads), 1)
-            self.assertEqual(sent_payloads[0]["model"], "gemini-3.8-flash-high")
+            self.assertIn("subscription tier", str(ctx.exception))
+            self.assertEqual(len(sent_payloads), 0)
+
+    async def test_post_sse_stream_403_tos_violation_disables_account_and_fails_over(self):
+        """Verifies that 403 TOS_VIOLATION disables the account and fails over to next account."""
+        acc1 = AntigravityOAuthSession(
+            account_id="acc1_banned",
+            email="banned@example.com",
+            refresh_token="ref1",
+            access_token="acc1",
+            enabled=True,
+        )
+        acc2 = AntigravityOAuthSession(
+            account_id="acc2_healthy",
+            email="healthy@example.com",
+            refresh_token="ref2",
+            access_token="acc2",
+            enabled=True,
+        )
+
+        mock_403_resp = MagicMock()
+        mock_403_resp.status_code = 403
+        mock_403_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_403_resp.aread = AsyncMock(return_value=b'{"error": {"code": 403, "message": "This service has been disabled in this account for violation of Terms of Service."}}')
+
+        mock_403_ctx = MagicMock()
+        mock_403_ctx.__aenter__ = AsyncMock(return_value=mock_403_resp)
+        mock_403_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        async def fake_stream_lines():
+            yield 'data: {"response": {"candidates": [{"content": {"parts": [{"text": "Hello from healthy account"}]}}]}}'
+
+        mock_200_resp = MagicMock()
+        mock_200_resp.status_code = 200
+        mock_200_resp.request = httpx.Request("POST", "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent")
+        mock_200_resp.aiter_lines = fake_stream_lines
+
+        mock_200_ctx = MagicMock()
+        mock_200_ctx.__aenter__ = AsyncMock(return_value=mock_200_resp)
+        mock_200_ctx.__aexit__ = AsyncMock(return_value=None)
+
+        client1 = MagicMock(stream=MagicMock(return_value=mock_403_ctx))
+        client2 = MagicMock(stream=MagicMock(return_value=mock_200_ctx))
+
+        with patch.object(self.pool, "get_candidate_accounts", return_value=[acc1, acc2]), \
+             patch.object(acc1, "initialize_project", AsyncMock(return_value="proj1")), \
+             patch.object(acc1, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer 1"})), \
+             patch.object(acc1, "get_http_client", AsyncMock(return_value=client1)), \
+             patch.object(acc2, "initialize_project", AsyncMock(return_value="proj2")), \
+             patch.object(acc2, "get_auth_headers", AsyncMock(return_value={"Authorization": "Bearer 2"})), \
+             patch.object(acc2, "get_http_client", AsyncMock(return_value=client2)):
+
+            results = []
+            gen = self.client._post_sse_stream_with_failover(
+                endpoint="v1internal:streamGenerateContent?alt=sse",
+                payload_builder_fn=lambda proj: {"model": "gemini-3.8-flash-high"},
+                model_name="gemini-3.8-flash-high",
+            )
+            async for chunk in gen:
+                results.append(chunk)
+
+            # acc1 should be auto-disabled due to TOS violation
+            self.assertFalse(acc1.enabled)
+            self.assertIn("TOS_VIOLATION", acc1.disabled_reason)
+
+            # should have seamlessly yielded result from acc2
+            self.assertEqual(len(results), 1)
+            self.assertEqual(
+                results[0]["response"]["candidates"][0]["content"]["parts"][0]["text"],
+                "Hello from healthy account",
+            )
 
 
 if __name__ == "__main__":

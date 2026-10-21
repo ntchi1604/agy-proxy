@@ -33,6 +33,9 @@ class CompactorSettings:
         pruning_enabled: bool = False,
         prune_keep_tools: int = 15,
         prune_max_chars: int = 15000,
+        checkpointer_threshold: int = 50000,
+        checkpointer_model: str = "gemini-3.1-flash-lite",
+        checkpointer_enabled: bool = True,
         config_file: Path | None = None,
         load_from_disk: bool = True,
     ):
@@ -44,6 +47,9 @@ class CompactorSettings:
         self.pruning_enabled = pruning_enabled
         self.prune_keep_tools = prune_keep_tools
         self.prune_max_chars = prune_max_chars
+        self.checkpointer_threshold = checkpointer_threshold
+        self.checkpointer_model = checkpointer_model
+        self.checkpointer_enabled = checkpointer_enabled
         if load_from_disk:
             self.load()
 
@@ -85,6 +91,21 @@ class CompactorSettings:
             except ValueError:
                 pass
 
+        env_cp = os.environ.get("CASCADE_USE_EXPERIMENT_CHECKPOINTER") or os.environ.get("AGY_PROXY_CHECKPOINTER")
+        if env_cp is not None:
+            self.checkpointer_enabled = env_cp.lower() not in ("0", "false", "no", "off", "disable", "disabled")
+
+        env_cp_threshold = os.environ.get("CASCADE_CHECKPOINTER_THRESHOLD") or os.environ.get("AGY_PROXY_CHECKPOINTER_THRESHOLD")
+        if env_cp_threshold is not None:
+            try:
+                self.checkpointer_threshold = int(env_cp_threshold)
+            except ValueError:
+                pass
+
+        env_cp_model = os.environ.get("CASCADE_CHECKPOINTER_MODEL") or os.environ.get("AGY_PROXY_CHECKPOINTER_MODEL")
+        if env_cp_model:
+            self.checkpointer_model = str(env_cp_model).strip()
+
     def load(self):
         if self.config_file.exists():
             try:
@@ -102,6 +123,9 @@ class CompactorSettings:
                     self.model = "gemini-3.8-flash-low"
                     self.prune_keep_tools = 15
                     self.prune_max_chars = 15000
+                    self.checkpointer_threshold = 50000
+                    self.checkpointer_model = "gemini-3.1-flash-lite"
+                    self.checkpointer_enabled = True
                     self.save()
                 else:
                     self.enabled = bool(data.get("enabled", False))
@@ -111,6 +135,9 @@ class CompactorSettings:
                     self.pruning_enabled = bool(data.get("pruning_enabled", False))
                     self.prune_keep_tools = int(data.get("prune_keep_tools", 15))
                     self.prune_max_chars = int(data.get("prune_max_chars", 15000))
+                    self.checkpointer_threshold = int(data.get("checkpointer_threshold", 50000))
+                    self.checkpointer_model = str(data.get("checkpointer_model", "gemini-3.1-flash-lite"))
+                    self.checkpointer_enabled = bool(data.get("checkpointer_enabled", True))
             except Exception as e:
                 logger.debug("Failed to load compactor config: %s", e)
         self._apply_env_overrides()
@@ -129,6 +156,9 @@ class CompactorSettings:
                         "pruning_enabled": self.pruning_enabled,
                         "prune_keep_tools": self.prune_keep_tools,
                         "prune_max_chars": self.prune_max_chars,
+                        "checkpointer_threshold": self.checkpointer_threshold,
+                        "checkpointer_model": self.checkpointer_model,
+                        "checkpointer_enabled": self.checkpointer_enabled,
                     },
                     f,
                     indent=2,
@@ -146,6 +176,9 @@ class CompactorSettings:
             "pruning_enabled": self.pruning_enabled,
             "prune_keep_tools": self.prune_keep_tools,
             "prune_max_chars": self.prune_max_chars,
+            "checkpointer_threshold": self.checkpointer_threshold,
+            "checkpointer_model": self.checkpointer_model,
+            "checkpointer_enabled": self.checkpointer_enabled,
         }
 
 
@@ -382,6 +415,28 @@ def should_auto_compact(
         return False
 
     threshold = threshold_tokens or compactor_settings.threshold_tokens
+    estimated = estimate_total_tokens(messages, system=system)
+    return estimated >= threshold
+
+
+def should_checkpoint(
+    messages: list[Any],
+    system: str | list[Any] | None = None,
+    threshold_tokens: int | None = None,
+    min_messages: int = 4,
+) -> bool:
+    """
+    Checks if conversation tokens exceed the CASCADE_USE_EXPERIMENT_CHECKPOINTER threshold (50,000 tokens).
+    """
+    if not getattr(compactor_settings, "checkpointer_enabled", True):
+        return False
+    env_cp = os.environ.get("CASCADE_USE_EXPERIMENT_CHECKPOINTER")
+    if env_cp is not None and env_cp.lower() in ("0", "false", "no", "off", "disable", "disabled"):
+        return False
+    if len(messages) < min_messages:
+        return False
+
+    threshold = threshold_tokens or compactor_settings.checkpointer_threshold
     estimated = estimate_total_tokens(messages, system=system)
     return estimated >= threshold
 

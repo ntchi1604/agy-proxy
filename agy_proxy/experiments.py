@@ -202,6 +202,11 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "category": "agents",
         "desc": "Enables browser subagent v2 for web exploration",
     },
+    "enable-browser-subagent-webview-script": {
+        "value": True,
+        "category": "agents",
+        "desc": "Injects DOM inspection and automation scripts for browser subagents",
+    },
     "enable-image-generator-subagent": {
         "value": True,
         "category": "agents",
@@ -255,6 +260,21 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "value": True,
         "category": "ui_editor",
         "desc": "Enables split editor view in chat/editor panels",
+    },
+    "enable-bottom-terminal-panel": {
+        "value": True,
+        "category": "ui_editor",
+        "desc": "Enables docked bottom terminal panel in Antigravity Hub UI",
+    },
+    "enable-omni-mention-search": {
+        "value": True,
+        "category": "ui_editor",
+        "desc": "Enables unified @ mention search for symbols, files, and tools",
+    },
+    "use-component-rewrite": {
+        "value": True,
+        "category": "ui_editor",
+        "desc": "Enables modern UI component rewrite in Antigravity Hub",
     },
     "enable-file-diff-accumulator": {
         "value": True,
@@ -464,6 +484,16 @@ CURATED_SAFE_FLAGS: dict[str, dict[str, Any]] = {
         "value": True,
         "category": "tools_plugins",
         "desc": "Enables built-in Chromium browser in Antigravity Hub",
+    },
+    "enable-iwa-builtin-browser": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables Isolated Web App (IWA) support for builtin browser",
+    },
+    "enable-remote-control-audio-transcription": {
+        "value": True,
+        "category": "tools_plugins",
+        "desc": "Enables audio transcription for remote control sessions",
     },
     "enable-programmatic-tools": {
         "value": True,
@@ -1465,7 +1495,7 @@ CURATED_EXPERIMENT_IDS: list[int] = [
     106544525, 106544526, 106555564, 106555566, 106568390, 106568772, 106588527,
     106596395, 106596396, 106597020, 106617388, 106617390, 106621675, 106640124, 106640126,
     106643242, 106659335, 106659337, 106659338, 106659344, 106659346, 106659347,
-    106670811, 106676368, 106701431, 106701435, 106711598, 106713377, 106713379,
+    106670811, 106676368, 106701431, 106701435, 106711598, 106712040, 106713377, 106713379,
     106713380, 106713382, 106724030, 106754391, 106834476, 106838234
 ]
 
@@ -1720,12 +1750,68 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                         exp_val["boolValue"] = True
 
     # Unlock Gemini 4 Argon if returned as disabled for consumer tier
-    if "gemini-4-argon-disabled" in models and "gemini-4-argon" not in models:
-        argon_entry = copy.deepcopy(models["gemini-4-argon-disabled"])
-        argon_entry["recommended"] = True
-        argon_entry.pop("tagTitle", None)
-        argon_entry.pop("tagDescription", None)
-        models["gemini-4-argon"] = argon_entry
+    if "gemini-4-argon-disabled" in models:
+        # 1. Fully unlock original gemini-4-argon-disabled entry
+        models["gemini-4-argon-disabled"]["disabled"] = False
+        models["gemini-4-argon-disabled"]["recommended"] = True
+        models["gemini-4-argon-disabled"].pop("tagTitle", None)
+        models["gemini-4-argon-disabled"].pop("tagDescription", None)
+
+        # 2. Create and unlock gemini-4-argon
+        if "gemini-4-argon" not in models:
+            argon_entry = copy.deepcopy(models["gemini-4-argon-disabled"])
+            argon_entry["recommended"] = True
+            argon_entry["disabled"] = False
+            argon_entry.pop("tagTitle", None)
+            argon_entry.pop("tagDescription", None)
+            models["gemini-4-argon"] = argon_entry
+        else:
+            models["gemini-4-argon"]["disabled"] = False
+            models["gemini-4-argon"]["recommended"] = True
+            models["gemini-4-argon"].pop("tagTitle", None)
+            models["gemini-4-argon"].pop("tagDescription", None)
+    elif "gemini-4-argon" in models:
+        models["gemini-4-argon"]["disabled"] = False
+        models["gemini-4-argon"]["recommended"] = True
+        models["gemini-4-argon"].pop("tagTitle", None)
+        models["gemini-4-argon"].pop("tagDescription", None)
+
+    # Synchronize agentModelSorts so gemini-4-argon is present alongside gemini-4-argon-disabled
+    sorts = data.get("agentModelSorts")
+    if isinstance(sorts, list):
+        for s in sorts:
+            if isinstance(s, dict):
+                for grp in s.get("groups", []):
+                    if isinstance(grp, dict):
+                        mids = grp.get("modelIds")
+                        if isinstance(mids, list):
+                            if "gemini-4-argon-disabled" in mids and "gemini-4-argon" not in mids:
+                                idx = mids.index("gemini-4-argon-disabled")
+                                mids.insert(idx + 1, "gemini-4-argon")
+                            elif "gemini-4-argon" in mids and "gemini-4-argon-disabled" not in mids:
+                                idx = mids.index("gemini-4-argon")
+                                mids.insert(idx + 1, "gemini-4-argon-disabled")
+
+    # Ensure bidirectional catalog redirection for Claude 3P models:
+    # claude-sonnet-4-6 <-> MODEL_PLACEHOLDER_M35
+    # claude-opus-4-6-thinking <-> MODEL_PLACEHOLDER_M26
+    if "MODEL_PLACEHOLDER_M35" in models and "claude-sonnet-4-6" not in models:
+        m35_entry = copy.deepcopy(models["MODEL_PLACEHOLDER_M35"])
+        m35_entry["model"] = "MODEL_PLACEHOLDER_M35"
+        models["claude-sonnet-4-6"] = m35_entry
+    elif "claude-sonnet-4-6" in models and "MODEL_PLACEHOLDER_M35" not in models:
+        m35_entry = copy.deepcopy(models["claude-sonnet-4-6"])
+        m35_entry["model"] = "MODEL_PLACEHOLDER_M35"
+        models["MODEL_PLACEHOLDER_M35"] = m35_entry
+
+    if "MODEL_PLACEHOLDER_M26" in models and "claude-opus-4-6-thinking" not in models:
+        m26_entry = copy.deepcopy(models["MODEL_PLACEHOLDER_M26"])
+        m26_entry["model"] = "MODEL_PLACEHOLDER_M26"
+        models["claude-opus-4-6-thinking"] = m26_entry
+    elif "claude-opus-4-6-thinking" in models and "MODEL_PLACEHOLDER_M26" not in models:
+        m26_entry = copy.deepcopy(models["claude-opus-4-6-thinking"])
+        m26_entry["model"] = "MODEL_PLACEHOLDER_M26"
+        models["MODEL_PLACEHOLDER_M26"] = m26_entry
 
     # 4. Ensure all proxy catalog models are exposed with placeholder mappings
     try:
@@ -1774,6 +1860,33 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                 models[m] = m_entry
     except Exception as e:
         logger.debug("Failed to append extra proxy models: %s", e)
+
+    # 5. Ensure specialized model group IDs match authentic Antigravity Hub specifications
+    if "imageGenerationModelIds" in data and isinstance(data["imageGenerationModelIds"], list):
+        if "gemini-3.1-flash-image" not in data["imageGenerationModelIds"]:
+            data["imageGenerationModelIds"].append("gemini-3.1-flash-image")
+    else:
+        data["imageGenerationModelIds"] = ["gemini-3.1-flash-image"]
+
+    if "audioTranscriptionModelIds" in data and isinstance(data["audioTranscriptionModelIds"], list):
+        if "models/proactive-observer-v10" not in data["audioTranscriptionModelIds"]:
+            data["audioTranscriptionModelIds"].append("models/proactive-observer-v10")
+    else:
+        data["audioTranscriptionModelIds"] = ["models/proactive-observer-v10"]
+
+    if "webSearchModelIds" not in data or not isinstance(data.get("webSearchModelIds"), list):
+        data["webSearchModelIds"] = ["gemini-3.5-flash-lite"]
+    elif "gemini-3.5-flash-lite" not in data["webSearchModelIds"]:
+        data["webSearchModelIds"] = ["gemini-3.5-flash-lite"]
+
+    if "tieredModelIds" in data and isinstance(data["tieredModelIds"], dict):
+        tiered = data["tieredModelIds"]
+        if "flashLite" in tiered and "gemini-3.5-flash-lite" not in tiered["flashLite"]:
+            tiered["flashLite"] = ["gemini-3.5-flash-lite"]
+        if "flash" in tiered and "gemini-3.8-flash-tiered" not in tiered["flash"]:
+            tiered["flash"] = ["gemini-3.8-flash-tiered"]
+        if "pro" in tiered and "gemini-3.8-flash-tiered" not in tiered["pro"]:
+            tiered["pro"] = ["gemini-3.8-flash-tiered"]
 
     return data
 

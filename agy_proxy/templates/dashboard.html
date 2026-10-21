@@ -1362,10 +1362,16 @@ https://your-tunnel.trycloudflare.com/v1</pre>
             Authenticate in Browser
           </div>
           <p class="text-slate-400">Click the button below to sign in with your secondary Google account:</p>
-          <a id="oauthLoginLink" href="#" target="_blank" class="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition shadow">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-            <span>Open Google OAuth Sign-In</span>
-          </a>
+          <div class="flex items-center space-x-2">
+            <a id="oauthLoginLink" href="#" target="_blank" class="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition shadow">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>Open Google OAuth Sign-In</span>
+            </a>
+            <button type="button" onclick="initOAuthFlow(true)" title="Generate fresh authorization link" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs flex items-center space-x-1.5 border border-slate-700">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Refresh Link</span>
+            </button>
+          </div>
         </div>
 
         <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
@@ -1418,14 +1424,26 @@ https://your-tunnel.trycloudflare.com/v1</pre>
                 <label class="text-[11px] text-slate-400 font-medium">HAR Export / Raw Cookies / cURL</label>
                 <span class="text-[10px] text-slate-500 font-mono">paste HAR JSON or Cookie: header</span>
               </div>
-              <textarea id="webCookiesInput" rows="3" placeholder="Paste .har export JSON, or Cookie header (__Secure-1PSID=...; __Secure-1PSIDTS=...), or curl command here..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-teal-500 custom-scrollbar"></textarea>
+              <textarea id="webCookiesInput" rows="3" oninput="autoDetectAuthUser(this.value)" placeholder="Paste .har export JSON, or Cookie header (__Secure-1PSID=...; __Secure-1PSIDTS=...), or curl command here..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-teal-500 custom-scrollbar"></textarea>
             </div>
-            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
-              <div class="text-[11px] text-slate-300 font-medium flex items-center">
-                <i class="fa-solid fa-laptop-code text-teal-400 mr-1.5"></i> Auto CDP Port
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
+                <div class="text-[11px] text-slate-300 font-medium flex items-center">
+                  <i class="fa-solid fa-user-circle text-teal-400 mr-1.5"></i> AuthUser (/u/X)
+                </div>
+                <input type="number" id="webAuthUserInput" value="0" min="0" max="9" placeholder="0" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono text-xs text-center focus:outline-none focus:border-teal-500" title="Google Multi-login index: 0 for primary, 1 for second account (/u/1), etc.">
               </div>
-              <input type="number" id="webCdpPortInput" value="9222" placeholder="9222" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono text-xs text-center focus:outline-none focus:border-teal-500">
+              <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
+                <div class="text-[11px] text-slate-300 font-medium flex items-center">
+                  <i class="fa-solid fa-laptop-code text-teal-400 mr-1.5"></i> CDP Port
+                </div>
+                <input type="number" id="webCdpPortInput" value="9222" placeholder="9222" class="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono text-xs text-center focus:outline-none focus:border-teal-500">
+              </div>
             </div>
+            <label class="flex items-center space-x-2 text-[11px] text-slate-400 cursor-pointer pt-0.5">
+              <input type="checkbox" id="webForceNewCheckbox" class="rounded bg-slate-800 border-slate-700 text-teal-500 focus:ring-0">
+              <span>Force new session slot (don't update existing matching account)</span>
+            </label>
           </div>
         </div>
       </div>
@@ -1586,7 +1604,7 @@ https://your-tunnel.trycloudflare.com/v1</pre>
         </button>
         <button onclick="submitActivateSessionModal()" id="modalConfirmActivateBtn" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition shadow">
           <i class="fa-solid fa-check text-xs"></i>
-          <span>Confirm Switch</span>
+          <span>Activate Session</span>
         </button>
       </div>
     </div>
@@ -1759,9 +1777,9 @@ ightarrow$ v1.0.3</p>
     let currentAccountView = 'grid';
     let currentAccountFilter = 'all';
     let collapsedSections = new Set(); // tracks which section addTypes are collapsed
-    let cliActiveAccountId = null;    // account_id currently active in AGY CLI
-    let standaloneActiveAccountId = null;    // account_id currently active in AGY IDE
-    let ideActiveAccountId = null;
+    let cliActiveAccountId = null;           // account_id currently active in AGY CLI
+    let standaloneActiveAccountId = null;    // account_id currently active in AGY Hub (Standalone)
+    let ideActiveAccountId = null;           // account_id currently active in AGY IDE
     let cliActiveInfo = { cli: null, ide: null, standalone: null };
     let targetActivateAccountId = null;
 
@@ -2170,10 +2188,10 @@ ightarrow$ v1.0.3</p>
       if (curIde) curIde.innerText = ideName;
       if (curStandalone) curStandalone.innerText = standaloneName;
 
-      // Reset radio to both
+      // Reset radio to all
       const radios = document.getElementsByName('agyTargetEnv');
       for (const r of radios) {
-        if (r.value === 'both') r.checked = true;
+        if (r.value === 'all') r.checked = true;
       }
 
       // Default primary checkbox to true so switching session aligns primary proxy routing
@@ -2209,7 +2227,7 @@ ightarrow$ v1.0.3</p>
       const acc = rawAccountsData.find(a => a.account_id === accountIdToActivate);
       const accName = acc ? (acc.name || acc.email) : accountIdToActivate;
 
-      const targetLabel = target === 'cli' ? 'CLI' : (target === 'standalone' ? 'Standalone' : (target === 'ide' ? 'IDE' : 'All'));
+      const targetLabel = target === 'cli' ? 'CLI' : (target === 'standalone' ? 'Hub' : (target === 'ide' ? 'IDE' : 'All'));
       showToast(`Activating ${accName} in ${targetLabel}...`, 'info');
       closeActivateSessionModal();
 
@@ -3176,19 +3194,33 @@ ightarrow$ v1.0.3</p>
       let agyActivePills = '';
       if (addType === 'oauth') {
         const cliAcc = items.find(a => a.account_id === cliActiveAccountId);
-        const ideAcc = items.find(a => a.account_id === window.ideActiveAccountId);
-        const standaloneAcc = items.find(a => a.account_id === standaloneActiveAccountId);
+        const ideAcc = items.find(a => a.account_id === ((typeof ideActiveAccountId !== 'undefined') ? ideActiveAccountId : window.ideActiveAccountId));
+        const hubAcc = items.find(a => a.account_id === standaloneActiveAccountId);
 
-        if (cliAcc && standaloneAcc && cliAcc.account_id === standaloneAcc.account_id) {
-          agyActivePills += `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1 shrink-0" title="Active in both Antigravity CLI and Standalone"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CLI+IDE: <b class="text-white">${cliAcc.name || cliAcc.email}</b></span></span>`;
-        } else {
-          if (cliAcc) {
-            agyActivePills += `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1 shrink-0" title="Active in Antigravity CLI"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CLI: <b class="text-white">${cliAcc.name || cliAcc.email}</b></span></span>`;
-          }
-          if (standaloneAcc) {
-            agyActivePills += `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 flex items-center space-x-1 shrink-0" title="Active in Standalone Web Agent"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span><span>IDE: <b class="text-white">${standaloneAcc.name || standaloneAcc.email}</b></span></span>`;
-          }
+        const accountTargets = new Map();
+        if (cliAcc) {
+          if (!accountTargets.has(cliAcc.account_id)) accountTargets.set(cliAcc.account_id, { acc: cliAcc, targets: [] });
+          accountTargets.get(cliAcc.account_id).targets.push('CLI');
         }
+        if (hubAcc) {
+          if (!accountTargets.has(hubAcc.account_id)) accountTargets.set(hubAcc.account_id, { acc: hubAcc, targets: [] });
+          accountTargets.get(hubAcc.account_id).targets.push('Hub');
+        }
+        if (ideAcc) {
+          if (!accountTargets.has(ideAcc.account_id)) accountTargets.set(ideAcc.account_id, { acc: ideAcc, targets: [] });
+          accountTargets.get(ideAcc.account_id).targets.push('IDE');
+        }
+
+        accountTargets.forEach(({ acc, targets }) => {
+          const isCli = targets.includes('CLI');
+          const isHub = targets.includes('Hub');
+          const pillColor = isCli
+            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+            : (isHub ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' : 'bg-purple-500/15 text-purple-400 border-purple-500/30');
+          const dotColor = isCli ? 'bg-emerald-400' : (isHub ? 'bg-cyan-400' : 'bg-purple-400');
+          const label = targets.join('+');
+          agyActivePills += `<span class="text-[10px] font-mono px-2 py-0.5 rounded-full ${pillColor} border flex items-center space-x-1 shrink-0" title="Active session in ${targets.join(', ')}"><span class="w-1.5 h-1.5 rounded-full ${dotColor} animate-pulse"></span><span>${label}: <b class="text-white">${acc.name || acc.email}</b></span></span>`;
+        });
       }
 
       let html = `
@@ -3490,16 +3522,24 @@ ightarrow$ v1.0.3</p>
       }
 
       const isCliActive = !isWeb && !isApiKey && (acc.account_id === cliActiveAccountId);
-      const isStandaloneActive = !isWeb && !isApiKey && (acc.account_id === (typeof standaloneActiveAccountId !== 'undefined' ? standaloneActiveAccountId : ((typeof ideActiveAccountId !== 'undefined') ? ideActiveAccountId : null)));
-      const isBothActive = isCliActive && isStandaloneActive;
+      const isHubActive = !isWeb && !isApiKey && (acc.account_id === (typeof standaloneActiveAccountId !== 'undefined' ? standaloneActiveAccountId : null));
+      const isIdeActive = !isWeb && !isApiKey && (acc.account_id === (typeof ideActiveAccountId !== 'undefined' ? ideActiveAccountId : null));
+      const isStandaloneActive = isHubActive;
+      const isBothActive = isCliActive && isHubActive;
+
+      let agyActiveBadges = [];
+      if (isCliActive) agyActiveBadges.push('CLI');
+      if (isHubActive) agyActiveBadges.push('Hub');
+      if (isIdeActive) agyActiveBadges.push('IDE');
 
       let agyActiveCardBadge = '';
-      if (isBothActive) {
-        agyActiveCardBadge = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Active session in both Antigravity CLI and Standalone"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CLI + Standalone</span></span>';
-      } else if (isCliActive) {
-        agyActiveCardBadge = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Active session in Antigravity CLI"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>CLI Active</span></span>';
-      } else if (isStandaloneActive) {
-        agyActiveCardBadge = '<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 flex items-center space-x-1 shrink-0 shadow-sm" title="Active session in Standalone Web Agent"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span><span>Standalone Active</span></span>';
+      if (agyActiveBadges.length > 0) {
+        const badgeText = agyActiveBadges.join(' + ') + ' Active';
+        const badgeColor = isCliActive
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+          : (isHubActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30');
+        const dotColor = isCliActive ? 'bg-emerald-400' : (isHubActive ? 'bg-cyan-400' : 'bg-purple-400');
+        agyActiveCardBadge = `<span class="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full ${badgeColor} font-semibold border flex items-center space-x-1 shrink-0 shadow-sm" title="Active session in ${agyActiveBadges.join(' and ')}"><span class="w-1.5 h-1.5 rounded-full ${dotColor} animate-pulse"></span><span>${badgeText}</span></span>`;
       }
 
       // Tier / Subscription Badge
@@ -3581,8 +3621,8 @@ ightarrow$ v1.0.3</p>
               <button onclick="testAccount('${acc.account_id}')" class="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-[10px] sm:text-[11px] transition border border-slate-700 flex items-center justify-center gap-1 shadow-sm" title="Test connection">
                 <i class="fa-solid fa-vial-circle-check text-teal-400 text-[9px] sm:text-[10px]"></i><span>Test</span>
               </button>
-              <button onclick="openActivateSessionModal('${acc.account_id}')" class="py-1.5 px-2 rounded-lg ${isBothActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isCliActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isStandaloneActive ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-400 border-slate-700'))} font-medium text-[10px] sm:text-[11px] transition border flex items-center justify-center gap-1 shadow-sm" title="Switch or configure active Antigravity CLI / Standalone session">
-                <i class="fa-solid ${isBothActive ? 'fa-check text-emerald-400' : (isCliActive ? 'fa-terminal text-emerald-400' : (isStandaloneActive ? 'fa-globe text-cyan-400' : 'fa-user-check text-[9px] sm:text-[10px]'))}"></i><span class="truncate">${isBothActive ? 'CLI + IDE' : (isCliActive ? 'In CLI' : (isStandaloneActive ? 'Standalone' : 'AGY CLI'))}</span>
+              <button onclick="openActivateSessionModal('${acc.account_id}')" class="py-1.5 px-2 rounded-lg ${isCliActive ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40' : (isHubActive ? 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border-cyan-500/40' : (isIdeActive ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border-purple-500/40' : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-400 border-slate-700'))} font-medium text-[10px] sm:text-[11px] transition border flex items-center justify-center gap-1 shadow-sm" title="Activate this account in Antigravity (CLI / Hub / IDE)">
+                <i class="fa-solid ${isCliActive ? 'fa-terminal text-emerald-400' : (isHubActive ? 'fa-globe text-cyan-400' : (isIdeActive ? 'fa-code text-purple-400' : 'fa-user-check text-[9px] sm:text-[10px]'))}"></i><span class="truncate">${agyActiveBadges.length > 0 ? ('In ' + agyActiveBadges.join('+')) : 'Activate'}</span>
               </button>
             </div>
           ` : ''}
@@ -3648,16 +3688,24 @@ ightarrow$ v1.0.3</p>
       };
 
       const isCliActive = !isWeb && !isApiKey && (acc.account_id === cliActiveAccountId);
-      const isStandaloneActive = !isWeb && !isApiKey && (acc.account_id === (typeof standaloneActiveAccountId !== 'undefined' ? standaloneActiveAccountId : ((typeof ideActiveAccountId !== 'undefined') ? ideActiveAccountId : null)));
-      const isBothActive = isCliActive && isStandaloneActive;
+      const isHubActive = !isWeb && !isApiKey && (acc.account_id === (typeof standaloneActiveAccountId !== 'undefined' ? standaloneActiveAccountId : null));
+      const isIdeActive = !isWeb && !isApiKey && (acc.account_id === (typeof ideActiveAccountId !== 'undefined' ? ideActiveAccountId : null));
+      const isStandaloneActive = isHubActive;
+      const isBothActive = isCliActive && isHubActive;
+
+      let agyActiveBadges = [];
+      if (isCliActive) agyActiveBadges.push('CLI');
+      if (isHubActive) agyActiveBadges.push('Hub');
+      if (isIdeActive) agyActiveBadges.push('IDE');
 
       let agyActiveTableBadge = '';
-      if (isBothActive) {
-        agyActiveTableBadge = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 inline-flex items-center space-x-1" title="Active session in both Antigravity CLI and Standalone"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1"></span>CLI + Standalone</span>';
-      } else if (isCliActive) {
-        agyActiveTableBadge = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 inline-flex items-center space-x-1" title="Active session in Antigravity CLI"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1"></span>CLI Active</span>';
-      } else if (isStandaloneActive) {
-        agyActiveTableBadge = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30 inline-flex items-center space-x-1" title="Active session in Standalone Web Agent"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse mr-1"></span>Standalone Active</span>';
+      if (agyActiveBadges.length > 0) {
+        const badgeText = agyActiveBadges.join(' + ');
+        const badgeColor = isCliActive
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+          : (isHubActive ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30');
+        const dotColor = isCliActive ? 'bg-emerald-400' : (isHubActive ? 'bg-cyan-400' : 'bg-purple-400');
+        agyActiveTableBadge = `<span class="text-[9px] px-1.5 py-0.2 rounded ${badgeColor} font-semibold border inline-flex items-center space-x-1" title="Active session in ${agyActiveBadges.join(' and ')}"><span class="w-1.5 h-1.5 rounded-full ${dotColor} animate-pulse mr-1"></span>${badgeText}</span>`;
       }
 
       // Tier / Subscription Badge
@@ -3683,7 +3731,7 @@ ightarrow$ v1.0.3</p>
       }
 
       return `
-        <tr class="hover:bg-slate-800/40 transition ${!isEnabled ? 'opacity-50' : ''} ${isBothActive || isCliActive ? 'bg-emerald-500/[0.03]' : (isStandaloneActive ? 'bg-cyan-500/[0.03]' : '')}">
+        <tr class="hover:bg-slate-800/40 transition ${!isEnabled ? 'opacity-50' : ''} ${isCliActive ? 'bg-emerald-500/[0.03]' : (isHubActive ? 'bg-cyan-500/[0.03]' : (isIdeActive ? 'bg-purple-500/[0.03]' : ''))}">
           <td class="w-8 px-3 py-3 text-center">
             <input type="checkbox" class="account-batch-checkbox w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer" value="${acc.account_id}" onchange="updateBatchButtons()">
           </td>
@@ -3794,7 +3842,7 @@ ightarrow$ v1.0.3</p>
               ${!isWeb && !isApiKey ? `<button onclick="openQuotaModal('${acc.account_id}')" class="text-slate-400 hover:text-purple-400 p-1 transition" title="View official agy Models & Quota"><i class="fa-solid fa-chart-pie text-xs"></i></button>` : ''}
               <button onclick="openPlaygroundForAccount('${acc.account_id}')" class="text-slate-400 hover:text-indigo-400 p-1 transition" title="Test in Live Playground"><i class="fa-solid fa-terminal text-xs"></i></button>
               <button onclick="testAccount('${acc.account_id}')" class="text-slate-400 hover:text-teal-400 p-1 transition" title="Test connection"><i class="fa-solid fa-vial-circle-check text-xs"></i></button>
-              ${!isWeb && !isApiKey ? `<button onclick="openActivateSessionModal('${acc.account_id}')" class="${isBothActive || isCliActive ? 'text-emerald-400 hover:text-emerald-300' : (isStandaloneActive ? 'text-cyan-400 hover:text-cyan-300' : 'text-slate-400 hover:text-emerald-400')} p-1 transition" title="${isBothActive ? 'Active in CLI + Standalone (click to switch)' : (isCliActive ? 'Active in CLI (click to switch)' : (isStandaloneActive ? 'Active in IDE (click to switch)' : 'Configure or switch AGY session'))}"><i class="fa-solid ${isBothActive ? 'fa-check' : (isCliActive ? 'fa-terminal' : (isStandaloneActive ? 'fa-globe' : 'fa-user-check'))} text-xs"></i></button>` : ''}
+              ${!isWeb && !isApiKey ? `<button onclick="openActivateSessionModal('${acc.account_id}')" class="${isCliActive ? 'text-emerald-400 hover:text-emerald-300' : (isHubActive ? 'text-cyan-400 hover:text-cyan-300' : (isIdeActive ? 'text-purple-400 hover:text-purple-300' : 'text-slate-400 hover:text-emerald-400'))} p-1 transition" title="${agyActiveBadges.length > 0 ? `Active in ${agyActiveBadges.join(' + ')} (click to switch)` : 'Configure or switch AGY session'}"><i class="fa-solid ${isCliActive ? 'fa-terminal' : (isHubActive ? 'fa-globe' : (isIdeActive ? 'fa-code' : 'fa-user-check'))} text-xs"></i></button>` : ''}
               ${isWeb ? `<button onclick="refreshWebCookies('${acc.account_id}')" class="text-slate-400 hover:text-teal-400 p-1 transition" title="Sync cookies from CDP port ${acc.cdp_port || 9222}"><i class="fa-solid fa-rotate text-xs"></i></button>` : ''}
               <button onclick="toggleAccount('${acc.account_id}', ${!isEnabled})" class="relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isEnabled ? 'bg-indigo-600' : 'bg-slate-700'}" title="${isEnabled ? 'Pause' : 'Enable'}">
                 <span class="pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${isEnabled ? 'translate-x-3' : 'translate-x-0'}"></span>
@@ -3956,16 +4004,17 @@ ightarrow$ v1.0.3</p>
     }
 
     const GEMINI_WEB_MODELS = [
-      { id: 'gemini-4-argon', name: '4-argon [Flagship]' },
-      { id: 'gemini-4-argon-web-task', name: '4-argon (web) [Agent]' },
-      { id: 'gemini-4-argon-high', name: '4-argon (high) [Thinking]' },
-      { id: 'gemini-3.8-flash-high', name: '3.8-flash (high) [Thinking]' },
-      { id: 'gemini-3.8-flash', name: '3.8-flash [Standard]' },
-      { id: 'gemini-3.8-flash-web-task', name: '3.8-flash (web) [Agent]' },
-      { id: 'gemini-3.1-pro-high', name: '3.1-pro (high) [Thinking]' },
-      { id: 'gemini-3.1-pro', name: '3.1-pro [Standard]' },
-      { id: 'gemini-3.5-flash-lite-high', name: '3.5-flash-lite (high) [Thinking]' },
-      { id: 'gemini-3.5-flash-lite', name: '3.5-flash-lite [Standard]' },
+      { id: 'web-gemini-4-argon-high', name: '4-argon (high) [Web Flagship · Thinking]' },
+      { id: 'web-gemini-4-argon-medium', name: '4-argon (medium) [Web · Thinking]' },
+      { id: 'web-gemini-4-argon-low', name: '4-argon (low) [Web · Fast]' },
+      { id: 'web-gemini-4-argon-spark', name: '4-argon spark (web) [Autonomous Spark Agent]' },
+      { id: 'web-gemini-3.8-flash-spark', name: '3.8-flash spark (web) [Autonomous Spark Agent]' },
+      { id: 'web-gemini-3.5-flash-lite-high', name: '3.5-flash-lite (high) [Web · Thinking]' },
+      { id: 'web-gemini-3.5-flash-lite-medium', name: '3.5-flash-lite (medium) [Web · Thinking]' },
+      { id: 'web-gemini-3.5-flash-lite-low', name: '3.5-flash-lite (low) [Web · Ultra Fast]' },
+      { id: 'web-gemini-3.8-flash-high', name: '3.8-flash (high) [Web · Thinking]' },
+      { id: 'web-gemini-3.8-flash-low', name: '3.8-flash (low) [Web · Fast]' },
+      { id: 'web-gemini-3.1-pro-high', name: '3.1-pro (high) [Web · Thinking]' },
     ];
 
     const API_KEY_MODELS = [
@@ -4030,7 +4079,7 @@ ightarrow$ v1.0.3</p>
         if (GEMINI_WEB_MODELS.some(m => m.id === prevVal)) {
           select.value = prevVal;
         } else {
-          select.value = 'gemini-4-argon';
+          select.value = 'web-gemini-4-argon-high';
         }
       } else if (acc && acc.auth_method === 'api_key') {
         // STRICT: Google AI Studio API Keys ONLY support Gemini API models (no Claude, no web-only)
@@ -4332,9 +4381,9 @@ ightarrow$ v1.0.3</p>
       if (acc && acc.auth_method === 'gemini_web') {
         const modelSel = document.getElementById('modelSelect');
         if (modelSel) {
-          modelSel.value = 'gemini-4-argon';
+          modelSel.value = 'web-gemini-4-argon-high';
           const activeM = document.getElementById('activeModelBadge');
-          if (activeM) activeM.innerText = 'gemini-4-argon';
+          if (activeM) activeM.innerText = 'web-gemini-4-argon-high';
         }
       }
       setTimeout(() => {
@@ -4364,20 +4413,47 @@ ightarrow$ v1.0.3</p>
         if (c) c.classList.add('hidden');
       });
 
-      if (tab === 'oauth') {
+    let isStartingOAuth = false;
+
+    async function initOAuthFlow(forceNew = false) {
+      if (isStartingOAuth) return;
+      if (!forceNew && currentOAuthVerifier && currentOAuthState) {
+        return;
+      }
+      isStartingOAuth = true;
+      const link = document.getElementById('oauthLoginLink');
+      if (link) {
+        link.dataset.ready = 'false';
+        link.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i><span>Preparing OAuth link...</span>';
+        link.classList.add('opacity-75', 'pointer-events-none');
+      }
+      try {
+        const res = await fetch('/api/accounts/oauth/start', { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        currentOAuthState = data.state;
+        currentOAuthVerifier = data.code_verifier;
+        if (link) {
+          link.href = data.auth_url;
+          link.dataset.ready = 'true';
+          link.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square mr-1.5"></i><span>Open Google OAuth Sign-In</span>';
+          link.classList.remove('opacity-75', 'pointer-events-none');
+        }
+      } catch (e) {
+        console.error('Failed to start OAuth:', e);
+        if (link) {
+          link.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1.5 text-amber-400"></i><span>Retry Generating Link</span>';
+          link.classList.remove('pointer-events-none');
+        }
+      } finally {
+        isStartingOAuth = false;
+      }
+    }
+
+    if (tab === 'oauth') {
         btnOAuth.className = 'flex-1 py-2 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
         contentOAuth.classList.remove('hidden');
-        if (!currentOAuthVerifier) {
-          fetch('/api/accounts/oauth/start', { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-              currentOAuthState = data.state;
-              currentOAuthVerifier = data.code_verifier;
-              const link = document.getElementById('oauthLoginLink');
-              if (link) link.href = data.auth_url;
-            })
-            .catch(err => console.error('OAuth start failed:', err));
-        }
+        initOAuthFlow(false);
       } else if (tab === 'apikey') {
         btnApiKey.className = 'flex-1 py-2 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
         contentApiKey.classList.remove('hidden');
@@ -4387,28 +4463,35 @@ ightarrow$ v1.0.3</p>
       }
     }
 
+    function autoDetectAuthUser(val) {
+      if (!val) return;
+      const m = val.match(/\/u\/(\d+)(?:\/|$|\?)/) || val.match(/x-goog-authuser[\s:=]+(\d+)/i) || val.match(/authuser=(\d+)/i);
+      if (m) {
+        const idx = m[1];
+        const uInput = document.getElementById('webAuthUserInput');
+        if (uInput && uInput.value === '0') uInput.value = idx;
+        const nameInput = document.getElementById('webNameInput');
+        if (nameInput && (!nameInput.value || nameInput.value === 'Gemini Web')) {
+          nameInput.value = `Gemini Web (u/${idx})`;
+        }
+      }
+    }
+
     async function openAddAccountModal(initialTab = 'oauth') {
       const tab = initialTab || 'oauth';
-      switchAddTab(tab);
       document.getElementById('authCodeInput').value = '';
       document.getElementById('apiKeyValueInput').value = '';
       document.getElementById('apiKeyLabelInput').value = '';
       if (document.getElementById('webNameInput')) document.getElementById('webNameInput').value = '';
       if (document.getElementById('webCookiesInput')) document.getElementById('webCookiesInput').value = '';
+      if (document.getElementById('webAuthUserInput')) document.getElementById('webAuthUserInput').value = '0';
+      if (document.getElementById('webForceNewCheckbox')) document.getElementById('webForceNewCheckbox').checked = false;
       if (document.getElementById('webCdpPortInput')) document.getElementById('webCdpPortInput').value = '9222';
+      switchAddTab(tab);
       document.getElementById('addAccountModal').classList.remove('hidden');
 
       if (tab === 'oauth') {
-        try {
-          const res = await fetch('/api/accounts/oauth/start', { method: 'POST' });
-          const data = await res.json();
-          currentOAuthState = data.state;
-          currentOAuthVerifier = data.code_verifier;
-          const link = document.getElementById('oauthLoginLink');
-          if (link) link.href = data.auth_url;
-        } catch (e) {
-          console.error('Failed to start OAuth:', e);
-        }
+        initOAuthFlow(true);
       }
     }
 
@@ -4421,6 +4504,8 @@ ightarrow$ v1.0.3</p>
         const name = document.getElementById('webNameInput').value.trim() || 'Gemini Web';
         const rawCookies = document.getElementById('webCookiesInput').value.trim();
         const cdpPort = parseInt(document.getElementById('webCdpPortInput').value, 10) || 9222;
+        const authUser = parseInt(document.getElementById('webAuthUserInput')?.value || '0', 10) || 0;
+        const forceNew = !!document.getElementById('webForceNewCheckbox')?.checked;
 
         const btn = document.getElementById('submitAuthBtn');
         btn.disabled = true;
@@ -4434,7 +4519,8 @@ ightarrow$ v1.0.3</p>
               name: name,
               cdp_port: cdpPort,
               raw_cookies: rawCookies || null,
-              proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
+              auth_user: authUser,
+              force_new: forceNew,
               proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
             })
           });
@@ -4493,8 +4579,8 @@ ightarrow$ v1.0.3</p>
       }
 
       // OAuth flow
-      const codeOrUrl = document.getElementById('authCodeInput').value.trim();
-      if (!codeOrUrl) {
+      const rawCodeOrUrl = document.getElementById('authCodeInput').value.trim();
+      if (!rawCodeOrUrl) {
         alert('Please paste the authorization code or redirect URL.');
         return;
       }
@@ -4503,21 +4589,38 @@ ightarrow$ v1.0.3</p>
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Adding...';
 
+      let codeToSend = rawCodeOrUrl;
+      let stateToSend = currentOAuthState;
+      try {
+        if (rawCodeOrUrl.includes('?') || rawCodeOrUrl.includes('#') || rawCodeOrUrl.startsWith('http')) {
+          const parsedUrl = new URL(rawCodeOrUrl.startsWith('http') ? rawCodeOrUrl : 'https://dummy.local/' + (rawCodeOrUrl.startsWith('?') ? '' : '?') + rawCodeOrUrl);
+          const p = parsedUrl.searchParams;
+          if (p.get('code')) codeToSend = p.get('code');
+          if (p.get('state')) stateToSend = p.get('state');
+        }
+      } catch (e) {}
+
       try {
         const res = await fetch('/api/accounts/oauth/callback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            code: codeOrUrl,
-            state: currentOAuthState,
+            code: codeToSend,
+            state: stateToSend,
             code_verifier: currentOAuthVerifier,
-            proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
             proxy_url: document.getElementById("addProxyUrlInput").value.trim() || undefined,
           })
         });
         if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(errText);
+          let errText = await res.text();
+          let msg = errText;
+          try {
+            const errObj = JSON.parse(errText);
+            if (errObj.detail) {
+              msg = typeof errObj.detail === 'string' ? errObj.detail : JSON.stringify(errObj.detail);
+            }
+          } catch (e) {}
+          throw new Error(msg);
         }
         const data = await res.json();
         alert('Successfully added Google Account: ' + (data.email || data.account_id));
@@ -4525,7 +4628,11 @@ ightarrow$ v1.0.3</p>
         await loadAccounts();
         await loadModels();
       } catch (err) {
-        alert('Failed to add account: ' + err.message);
+        let displayErr = err.message;
+        if (displayErr.includes('invalid_grant')) {
+          displayErr = 'Invalid or expired authorization grant (invalid_grant).\nGoogle authorization codes can only be used once and expire quickly.\nPlease click "Refresh Link", sign in again, and paste the new callback URL.';
+        }
+        alert('Failed to add account: ' + displayErr);
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-check"></i> Add to Pool';

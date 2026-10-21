@@ -430,3 +430,129 @@ def test_enhance_quota_summary():
     assert enhance_quota_summary(None) is None
     assert enhance_quota_summary({"groups": "invalid"}) == {"groups": "invalid"}
 
+
+def test_enhance_available_models_argon_unlocking():
+    """Verify that gemini-4-argon is fully unlocked (disabled: false, tags stripped) and agentModelSorts synced."""
+    mock_models_data = {
+        "models": {
+            "gemini-4-argon-disabled": {
+                "displayName": "Gemini 4 Argon",
+                "supportsImages": True,
+                "supportsThinking": True,
+                "thinkingBudget": -1,
+                "minThinkingBudget": 32,
+                "recommended": False,
+                "maxTokens": 1048576,
+                "maxOutputTokens": 65536,
+                "disabled": True,
+                "tagTitle": "Disabled on Free Tier",
+                "tagDescription": "Upgrade to Pro to use Argon",
+                "model": "MODEL_PLACEHOLDER_M421",
+            },
+            "gemini-3.8-flash-high": {
+                "displayName": "Gemini 3.8 Flash (High)",
+                "disabled": False,
+            },
+        },
+        "agentModelSorts": [
+            {
+                "displayName": "Recommended",
+                "groups": [
+                    {
+                        "modelIds": [
+                            "gemini-3.8-flash-high",
+                            "gemini-4-argon-disabled",
+                        ]
+                    }
+                ],
+            }
+        ],
+    }
+
+    enhanced = enhance_available_models(mock_models_data)
+
+    # 1. Verify original gemini-4-argon-disabled is unlocked
+    m_disabled = enhanced["models"]["gemini-4-argon-disabled"]
+    assert m_disabled["disabled"] is False
+    assert m_disabled["recommended"] is True
+    assert "tagTitle" not in m_disabled
+    assert "tagDescription" not in m_disabled
+
+    # 2. Verify synthesized gemini-4-argon is created and fully unlocked
+    assert "gemini-4-argon" in enhanced["models"]
+    m_argon = enhanced["models"]["gemini-4-argon"]
+    assert m_argon["disabled"] is False
+    assert m_argon["recommended"] is True
+    assert "tagTitle" not in m_argon
+    assert "tagDescription" not in m_argon
+    assert m_argon["model"] == "MODEL_PLACEHOLDER_M421"
+
+    # 3. Verify agentModelSorts has gemini-4-argon inserted alongside gemini-4-argon-disabled
+    rec_group = enhanced["agentModelSorts"][0]["groups"][0]["modelIds"]
+    assert "gemini-4-argon-disabled" in rec_group
+    assert "gemini-4-argon" in rec_group
+    disabled_idx = rec_group.index("gemini-4-argon-disabled")
+    argon_idx = rec_group.index("gemini-4-argon")
+    assert argon_idx == disabled_idx + 1
+
+
+def test_new_curated_safe_flags_activation():
+    """Verify newly added safe flags from Antigravity Hub v2.24.0 are activated."""
+    from agy_proxy.experiments import CURATED_SAFE_FLAGS
+
+    new_flag_names = [
+        "enable-bottom-terminal-panel",
+        "enable-browser-subagent-webview-script",
+        "enable-iwa-builtin-browser",
+        "enable-omni-mention-search",
+        "enable-remote-control-audio-transcription",
+        "use-component-rewrite",
+    ]
+
+    for name in new_flag_names:
+        assert name in CURATED_SAFE_FLAGS, f"Flag {name} missing from CURATED_SAFE_FLAGS"
+        assert CURATED_SAFE_FLAGS[name]["value"] is True
+
+    # Test that enhance_list_experiments activates them when upstream is False
+    upstream = {
+        "flags": [{"name": n, "boolValue": False} for n in new_flag_names],
+        "experimentIds": [],
+    }
+    enhanced = enhance_list_experiments(upstream, config_override={"enabled": True, "mode": "curated", "custom_overrides": {}})
+    flags_map = {f["name"]: f.get("boolValue") for f in enhanced["flags"]}
+
+    for name in new_flag_names:
+        assert flags_map[name] is True, f"Flag {name} was not enabled by enhance_list_experiments"
+
+
+def test_default_experiments_catalog_completeness():
+    """Verify default_experiments.json contains exactly 491 flags and updated experimentIds."""
+    payload = get_default_experiments_payload()
+    assert 106712040 in payload["experimentIds"]
+
+    flags = payload["flags"]
+    flag_names = {f["name"] for f in flags}
+
+    # Verify new flags are present
+    assert "best-of-n-default-model-id" in flag_names
+    assert "enable-bottom-terminal-panel" in flag_names
+    assert "enable-browser-subagent-webview-script" in flag_names
+    assert "enable-iwa-builtin-browser" in flag_names
+    assert "enable-omni-mention-search" in flag_names
+    assert "science-plugin-split-targets" in flag_names
+    assert "enable-remote-control-audio-transcription" in flag_names
+    assert "use-component-rewrite" in flag_names
+
+    # Check raw default file
+    import json
+    from agy_proxy.experiments import DEFAULT_EXPERIMENTS_FILE
+    with open(DEFAULT_EXPERIMENTS_FILE, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    assert len(raw_data["flags"]) == 491
+    raw_flag_names = {f["name"] for f in raw_data["flags"]}
+    assert "ReturnAdminControls__enable_for_cli" not in raw_flag_names
+    assert "enable-swarm" not in raw_flag_names
+    assert 106712040 in raw_data["experimentIds"]
+
+

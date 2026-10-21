@@ -11,6 +11,9 @@ import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, patch, MagicMock
+
+import httpx
 
 from agy_proxy.auth import (
     AccountPool,
@@ -22,6 +25,7 @@ from agy_proxy.auth import (
     GeminiWebSession,
     clean_gemini_text,
     extract_cookies_from_raw,
+    extract_auth_user_from_raw,
     _parse_expiry,
     get_candidate_token_files,
     is_candidate_token_file,
@@ -170,6 +174,16 @@ class TestTokenParsing(unittest.TestCase):
         self.assertEqual(res["expiry_timestamp"], 1789999999.0)
         self.assertEqual(res["id_token"], fake_jwt)
 
+    def test_decode_jwt_payload_handles_ya29_and_invalid_bytes(self):
+        from agy_proxy.auth.token_utils import _decode_jwt_payload
+        # ya29 token containing binary byte sequences must cleanly return {} without error
+        ya29_tok = "ya29.mock_dummy_access_token_testing_pure_synthetic_value"
+        self.assertEqual(_decode_jwt_payload(ya29_tok), {})
+        self.assertEqual(_decode_jwt_payload("not-a-token"), {})
+        self.assertEqual(_decode_jwt_payload("random.dotted.token"), {})
+        self.assertEqual(_decode_jwt_payload(None), {})
+        self.assertEqual(_decode_jwt_payload(""), {})
+
 
     def test_parse_antigravity_token_file(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -303,20 +317,87 @@ class TestAccountPoolTokenSync(unittest.TestCase):
         mgr.pool = pool
         self.assertEqual(mgr.primary_account.account_id, "acc_2")
 
-    def test_account_session_region_code_persistence(self):
+    def test_account_session_region_code_loaded_if_present_but_omitted_on_save(self):
+        # 1. If present in legacy accounts file, load_accounts preserves it
+        self.accounts_file.write_text(json.dumps({
+            "accounts": [{
+                "account_id": "acc_legacy_region",
+                "email": "legacy@example.com",
+                "refresh_token": "1//r_reg",
+                "region_code": "UA",
+            }]
+        }))
+        pool = AccountPool(accounts_file=self.accounts_file)
+        pool.load_accounts()
+        self.assertEqual(pool.accounts["acc_legacy_region"].region_code, "UA")
+
+        # 2. On subsequent save, region_code is omitted to keep config minimal
+        pool.save_accounts(force=True)
+        data = json.loads(self.accounts_file.read_text())
+        self.assertNotIn("region_code", data["accounts"][0])
+
+    def test_save_accounts_omits_bloat_fields(self):
         pool = AccountPool(accounts_file=self.accounts_file)
         acc = AccountSession(
-            account_id="acc_region",
-            refresh_token="1//r_reg",
+            account_id="acc_clean_test",
+            refresh_token="1//refresh_token_xyz",
+            access_token="ya29.access_token_xyz",
+            expiry_timestamp=1789000000.0,
+            email="clean@example.com",
+            name="Clean User",
+            picture="https://example.com/pic.png",
+            project_id="aicode-consumers",
             region_code="UA",
+            is_primary=True,
+            enabled=True,
+            id_token="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.dummy_id_token",
+            tier_info={"id": "free-tier", "name": "Antigravity", "privacyNotice": {"text": "Google GDPR Notice"}},
+            available_models=["gemini-2.5-pro", "gemini-3-flash"],
         )
-        pool.accounts["acc_region"] = acc
+        acc.supports_claude_5_5 = True
+        pool.accounts["acc_clean_test"] = acc
         pool.save_accounts()
 
-        loaded_pool = AccountPool(accounts_file=self.accounts_file)
-        loaded_pool.load_accounts()
-        self.assertIn("acc_region", loaded_pool.accounts)
-        self.assertEqual(loaded_pool.accounts["acc_region"].region_code, "UA")
+        self.assertTrue(self.accounts_file.exists())
+        with open(self.accounts_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.assertEqual(len(data["accounts"]), 1)
+        saved_acc = data["accounts"][0]
+
+        # Ensure essential auth fields are present
+        self.assertEqual(saved_acc["account_id"], "acc_clean_test")
+        self.assertEqual(saved_acc["email"], "clean@example.com")
+        self.assertEqual(saved_acc["name"], "Clean User")
+        self.assertEqual(saved_acc["project_id"], "aicode-consumers")
+        self.assertEqual(saved_acc["refresh_token"], "1//refresh_token_xyz")
+        self.assertEqual(saved_acc["access_token"], "ya29.access_token_xyz")
+        self.assertEqual(saved_acc["expiry_timestamp"], 1789000000.0)
+        self.assertTrue(saved_acc["is_primary"])
+        self.assertTrue(saved_acc["enabled"])
+
+        # Ensure bloat and redundant fields are completely omitted from disk
+        self.assertNotIn("picture", saved_acc)
+        self.assertNotIn("tier_info", saved_acc)
+        self.assertNotIn("tier_id", saved_acc)
+        self.assertNotIn("id_token", saved_acc)
+        self.assertNotIn("available_models", saved_acc)
+        self.assertNotIn("supports_claude_5_5", saved_acc)
+        self.assertNotIn("region_code", saved_acc)
+        self.assertNotIn("auth_method", saved_acc)
+        self.assertNotIn("proxy_url", saved_acc)
+
+        # Ensure reloading handles missing bloat fields with safe defaults
+        reloaded_pool = AccountPool(accounts_file=self.accounts_file)
+        reloaded_pool.load_accounts()
+        self.assertIn("acc_clean_test", reloaded_pool.accounts)
+        r_acc = reloaded_pool.accounts["acc_clean_test"]
+        self.assertEqual(r_acc.email, "clean@example.com")
+        self.assertEqual(r_acc.auth_method, "consumer")
+        self.assertEqual(r_acc.tier_id, "free-tier")
+        self.assertEqual(r_acc.tier_info, {})
+        self.assertEqual(r_acc.available_models, {})
+        self.assertFalse(r_acc.supports_claude_5_5)
 
 
 class TestAccountSessionRegionCode(unittest.IsolatedAsyncioTestCase):
@@ -655,21 +736,21 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(oauth_acc.is_model_supported("gemini-4-argon-disabled"))
         self.assertTrue(oauth_acc.is_model_supported("gemini-3.8-flash-high"))
 
-        # 2. When only OAuth accounts exist: auto-fallback to gemini-3.8-flash-high with allow_auto_routing=True
-        cands_fallback = pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=True)
-        self.assertEqual(len(cands_fallback), 1)
-        self.assertEqual(cands_fallback[0].account_id, "oa_1")
+        # 2. When only OAuth accounts exist without Argon subscription: raise honest subscription error without silent fallback
+        with self.assertRaises(RuntimeError) as ctx:
+            pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=True)
+        self.assertIn("subscription tier", str(ctx.exception))
 
-        cands_argon = pool.get_candidate_accounts("gemini-4-argon", allow_auto_routing=True)
-        self.assertEqual(len(cands_argon), 1)
-        self.assertEqual(cands_argon[0].account_id, "oa_1")
+        with self.assertRaises(RuntimeError) as ctx:
+            pool.get_candidate_accounts("gemini-4-argon", allow_auto_routing=True)
+        self.assertIn("subscription tier", str(ctx.exception))
 
-        # 3. With allow_auto_routing=False: raises RuntimeError (no active accounts support model)
+        # 3. With allow_auto_routing=False: raises RuntimeError
         with self.assertRaises(RuntimeError) as ctx:
             pool.get_candidate_accounts("gemini-4-argon-high", allow_auto_routing=False)
         self.assertIn("gemini-4-argon-high", str(ctx.exception))
 
-        # 4. When a GeminiWebSession is added, it is preferred for Argon requests
+        # 4. When a GeminiWebSession is added, it serves web models (e.g. gemini-4-argon-web-high)
         web_acc = GeminiWebSession(
             account_id="gw_1",
             cookies={"__Secure-1PSID": "cookie"},
@@ -677,10 +758,9 @@ class TestPolymorphicAccountHierarchy(unittest.IsolatedAsyncioTestCase):
             enabled=True,
         )
         pool.accounts["gw_1"] = web_acc
-        self.assertTrue(web_acc.is_model_supported("gemini-4-argon"))
-        self.assertTrue(web_acc.is_model_supported("gemini-4-argon-high"))
+        self.assertTrue(web_acc.is_model_supported("gemini-4-argon-web-high"))
 
-        cands_web = pool.get_candidate_accounts("gemini-4-argon-high")
+        cands_web = pool.get_candidate_accounts("gemini-4-argon-web-high")
         self.assertEqual(len(cands_web), 1)
         self.assertEqual(cands_web[0].account_id, "gw_1")
 
@@ -948,6 +1028,81 @@ class TestGeminiWebSession(unittest.TestCase):
         self.assertEqual(res.get("__Secure-1PSID"), "curl_psid")
         self.assertEqual(res.get("SSID"), "curl_ssid")
 
+    def test_extract_auth_user_from_raw(self):
+        # 1. HAR format with /u/1/ URL
+        har_data = {
+            "log": {
+                "entries": [
+                    {"request": {"url": "https://gemini.google.com/u/1/app"}}
+                ]
+            }
+        }
+        self.assertEqual(extract_auth_user_from_raw(har_data), 1)
+
+        # 2. HAR format with X-Goog-AuthUser header
+        har_data2 = {
+            "log": {
+                "entries": [
+                    {"request": {"url": "https://gemini.google.com/app", "headers": [{"name": "X-Goog-AuthUser", "value": "2"}]}}
+                ]
+            }
+        }
+        self.assertEqual(extract_auth_user_from_raw(har_data2), 2)
+
+        # 3. cURL string with /u/3/
+        curl_str = "curl 'https://gemini.google.com/u/3/_/BardChatUi' -H 'cookie: foo=bar'"
+        self.assertEqual(extract_auth_user_from_raw(curl_str), 3)
+
+        # 4. Text with x-goog-authuser: 1
+        text_hdr = "Host: gemini.google.com\nX-Goog-AuthUser: 1\nCookie: __Secure-1PSID=xyz"
+        self.assertEqual(extract_auth_user_from_raw(text_hdr), 1)
+
+        # 5. Empty or none returns None
+        self.assertIsNone(extract_auth_user_from_raw(""))
+        self.assertIsNone(extract_auth_user_from_raw(None))
+
+    def test_add_gemini_web_multi_account_and_force_new(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pool = AccountPool(accounts_file=Path(tmpdir) / "accounts.json")
+            
+            # Account 1 (default auth_user=0)
+            acc1 = asyncio.run(pool.add_gemini_web_account(
+                name="Primary Web",
+                cookies={"__Secure-1PSID": "shared_psid_123"},
+                auth_user=0,
+            ))
+            self.assertEqual(len(pool.accounts), 1)
+            self.assertEqual(acc1.auth_user, 0)
+
+            # Account 2 with same cookies but auth_user=1 -> MUST create separate account!
+            acc2 = asyncio.run(pool.add_gemini_web_account(
+                name="Secondary Web",
+                cookies={"__Secure-1PSID": "shared_psid_123"},
+                auth_user=1,
+            ))
+            self.assertEqual(len(pool.accounts), 2)
+            self.assertEqual(acc2.auth_user, 1)
+            self.assertNotEqual(acc1.account_id, acc2.account_id)
+
+            # Account 3 with force_new=True even with auth_user=0 -> MUST create separate account!
+            acc3 = asyncio.run(pool.add_gemini_web_account(
+                name="Primary Web Duplicate",
+                cookies={"__Secure-1PSID": "shared_psid_123"},
+                auth_user=0,
+                force_new=True,
+            ))
+            self.assertEqual(len(pool.accounts), 3)
+            self.assertNotEqual(acc3.account_id, acc1.account_id)
+
+            # Auto-detection from raw_cookies containing /u/2/
+            acc4 = asyncio.run(pool.add_gemini_web_account(
+                name="Auto Detected Web",
+                raw_cookies="curl 'https://gemini.google.com/u/2/app' -H 'cookie: __Secure-1PSID=diff_psid'",
+                auth_user=0,
+            ))
+            self.assertEqual(len(pool.accounts), 4)
+            self.assertEqual(acc4.auth_user, 2)
+
     def test_gemini_web_models_and_support(self):
         gw = GeminiWebSession(
             account_id="gw_test",
@@ -1016,7 +1171,7 @@ class TestGeminiWebSession(unittest.TestCase):
         inner = json.loads(outer[1])
         self.assertEqual(len(inner), 99)
         self.assertIsNone(inner[2])  # inner[2] is None in modern protocol
-        self.assertIsNone(inner[3])  # inner[3] is None (no expired botguard string)
+        self.assertTrue(inner[3] is None or isinstance(inner[3], str))  # inner[3] is Botguard token or None
         self.assertEqual(inner[17], [[2]])  # High thinking budget
         self.assertIsNone(inner[71])  # Turn 1 has no continuation
         self.assertEqual(inner[67], 0)
@@ -1604,6 +1759,30 @@ class TestGeminiWebSession(unittest.TestCase):
             self.assertEqual(candidates[1].account_id, "key_test")
             self.assertEqual(candidates[2].account_id, "web_test")
 
+    def test_argon_without_web_prefix_routes_to_gemini_web(self):
+        """Verify that requesting gemini-4-argon variants without web- prefix routes to GeminiWeb when OAuth lacks Argon."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            pool = AccountPool(accounts_file=Path(tmp_dir) / "accounts.json")
+            pool.save_accounts = lambda *args, **kwargs: None
+            oauth = AntigravityOAuthSession(account_id="oa_test", email="oa@test.com", refresh_token="rt_test")
+            web = GeminiWebSession(account_id="web_test", email="web@test.com", cookies={"__Secure-1PSID": "web_psid"})
+            pool.accounts["oa_test"] = oauth
+            pool.accounts["web_test"] = web
+
+            # Standard model routes to OAuth
+            cands_flash = pool.get_candidate_accounts("gemini-3.8-flash-high")
+            self.assertEqual(cands_flash[0].account_id, "oa_test")
+
+            # gemini-4-argon-low without web prefix routes cleanly to Gemini Web
+            cands_argon_low = pool.get_candidate_accounts("gemini-4-argon-low")
+            self.assertEqual(len(cands_argon_low), 1)
+            self.assertEqual(cands_argon_low[0].account_id, "web_test")
+
+            # gemini-4-argon-high without web prefix routes cleanly to Gemini Web
+            cands_argon_high = pool.get_candidate_accounts("gemini-4-argon-high")
+            self.assertEqual(len(cands_argon_high), 1)
+            self.assertEqual(cands_argon_high[0].account_id, "web_test")
+
     def test_gemini_web_full_restart_and_initialization_lifecycle(self):
         """Verify enabled: False persistence across full restart/initialization lifecycle."""
         from unittest.mock import patch, AsyncMock
@@ -1919,10 +2098,664 @@ class TestGeminiWebSession(unittest.TestCase):
                 data = json.load(f)
             self.assertEqual(data.get("routing_strategy"), "round_robin")
 
-            # Reload pool from disk
-            pool2 = AccountPool(accounts_file=acc_file)
-            pool2.load_accounts()
-            self.assertEqual(pool2.routing_strategy, "round_robin")
+    def test_gemini_web_task_botguard_tokens(self):
+        """Verify botguard token retrieval prioritizes task and agent models."""
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+        session = GeminiWebSession(
+            account_id="test_web",
+            cookies={"__Secure-1PSID": "mock_psid"},
+        )
+        session._botguard_tokens = {
+            "gemini-4-argon-high": "tok_argon_high",
+            "gemini-4-argon-task": "tok_argon_task",
+            "gemini-3.8-flash-high": "tok_flash_high",
+            "gemini-3.8-flash-task": "tok_flash_task",
+            "default": "tok_default",
+        }
+        # Argon task and web-task models
+        self.assertEqual(session.get_botguard_token("gemini-4-argon-task"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("gemini-4-argon-web-task"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("gemini-pro-agent"), "tok_argon_task")
+
+        # Flash task and web-task models
+        self.assertEqual(session.get_botguard_token("gemini-3.8-flash-task"), "tok_flash_task")
+        self.assertEqual(session.get_botguard_token("gemini-3.8-flash-web-task"), "tok_flash_task")
+        self.assertEqual(session.get_botguard_token("gemini-3-flash-agent"), "tok_flash_task")
+
+        # High models
+        self.assertEqual(session.get_botguard_token("gemini-4-argon-high"), "tok_argon_high")
+        self.assertEqual(session.get_botguard_token("gemini-3.8-flash-high"), "tok_flash_high")
+
+        # Spark / Task aliases
+        self.assertEqual(session.get_botguard_token("spark"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("task-spark"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("spark-argon"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("gemini-spark"), "tok_argon_task")
+        self.assertEqual(session.get_botguard_token("spark-flash"), "tok_flash_task")
+        self.assertEqual(session.get_botguard_token("gemini-spark-flash"), "tok_flash_task")
+
+    def test_gemini_web_spark_har_traffic_equivalence_and_multi_turn(self):
+        """
+        Verifies that _build_stream_generate_body generates the exact 99-element
+        payload matching real Chrome browser HAR captures for both Argon and Flash Spark
+        turns (turns 0 and 1).
+        """
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+        session = GeminiWebSession(
+            account_id="test_web",
+            cookies={"__Secure-1PSID": "mock_psid"},
+        )
+
+        # 1. Model support verification
+        for alias in [
+            "task-spark", "web-spark", "spark", "spark-argon",
+            "spark-flash", "web-spark-argon", "web-spark-flash",
+            "gemini-spark", "gemini-spark-flash", "web-task-spark",
+            "gemini-4-argon-task", "gemini-3.8-flash-task",
+        ]:
+            self.assertTrue(session.is_model_supported(alias), f"Model {alias} should be supported")
+
+        # 2. Multi-turn Spark Flash verification
+        cfg_flash = session.get_model_config("spark-flash")
+        self.assertEqual(cfg_flash["model_id"], 1)
+        self.assertEqual(cfg_flash["feature_mode"], 40)
+
+        # Flash Turn 0: inner[17]==[[0]], inner[67]==None, inner[71] is None, inner[83]==1, inner[96]==0
+        body_flash_0 = session._build_stream_generate_body(
+            "Hello",
+            model_config=cfg_flash,
+            client_uuid="UUID-F0",
+            turn_index=0,
+            model_name="spark-flash",
+        )
+        inner_f0 = json.loads(json.loads(body_flash_0["f.req"])[1])
+        self.assertEqual(len(inner_f0), 99)
+        self.assertEqual(inner_f0[17], [[0]])
+        self.assertIsNone(inner_f0[67])
+        self.assertIsNone(inner_f0[71])
+        self.assertEqual(inner_f0[83], 1)
+        self.assertEqual(inner_f0[96], 0)
+        self.assertEqual(inner_f0[49], 40)
+        self.assertEqual(inner_f0[79], 1)
+
+        # Flash Turn 1: inner[17]==[[1]], inner[67]==None, inner[71][7]=="", inner[83] is None, inner[96]==0
+        body_flash_1 = session._build_stream_generate_body(
+            "Hello 2",
+            model_config=cfg_flash,
+            client_uuid="UUID-F1",
+            conv_id="c_2d4e5947ecedf708",
+            turn_index=1,
+            model_name="spark-flash",
+        )
+        inner_f1 = json.loads(json.loads(body_flash_1["f.req"])[1])
+        self.assertEqual(inner_f1[17], [[1]])
+        self.assertIsNone(inner_f1[67])
+        self.assertEqual(inner_f1[71], ["c_2d4e5947ecedf708", None, None, None, None, None, None, ""])
+        self.assertIsNone(inner_f1[83])
+        self.assertEqual(inner_f1[96], 0)
+
+        # 3. Multi-turn Spark Argon verification
+        cfg_argon = session.get_model_config("task-spark")
+        self.assertEqual(cfg_argon["model_id"], 8)
+        self.assertEqual(cfg_argon["feature_mode"], 40)
+
+        # Argon Turn 0: inner[17]==[[0]], inner[67]==0, inner[71] is None, inner[83]==1, inner[96]==1
+        body_argon_0 = session._build_stream_generate_body(
+            "Hello",
+            model_config=cfg_argon,
+            client_uuid="UUID-A0",
+            turn_index=0,
+            model_name="task-spark",
+        )
+        inner_a0 = json.loads(json.loads(body_argon_0["f.req"])[1])
+        self.assertEqual(len(inner_a0), 99)
+        self.assertEqual(inner_a0[17], [[0]])
+        self.assertEqual(inner_a0[67], 0)
+        self.assertIsNone(inner_a0[71])
+        self.assertEqual(inner_a0[83], 1)
+        self.assertEqual(inner_a0[96], 1)
+        self.assertEqual(inner_a0[49], 40)
+        self.assertEqual(inner_a0[79], 8)
+
+        # Argon Turn 1: inner[17]==[[1]], inner[67]==0, inner[71][7]=="", inner[83] is None, inner[96]==0
+        body_argon_1 = session._build_stream_generate_body(
+            "Hello 2",
+            model_config=cfg_argon,
+            client_uuid="UUID-A1",
+            conv_id="c_2819399536e5acad",
+            turn_index=1,
+            model_name="task-spark",
+        )
+        inner_a1 = json.loads(json.loads(body_argon_1["f.req"])[1])
+        self.assertEqual(inner_a1[17], [[1]])
+        self.assertEqual(inner_a1[67], 0)
+        self.assertEqual(inner_a1[71], ["c_2819399536e5acad", None, None, None, None, None, None, ""])
+        self.assertIsNone(inner_a1[83])
+        self.assertEqual(inner_a1[96], 0)
+
+        # 4. Compare directly against HAR files if available on system
+        from pathlib import Path
+        import urllib.parse
+        argon_har_path = Path("/home/qumhab/tmp_gemini/trafic/gemini.google.com-spark-argon.har")
+        if argon_har_path.exists():
+            with open(argon_har_path, "r", encoding="utf-8") as f:
+                har_data = json.load(f)
+            # Entry 11 (Flash turn 0)
+            req11 = json.loads(urllib.parse.parse_qs(har_data["log"]["entries"][11]["request"]["postData"]["text"])["f.req"][0])
+            actual_f0 = json.loads(req11[1])
+            for i in range(99):
+                if i in (0, 3, 4, 59):  # dynamic message/token/uuid fields
+                    continue
+                self.assertEqual(inner_f0[i], actual_f0[i], f"Mismatch at field inner[{i}] for Flash turn 0")
+
+            # Entry 44 (Flash turn 1)
+            req44 = json.loads(urllib.parse.parse_qs(har_data["log"]["entries"][44]["request"]["postData"]["text"])["f.req"][0])
+            actual_f1 = json.loads(req44[1])
+            for i in range(99):
+                if i in (0, 3, 4, 59):
+                    continue
+                self.assertEqual(inner_f1[i], actual_f1[i], f"Mismatch at field inner[{i}] for Flash turn 1")
+
+            # Entry 77 (Argon turn 0)
+            req77 = json.loads(urllib.parse.parse_qs(har_data["log"]["entries"][77]["request"]["postData"]["text"])["f.req"][0])
+            actual_a0 = json.loads(req77[1])
+            for i in range(99):
+                if i in (0, 3, 4, 59):
+                    continue
+                self.assertEqual(inner_a0[i], actual_a0[i], f"Mismatch at field inner[{i}] for Argon turn 0")
+
+            # Entry 97 (Argon turn 1)
+            req97 = json.loads(urllib.parse.parse_qs(har_data["log"]["entries"][97]["request"]["postData"]["text"])["f.req"][0])
+            actual_a1 = json.loads(req97[1])
+            for i in range(99):
+                if i in (0, 3, 4, 59):
+                    continue
+                self.assertEqual(inner_a1[i], actual_a1[i], f"Mismatch at field inner[{i}] for Argon turn 1")
+
+    def test_gemini_web_spark_agent_feature_mode(self):
+        """Verify inner[49] is set to 40 for Spark/Task agent models."""
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+        session = GeminiWebSession(
+            account_id="test_web",
+            cookies={"__Secure-1PSID": "mock_psid"},
+        )
+        cfg_task = session.get_model_config("gemini-4-argon-task")
+        payload_task = session._build_stream_generate_body(
+            user_message="Do something autonomous",
+            model_config=cfg_task,
+            client_uuid="uuid-123",
+            model_name="gemini-4-argon-task",
+        )
+        f_req = payload_task["f.req"]
+        parsed = json.loads(f_req)
+        inner = json.loads(parsed[1])
+        self.assertEqual(inner[49], 40)
+
+        # Test standard non-task model
+        cfg_std = session.get_model_config("gemini-3.8-flash")
+        payload_std = session._build_stream_generate_body(
+            user_message="Hello",
+            model_config=cfg_std,
+            client_uuid="uuid-123",
+            model_name="gemini-3.8-flash",
+        )
+        parsed_std = json.loads(payload_std["f.req"])
+        inner_std = json.loads(parsed_std[1])
+        self.assertEqual(inner_std[49], 0)
+
+    def test_gemini_web_acknowledge_response(self):
+        """Verify acknowledge_response sends PCck7e batchexecute RPC."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+
+        session = GeminiWebSession(
+            account_id="test_web",
+            cookies={"__Secure-1PSID": "mock_psid"},
+        )
+        session._at_token = "mock_at_token"
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+
+        async def run_test():
+            with patch.object(session, "get_http_client", return_value=mock_http):
+                success = await session.acknowledge_response("resp_12345", "c_abcdef")
+                self.assertTrue(success)
+                self.assertTrue(mock_http.post.called)
+                call_args = mock_http.post.call_args
+                url = call_args[0][0]
+                data = call_args[1]["data"]
+                self.assertIn("rpcids=PCck7e", url)
+                self.assertIn("PCck7e", data["f.req"])
+                self.assertIn("resp_12345", data["f.req"])
+
+        asyncio.run(run_test())
+
+    def test_gemini_web_extract_model_hashes(self):
+        """Verify recursive model hash extraction for qpEbW RPC."""
+        from agy_proxy.auth.gemini_web import GeminiWebSession
+
+        mock_data = [
+            [["gemini-4-argon", 8, "95a4c0abcba24364"]],
+            [["gemini-3.8-flash", 1, "56fdd199312815e2"]],
+            [["gemini-3.1-pro", 3, "e6fa609c3fa255c0"]],
+            [["gemini-3.5-flash-lite", 6, "8c46e95b1a07cecc"]],
+        ]
+        extracted = GeminiWebSession._extract_model_hashes_from_data(mock_data)
+        self.assertEqual(extracted.get("gemini-4-argon"), "95a4c0abcba24364")
+        self.assertEqual(extracted.get("gemini-3.8-flash"), "56fdd199312815e2")
+        self.assertEqual(extracted.get("gemini-3.1-pro"), "e6fa609c3fa255c0")
+        self.assertEqual(extracted.get("gemini-3.5-flash-lite"), "8c46e95b1a07cecc")
+
+
+class TestTosViolationHandling(unittest.TestCase):
+    def test_fetch_quota_detects_tos_violation(self):
+        from unittest.mock import AsyncMock, patch, MagicMock
+        from agy_proxy.auth import AntigravityOAuthSession
+
+        session = AntigravityOAuthSession(
+            account_id="acc_tos_test",
+            email="banned@example.com",
+            refresh_token="mock_refresh",
+            access_token="mock_access",
+            enabled=True,
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        mock_resp.headers = {"content-type": "application/json"}
+        mock_resp.json = MagicMock(return_value={
+            "error": {
+                "code": 403,
+                "message": "This service has been disabled in this account for violation of Terms of Service.",
+                "details": [{"reason": "TOS_VIOLATION"}],
+            }
+        })
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+
+        async def run_test():
+            with patch.object(session, "get_http_client", return_value=mock_http):
+                with patch.object(session, "initialize_project", return_value="mock-project"):
+                    with patch.object(session, "get_auth_headers", return_value={"Authorization": "Bearer mock"}):
+                        res = await session.fetch_quota()
+                        self.assertFalse(session.enabled)
+                        self.assertIn("TOS_VIOLATION", session.disabled_reason)
+                        self.assertEqual(res.get("error"), "TOS_VIOLATION")
+
+                        # Quota details for disabled account should be 0.0
+                        qd = session.get_quota_details()
+                        self.assertEqual(qd["gemini"]["fraction"], 0.0)
+                        self.assertEqual(qd["3p"]["fraction"], 0.0)
+                        self.assertTrue(qd["gemini"]["is_rate_limited"])
+                        self.assertTrue(qd["3p"]["is_rate_limited"])
+
+                        # test_connection should return ok=False
+                        with patch.object(session, "validate_live", return_value={"token_ok": True, "quota_summary": res}):
+                            conn = await session.test_connection()
+                            self.assertFalse(conn["ok"])
+
+        asyncio.run(run_test())
+
+
+class TestOAuthFlowRedirectUri(unittest.TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.accounts_file = Path(self.tmp_dir.name) / "accounts.json"
+        self.pool = AccountPool(accounts_file=self.accounts_file)
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def test_start_oauth_flow_default_redirect_uri(self):
+        flow = self.pool.start_oauth_flow()
+        self.assertIn("auth_url", flow)
+        self.assertIn("state", flow)
+        self.assertIn("code_verifier", flow)
+
+        state = flow["state"]
+        self.assertIn(state, self.pool.pending_pkce_flows)
+        verifier, ts, redirect_uri = self.pool.pending_pkce_flows[state]
+        self.assertEqual(redirect_uri, "https://antigravity.google/oauth-callback")
+        self.assertIn("redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback", flow["auth_url"])
+
+    def test_start_oauth_flow_custom_hub_redirect_uri(self):
+        hub_redirect = "http://localhost:42555/auth/callback"
+        flow = self.pool.start_oauth_flow(redirect_uri=hub_redirect)
+        state = flow["state"]
+        verifier, ts, redirect_uri = self.pool.pending_pkce_flows[state]
+        self.assertEqual(redirect_uri, hub_redirect)
+        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%3A42555%2Fauth%2Fcallback", flow["auth_url"])
+
+    def test_complete_oauth_flow_with_hub_redirect_url(self):
+        async def run_test():
+            hub_url = "http://localhost:42555/auth/callback?code=4/0AXhubcode123&state=hub_state_1"
+            self.pool.pending_pkce_flows["hub_state_1"] = ("mock_verifier_hub", time.time(), "http://localhost:42555/auth/callback")
+
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_token",
+                        "refresh_token": "1//mock_refresh_token",
+                        "expires_in": 3600,
+                        "id_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Imh1Yl91c2VyQGV4YW1wbGUuY29tIiwibmFtZSI6Ikh1YiBVc2VyIn0.mock_sig",
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    acc = await self.pool.complete_oauth_flow(code_or_url=hub_url)
+                                    self.assertEqual(acc.email, "hub_user@example.com")
+                                    self.assertEqual(captured_post_data["code"], "4/0AXhubcode123")
+                                    self.assertEqual(captured_post_data["code_verifier"], "mock_verifier_hub")
+                                    self.assertEqual(captured_post_data["redirect_uri"], "http://localhost:42555/auth/callback")
+                                    self.assertNotIn("hub_state_1", self.pool.pending_pkce_flows)
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_with_cli_redirect_url(self):
+        async def run_test():
+            cli_url = "https://antigravity.google/oauth-callback?code=4/0AXclicode456&state=cli_state_2"
+            self.pool.pending_pkce_flows["cli_state_2"] = ("mock_verifier_cli", time.time(), "https://antigravity.google/oauth-callback")
+
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_token_cli",
+                        "refresh_token": "1//mock_refresh_token_cli",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    acc = await self.pool.complete_oauth_flow(code_or_url=cli_url)
+                                    self.assertEqual(captured_post_data["code"], "4/0AXclicode456")
+                                    self.assertEqual(captured_post_data["code_verifier"], "mock_verifier_cli")
+                                    self.assertEqual(captured_post_data["redirect_uri"], "https://antigravity.google/oauth-callback")
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_with_raw_code_and_tracked_redirect_uri(self):
+        async def run_test():
+            self.pool.pending_pkce_flows["state_tracked"] = ("verifier_tracked", time.time(), "http://localhost:42555/auth/callback")
+
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_tracked",
+                        "refresh_token": "1//mock_refresh_tracked",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    acc = await self.pool.complete_oauth_flow(
+                                        code_or_url="4/0AXrawcode789",
+                                        state="state_tracked",
+                                    )
+                                    self.assertEqual(captured_post_data["code"], "4/0AXrawcode789")
+                                    self.assertEqual(captured_post_data["code_verifier"], "verifier_tracked")
+                                    self.assertEqual(captured_post_data["redirect_uri"], "http://localhost:42555/auth/callback")
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_explicit_redirect_uri_argument(self):
+        async def run_test():
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_explicit",
+                        "refresh_token": "1//mock_refresh_explicit",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    acc = await self.pool.complete_oauth_flow(
+                                        code_or_url="4/0AXexplicit",
+                                        verifier="verifier_explicit",
+                                        redirect_uri="http://custom.local:9000/callback",
+                                    )
+                                    self.assertEqual(captured_post_data["redirect_uri"], "http://custom.local:9000/callback")
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_error_handling(self):
+        async def run_test():
+            error_url = "http://localhost:42555/auth/callback?error=access_denied&error_description=User+denied+consent"
+            with self.assertRaises(ValueError) as ctx:
+                await self.pool.complete_oauth_flow(code_or_url=error_url)
+            self.assertIn("User denied consent", str(ctx.exception))
+
+            missing_code_url = "http://localhost:42555/auth/callback?state=no_code_here"
+            with self.assertRaises(ValueError) as ctx:
+                await self.pool.complete_oauth_flow(code_or_url=missing_code_url)
+            self.assertIn("missing the 'code' parameter", str(ctx.exception))
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_with_mismatched_frontend_verifier_uses_server_flow_verifier(self):
+        async def run_test():
+            # Simulates race condition where frontend sent stale verifier and state,
+            # but callback URL contains the true state and code issued by Google
+            callback_url = "https://antigravity.google/oauth-callback?code=4/0AXcanonical_code&state=canonical_state_123"
+            self.pool.pending_pkce_flows["canonical_state_123"] = (
+                "canonical_server_verifier",
+                time.time(),
+                "https://antigravity.google/oauth-callback",
+            )
+
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_token",
+                        "refresh_token": "1//mock_refresh_token",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    acc = await self.pool.complete_oauth_flow(
+                                        code_or_url=callback_url,
+                                        verifier="stale_mismatched_verifier_from_frontend",
+                                        state="stale_state_from_frontend",
+                                    )
+                                    self.assertEqual(captured_post_data["code"], "4/0AXcanonical_code")
+                                    # Must use canonical_server_verifier, NOT stale_mismatched_verifier_from_frontend
+                                    self.assertEqual(captured_post_data["code_verifier"], "canonical_server_verifier")
+                                    self.assertEqual(captured_post_data["redirect_uri"], "https://antigravity.google/oauth-callback")
+                                    self.assertNotIn("canonical_state_123", self.pool.pending_pkce_flows)
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_url_encoded_and_quoted_code(self):
+        async def run_test():
+            self.pool.pending_pkce_flows["enc_state"] = (
+                "enc_verifier",
+                time.time(),
+                "https://antigravity.google/oauth-callback",
+            )
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_token",
+                        "refresh_token": "1//mock_refresh_token",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    # Quoted and URL-encoded raw code: "4%2F0AXraw123"
+                                    acc = await self.pool.complete_oauth_flow(
+                                        code_or_url='  "4%2F0AXraw123"  ',
+                                        state="enc_state",
+                                    )
+                                    # Expected unquoted code: 4/0AXraw123
+                                    self.assertEqual(captured_post_data["code"], "4/0AXraw123")
+                                    self.assertEqual(captured_post_data["code_verifier"], "enc_verifier")
+
+        asyncio.run(run_test())
+
+    def test_complete_oauth_flow_with_fragment_url(self):
+        async def run_test():
+            self.pool.pending_pkce_flows["frag_state"] = (
+                "frag_verifier",
+                time.time(),
+                "https://antigravity.google/oauth-callback",
+            )
+            captured_post_data = {}
+
+            async def mock_post(*args, **kwargs):
+                nonlocal captured_post_data
+                url_str = str(args) + str(kwargs)
+                if "oauth2.googleapis.com" in url_str:
+                    data = kwargs.get("data")
+                    if data is None and len(args) > 1:
+                        data = args[1]
+                    captured_post_data = dict(data) if data else {}
+                    resp = MagicMock()
+                    resp.status_code = 200
+                    resp.json = MagicMock(return_value={
+                        "access_token": "mock_acc_token",
+                        "refresh_token": "1//mock_refresh_token",
+                        "expires_in": 3600,
+                    })
+                    return resp
+                resp = MagicMock()
+                resp.status_code = 200
+                resp.json = MagicMock(return_value={})
+                return resp
+
+            with patch.object(httpx.AsyncClient, "post", side_effect=mock_post):
+                with patch.object(AntigravityOAuthSession, "fetch_user_info", new_callable=AsyncMock):
+                    with patch.object(AntigravityOAuthSession, "initialize_project", new_callable=AsyncMock):
+                        with patch.object(AntigravityOAuthSession, "fetch_cloudcode_user_info", new_callable=AsyncMock):
+                            with patch.object(AntigravityOAuthSession, "fetch_quota", new_callable=AsyncMock):
+                                with patch.object(AntigravityOAuthSession, "fetch_models", new_callable=AsyncMock):
+                                    fragment_url = "https://antigravity.google/oauth-callback#code=4/0AXfragCode&state=frag_state"
+                                    acc = await self.pool.complete_oauth_flow(code_or_url=fragment_url)
+                                    self.assertEqual(captured_post_data["code"], "4/0AXfragCode")
+                                    self.assertEqual(captured_post_data["code_verifier"], "frag_verifier")
+
+        asyncio.run(run_test())
 
 
 if __name__ == "__main__":

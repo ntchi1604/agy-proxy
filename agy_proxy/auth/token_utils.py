@@ -200,14 +200,23 @@ def _decode_jwt_payload(token: str | None) -> dict[str, Any]:
     """Safely extracts claims from an unverified JWT (e.g. Google id_token) without external libraries."""
     if not token or not isinstance(token, str):
         return {}
+    token = token.strip()
+    # Fast path: Google OAuth access tokens (ya29.*) or non-JWT tokens are not JWTs
+    if token.startswith("ya29.") or "." not in token:
+        return {}
+    parts = token.split(".")
+    # A standard JWT must have 2 or 3 parts (header.payload[.signature]) and standard Jose header starting with ey
+    if len(parts) not in (2, 3) or not parts[0].startswith("ey"):
+        return {}
     try:
-        parts = token.strip().split(".")
-        if len(parts) >= 2:
-            payload_b64 = parts[1]
-            padded = payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4)
-            data = json.loads(base64.urlsafe_b64decode(padded.encode("utf-8")))
-            if isinstance(data, dict):
-                return data
+        payload_b64 = parts[1]
+        if not payload_b64:
+            return {}
+        padded = payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4)
+        raw_bytes = base64.urlsafe_b64decode(padded.encode("ascii", errors="ignore"))
+        data = json.loads(raw_bytes.decode("utf-8"))
+        if isinstance(data, dict):
+            return data
     except Exception as e:
         logger.debug("Failed to decode JWT payload: %s", e)
     return {}
@@ -311,7 +320,12 @@ def generate_pkce_pair() -> tuple[str, str, str]:
     return verifier, challenge, state
 
 
-def get_authorization_url(code_challenge: str, state: str, client_id: str = DEFAULT_CLIENT_ID) -> str:
+def get_authorization_url(
+    code_challenge: str,
+    state: str,
+    client_id: str = DEFAULT_CLIENT_ID,
+    redirect_uri: str = REDIRECT_URI,
+) -> str:
     """Constructs the Google OAuth authorization URL."""
     params = {
         "access_type": "offline",
@@ -319,7 +333,7 @@ def get_authorization_url(code_challenge: str, state: str, client_id: str = DEFA
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "prompt": "consent",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": " ".join(SCOPES),
         "state": state,

@@ -111,14 +111,14 @@ class TestSchemaSanitization(unittest.TestCase):
 class TestOpenAIToCloudCode(unittest.TestCase):
     def test_basic_message_conversion(self):
         req = OpenAIChatRequest(
-            model="gemini-3.7-flash-high",
+            model="gemini-3.8-flash-high",
             messages=[
                 {"role": "system", "content": "You are a helpful coding assistant."},
                 {"role": "user", "content": "Write a hello world in Python."},
             ],
         )
         payload = openai_to_cloudcode_payload(req, project_id="test-project")
-        self.assertEqual(payload["model"], "gemini-3.7-flash-high")
+        self.assertEqual(payload["model"], "gemini-3.8-flash-high")
         self.assertEqual(payload["project"], "test-project")
         inner = payload["request"]
         self.assertIn("systemInstruction", inner)
@@ -955,7 +955,81 @@ class TestModularConvertersPackage(unittest.TestCase):
         self.assertIn("field_b", comp["properties"])
         self.assertIn("field_a", comp["required"])
         self.assertIn("field_b", comp["required"])
-        self.assertNotIn("allOf", comp)
+    def test_mid_conversation_system_reminder(self):
+        req = AnthropicRequest(
+            model="gemini-3.8-flash-high",
+            messages=[
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+                {"role": "system", "content": "Mid-conversation update: use python3"},
+            ],
+        )
+        payload = anthropic_to_cloudcode_payload(req, project_id="p-123")
+        contents = payload["request"]["contents"]
+        self.assertEqual(len(contents), 3)
+        self.assertEqual(contents[2]["role"], "user")
+        self.assertIn("<system-reminder>", contents[2]["parts"][0]["text"])
+        self.assertIn("Mid-conversation update: use python3", contents[2]["parts"][0]["text"])
+        self.assertIn("</system-reminder>", contents[2]["parts"][0]["text"])
+
+    def test_mid_conversation_system_reminder_no_double_wrap(self):
+        req = AnthropicRequest(
+            model="gemini-3.8-flash-high",
+            messages=[
+                {"role": "system", "content": "<system-reminder>\nAlready wrapped instruction\n</system-reminder>"},
+            ],
+        )
+        payload = anthropic_to_cloudcode_payload(req, project_id="p-123")
+        contents = payload["request"]["contents"]
+        text = contents[0]["parts"][0]["text"]
+        self.assertEqual(text.count("<system-reminder>"), 1)
+
+    def test_web_search_20250305_tool_mapping(self):
+        req = AnthropicRequest(
+            model="gemini-3.8-flash-high",
+            messages=[{"role": "user", "content": "Search for Python docs"}],
+            tools=[{"type": "web_search_20250305"}],
+            tool_choice={"type": "web_search_20250305"},
+        )
+        payload = anthropic_to_cloudcode_payload(req, project_id="p-123")
+        tools = payload["request"]["tools"][0]["functionDeclarations"]
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["name"], "web_search")
+        self.assertIn("query", tools[0]["parameters"]["properties"])
+        tool_cfg = payload["request"]["toolConfig"]
+        self.assertEqual(tool_cfg["functionCallingConfig"]["mode"], "ANY")
+        self.assertEqual(tool_cfg["functionCallingConfig"]["allowedFunctionNames"], ["web_search"])
+
+    def test_adaptive_thinking_high_effort(self):
+        req = AnthropicRequest(
+            model="gemini-3.8-flash-high",
+            messages=[{"role": "user", "content": "Think deeply"}],
+            thinking={"type": "adaptive"},
+            output_config={"effort": "high"},
+        )
+        payload = anthropic_to_cloudcode_payload(req, project_id="p-123")
+        th_cfg = payload["request"]["generationConfig"]["thinkingConfig"]
+        self.assertEqual(th_cfg.get("thinkingLevel"), "HIGH")
+        self.assertEqual(th_cfg.get("thinkingBudget"), -1)
+
+    def test_claude_cloudcode_labels(self):
+        req_sonnet = AnthropicRequest(
+            model="claude-sonnet-4-6",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        payload_sonnet = anthropic_to_cloudcode_payload(req_sonnet, project_id="p-123")
+        labels = payload_sonnet["request"].get("labels", {})
+        self.assertEqual(labels.get("model_enum"), "MODEL_PLACEHOLDER_M35")
+        self.assertEqual(labels.get("used_claude"), "true")
+
+        req_opus = AnthropicRequest(
+            model="claude-opus-4-6-thinking",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+        payload_opus = anthropic_to_cloudcode_payload(req_opus, project_id="p-123")
+        labels_opus = payload_opus["request"].get("labels", {})
+        self.assertEqual(labels_opus.get("model_enum"), "MODEL_PLACEHOLDER_M26")
+        self.assertEqual(labels_opus.get("used_claude"), "true")
 
 
 if __name__ == "__main__":

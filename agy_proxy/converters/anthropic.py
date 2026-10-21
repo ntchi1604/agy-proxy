@@ -59,10 +59,20 @@ def anthropic_to_cloudcode_payload(
                 if isinstance(b_dict, dict) and b_dict.get("type") == "tool_use":
                     t_id = b_dict.get("id")
                     t_name = b_dict.get("name")
+                    if t_name == "web_search_20250305":
+                        t_name = "web_search"
                     if t_id and t_name:
                         tool_id_to_name[t_id] = t_name
 
     contents: list[dict[str, Any]] = []
+
+    def _wrap_system_reminder(text_val: str) -> str:
+        t = text_val.strip()
+        if not t:
+            return text_val
+        if t.startswith("<system-reminder>") and t.endswith("</system-reminder>"):
+            return text_val
+        return f"<system-reminder>\n{text_val}\n</system-reminder>"
 
     for msg in req.messages:
         msg_dict = to_dict(msg)
@@ -73,12 +83,15 @@ def anthropic_to_cloudcode_payload(
             role = getattr(msg, "role", "user")
             content = getattr(msg, "content", [])
 
+        is_system_role = (str(role).lower() == "system")
         gemini_role = "model" if role == "assistant" else "user"
         parts: list[dict[str, Any]] = []
 
         if isinstance(content, str):
             cleaned_c = clean_system_prompt_text(content) if "x-anthropic-billing-header:" in content.lower() else content
             if cleaned_c:
+                if is_system_role:
+                    cleaned_c = _wrap_system_reminder(cleaned_c)
                 parts.append({"text": cleaned_c})
         elif isinstance(content, list):
             last_thinking_sig = None
@@ -92,6 +105,8 @@ def anthropic_to_cloudcode_payload(
                     if txt:
                         cleaned_txt = clean_system_prompt_text(txt) if "x-anthropic-billing-header:" in txt.lower() else txt
                         if cleaned_txt:
+                            if is_system_role:
+                                cleaned_txt = _wrap_system_reminder(cleaned_txt)
                             parts.append({"text": cleaned_txt})
                 elif b_type == "thinking":
                     last_thinking_sig = b_dict.get("signature")
@@ -130,6 +145,8 @@ def anthropic_to_cloudcode_payload(
                 elif b_type == "tool_use":
                     tool_id = b_dict.get("id", f"call_{uuid.uuid4().hex[:8]}")
                     func_name = b_dict.get("name", "")
+                    if func_name == "web_search_20250305":
+                        func_name = "web_search"
                     func_input = b_dict.get("input", {})
 
                     sig = (
@@ -246,20 +263,47 @@ def anthropic_to_cloudcode_payload(
             t_dict = to_dict(t)
             if not isinstance(t_dict, dict):
                 continue
+            t_type = t_dict.get("type")
             t_custom = t_dict.get("custom") if isinstance(t_dict.get("custom"), dict) else {}
             fn = t_dict.get("function") if isinstance(t_dict.get("function"), dict) else {}
             tool_name = t_dict.get("name") or t_custom.get("name") or fn.get("name")
-            if not tool_name:
-                continue
-            tool_desc = t_dict.get("description") or t_custom.get("description") or fn.get("description", "")
-            params = (
-                t_dict.get("input_schema")
-                or t_custom.get("input_schema")
-                or t_dict.get("parameters")
-                or t_custom.get("parameters")
-                or fn.get("parameters")
-                or fn.get("input_schema")
-            )
+            if t_type == "web_search_20250305" or tool_name == "web_search_20250305":
+                tool_name = "web_search"
+                tool_desc = (
+                    t_dict.get("description")
+                    or t_custom.get("description")
+                    or fn.get("description")
+                    or "Search the web for up-to-date information, news, documentation, and reference material."
+                )
+                params = (
+                    t_dict.get("input_schema")
+                    or t_custom.get("input_schema")
+                    or t_dict.get("parameters")
+                    or t_custom.get("parameters")
+                    or fn.get("parameters")
+                    or {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query string.",
+                            }
+                        },
+                        "required": ["query"],
+                    }
+                )
+            else:
+                if not tool_name:
+                    continue
+                tool_desc = t_dict.get("description") or t_custom.get("description") or fn.get("description", "")
+                params = (
+                    t_dict.get("input_schema")
+                    or t_custom.get("input_schema")
+                    or t_dict.get("parameters")
+                    or t_custom.get("parameters")
+                    or fn.get("parameters")
+                    or fn.get("input_schema")
+                )
             decl: dict[str, Any] = {
                 "name": tool_name,
                 "description": tool_desc,
@@ -276,11 +320,16 @@ def anthropic_to_cloudcode_payload(
             if req.tool_choice:
                 tc = req.tool_choice if isinstance(req.tool_choice, dict) else {"type": str(req.tool_choice)}
                 tc_type = str(tc.get("type", "auto")).lower()
-                if tc_type == "any":
+                tc_name = tc.get("name")
+                if tc_type == "web_search_20250305" or tc_name == "web_search_20250305":
                     tool_cfg["functionCallingConfig"]["mode"] = "ANY"
-                elif tc_type == "tool" and tc.get("name"):
+                    tool_cfg["functionCallingConfig"]["allowedFunctionNames"] = ["web_search"]
+                elif tc_type == "any":
                     tool_cfg["functionCallingConfig"]["mode"] = "ANY"
-                    tool_cfg["functionCallingConfig"]["allowedFunctionNames"] = [tc["name"]]
+                elif tc_type == "tool" and tc_name:
+                    tool_cfg["functionCallingConfig"]["mode"] = "ANY"
+                    chosen_fn = "web_search" if tc_name == "web_search_20250305" else tc_name
+                    tool_cfg["functionCallingConfig"]["allowedFunctionNames"] = [chosen_fn]
                 elif tc_type == "none":
                     tool_cfg["functionCallingConfig"]["mode"] = "NONE"
             inner_request["toolConfig"] = tool_cfg
@@ -335,6 +384,17 @@ def anthropic_to_cloudcode_payload(
 
     if sess_id_str:
         inner_request["sessionId"] = sess_id_str
+
+    if backend_model == "claude-sonnet-4-6":
+        labels = inner_request.setdefault("labels", {})
+        labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M35")
+        labels.setdefault("used_claude", "true")
+        labels.setdefault("used_non_gemini_model", "true")
+    elif backend_model == "claude-opus-4-6-thinking":
+        labels = inner_request.setdefault("labels", {})
+        labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M26")
+        labels.setdefault("used_claude", "true")
+        labels.setdefault("used_non_gemini_model", "true")
 
     return {
         "project": project_id,

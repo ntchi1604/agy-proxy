@@ -49,6 +49,7 @@ from agy_proxy.auth.gemini_web import (
     GeminiWebSession,
     clean_gemini_text,
     extract_cookies_from_raw,
+    extract_auth_user_from_raw,
 )
 from agy_proxy.auth.pool import (
     AccountPool,
@@ -93,6 +94,7 @@ __all__ = [
     "GeminiWebSession",
     "clean_gemini_text",
     "extract_cookies_from_raw",
+    "extract_auth_user_from_raw",
     # Pool & Manager
     "AccountPool",
     "AuthManager",

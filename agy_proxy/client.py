@@ -35,8 +35,10 @@ from agy_proxy.models import (
     get_claude_fallback_model,
 )
 from agy_proxy.compactor import (
+    GOOGLE_CASCADE_CHECKPOINTER_PROMPT,
     generate_compact_summary,
     should_auto_compact,
+    should_checkpoint,
     compact_conversation_history,
     compactor_settings,
     prune_tool_results,
@@ -653,6 +655,7 @@ class CloudCodeClient:
             preferred_account_id=preferred_account,
         )
         last_error = None
+        from agy_proxy.models import normalize_model_name
 
         for acc in candidates:
             for attempt in range(2):
@@ -915,6 +918,22 @@ class CloudCodeClient:
                                 last_error = httpx.HTTPStatusError("503 Service Unavailable (Model Overloaded)", request=response.request, response=response)
                                 break  # Proceed to next candidate account
 
+                            if response.status_code == 403:
+                                error_text = await response.aread()
+                                err_decoded = error_text.decode("utf-8", "ignore").strip()
+                                try:
+                                    err_json = json.loads(err_decoded)
+                                    clean_err = err_json.get("error", {}).get("message") or err_decoded.replace("\n", " ")[:200]
+                                except Exception:
+                                    clean_err = err_decoded.replace("\n", " ")[:200]
+                                if "Terms of Service" in clean_err or "TOS_VIOLATION" in err_decoded:
+                                    logger.error("[%s] Account suspended by Google for TOS violation. Auto-disabling in pool.", acc.email)
+                                    acc.enabled = False
+                                    acc.disabled_reason = "TOS_VIOLATION: Service disabled by Google"
+                                logger.warning("[%s] Hit 403 Forbidden (%s). Failing over to next account in pool...", acc.email, clean_err)
+                                last_error = httpx.HTTPStatusError(f"403 Forbidden: {clean_err}", request=response.request, response=response)
+                                break  # Proceed to next candidate account
+
                             if response.status_code != 200:
                                 error_text = await response.aread()
                                 err_decoded = error_text.decode("utf-8", "ignore").strip()
@@ -1007,7 +1026,10 @@ class CloudCodeClient:
                             acc.unsupported_models.add(norm_m)
                             if getattr(acc, "available_models", None):
                                 acc.available_models.pop(model_name, None)
-                                acc.available_models.pop(norm_m, None)
+                        if e.response.status_code == 403 and any(kw in err_lower for kw in ("terms of service", "tos_violation", "violation")):
+                            logger.error("[%s] Account suspended by Google for TOS violation. Auto-disabling in pool.", acc.email)
+                            acc.enabled = False
+                            acc.disabled_reason = "TOS_VIOLATION: Service disabled by Google"
                         if e.response.status_code in (400, 401, 403, 429, 500, 502, 503, 504, 404):
                             logger.warning("[%s] Account error [%d]. Failing over to next candidate account...", acc.email, e.response.status_code)
                             break
@@ -1045,6 +1067,27 @@ class CloudCodeClient:
                         err_text = e.response.text
                     except Exception:
                         pass
+                    err_lower = err_text.lower()
+                    is_claude_deprecated = (
+                        "no longer available" in err_lower
+                        or ("4.6" in err_lower and "5.5" in err_lower)
+                        or "switch to claude" in err_lower
+                    )
+                    if is_claude_deprecated:
+                        if not hasattr(acc, "unsupported_models"):
+                            acc.unsupported_models = set()
+                        acc.unsupported_models.add("claude-sonnet-4-6")
+                        acc.unsupported_models.add("claude-opus-4-6-thinking")
+                        from agy_proxy.models import normalize_model_name
+                        norm_m = normalize_model_name(model_name)
+                        acc.unsupported_models.add(norm_m)
+                        if getattr(acc, "available_models", None):
+                            acc.available_models.pop("claude-sonnet-4-6", None)
+                            acc.available_models.pop("claude-opus-4-6-thinking", None)
+                            acc.available_models.pop(norm_m, None)
+                        acc.supports_claude_5_5 = True
+                        logger.warning("[%s] ⚠️ Account does not support Claude 4.6 (%s). Marked as Claude 5.5-only. Failing over...", acc.email, err_text[:200])
+                        break
                     if e.response.status_code not in (400, 422):
                         logger.warning("[%s] Account error [%d]. Failing over to next account in pool...", acc.email, e.response.status_code)
                         break
@@ -1114,6 +1157,51 @@ class CloudCodeClient:
                     logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
                     return
 
+            from agy_proxy.models import is_claude_4_6_model, get_claude_5_5_upgrade_model
+            if is_claude_4_6_model(model_name):
+                last_err_str = str(last_error).lower()
+                is_upgradeable = (
+                    "no longer available" in last_err_str
+                    or "switch to claude" in last_err_str
+                    or ("4.6" in last_err_str and "5.5" in last_err_str)
+                    or "not found" in last_err_str
+                )
+                if is_upgradeable:
+                    upgrade_m = get_claude_5_5_upgrade_model(model_name)
+                    logger.warning(
+                        "[Model Upgrade] ⚠️ Claude 4.6 (%s) is unavailable across accounts. 🔄 Auto-upgrading to Claude 5.5 (%s) so generation continues without error!",
+                        model_name,
+                        upgrade_m,
+                    )
+                    logger.info("[Model Upgrade] %s active (Antigravity CloudCode - Upgraded from %s)", upgrade_m, model_name)
+
+                    def up_payload_builder(proj: str):
+                        base = payload_builder_fn(proj)
+                        if isinstance(base, dict):
+                            p_copy = copy.deepcopy(base)
+                            p_copy["model"] = upgrade_m
+                            if "request" in p_copy and isinstance(p_copy["request"], dict):
+                                p_copy["request"]["model"] = upgrade_m
+                            return p_copy
+                        return base
+
+                    async for chunk in self._post_sse_stream_with_failover(
+                        endpoint,
+                        up_payload_builder,
+                        model_name=upgrade_m,
+                        timeout=timeout,
+                        session_key=session_key,
+                        specific_account_id=specific_account_id,
+                        client_path=client_path,
+                        is_streaming=is_streaming,
+                        is_subcall=True,
+                    ):
+                        yield chunk
+                    if not is_subcall:
+                        recorded = True
+                    logger.info("[Model Upgrade] ✅ Upgraded request to %s succeeded seamlessly!", upgrade_m)
+                    return
+
             status_code = getattr(getattr(last_error, "response", None), "status_code", None)
             err_str = str(last_error).lower()
             if status_code in (503, 429) and ("capacity" in err_str or "pro" in str(model_name).lower()):
@@ -1151,42 +1239,6 @@ class CloudCodeClient:
                 logger.info("[Model Fallback] ✅ Capacity fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
                 return
 
-            from agy_proxy.models import is_argon_model, get_argon_fallback_model
-            if is_argon_model(model_name):
-                fallback_m = get_argon_fallback_model(model_name) or "gemini-3.8-flash-high"
-                logger.warning(
-                    "[Model Fallback] ⚠️ Gemini 4 Argon (%s) failed or is unavailable on Gemini Web session. 🔄 Auto-falling back to %s on CloudCode to avoid interruption!",
-                    model_name,
-                    fallback_m,
-                )
-                logger.info("[Model Fallback] %s active (Antigravity CloudCode - Fallback from %s)", fallback_m, model_name)
-
-                def fb_argon_payload_builder(proj: str):
-                    base = payload_builder_fn(proj)
-                    if isinstance(base, dict):
-                        p_copy = copy.deepcopy(base)
-                        p_copy["model"] = fallback_m
-                        if "request" in p_copy and isinstance(p_copy["request"], dict):
-                            p_copy["request"]["model"] = fallback_m
-                        return p_copy
-                    return base
-
-                async for chunk in self._post_sse_stream_with_failover(
-                    endpoint,
-                    fb_argon_payload_builder,
-                    model_name=fallback_m,
-                    timeout=timeout,
-                    session_key=session_key,
-                    specific_account_id=specific_account_id,
-                    client_path=client_path,
-                    is_streaming=is_streaming,
-                    is_subcall=True,
-                ):
-                    yield chunk
-                if not is_subcall:
-                    recorded = True
-                logger.info("[Model Fallback] ✅ Fallback to %s succeeded! Generation completed seamlessly.", fallback_m)
-                return
 
         if not recorded and not is_subcall:
             dur_ms = (time.time() - t0) * 1000
@@ -1239,7 +1291,18 @@ class CloudCodeClient:
             if pruned_count > 0:
                 logger.info("[Smart Pruner] Pruned %d older tool outputs, saved ~%d tokens", pruned_count, tokens_saved)
 
-        if should_auto_compact(req.messages):
+        if should_checkpoint(req.messages):
+            try:
+                compacted, _, _ = await compact_conversation_history(
+                    self.pool,
+                    req.messages,
+                    model=compactor_settings.checkpointer_model,
+                    prompt=GOOGLE_CASCADE_CHECKPOINTER_PROMPT,
+                )
+                req.messages = compacted
+            except Exception as e:
+                logger.warning("Cascade checkpointer auto-compaction error: %s", e)
+        elif should_auto_compact(req.messages):
             try:
                 compacted, _, _ = await compact_conversation_history(self.pool, req.messages)
                 req.messages = compacted
@@ -1371,7 +1434,18 @@ class CloudCodeClient:
             if pruned_count > 0:
                 logger.info("[Smart Pruner] Pruned %d older tool outputs, saved ~%d tokens", pruned_count, tokens_saved)
 
-        if should_auto_compact(req.messages):
+        if should_checkpoint(req.messages):
+            try:
+                compacted, _, _ = await compact_conversation_history(
+                    self.pool,
+                    req.messages,
+                    model=compactor_settings.checkpointer_model,
+                    prompt=GOOGLE_CASCADE_CHECKPOINTER_PROMPT,
+                )
+                req.messages = compacted
+            except Exception as e:
+                logger.warning("Cascade checkpointer auto-compaction error: %s", e)
+        elif should_auto_compact(req.messages):
             try:
                 compacted, _, _ = await compact_conversation_history(self.pool, req.messages)
                 req.messages = compacted
@@ -1582,7 +1656,18 @@ class CloudCodeClient:
             if pruned_count > 0:
                 logger.info("[Smart Pruner] Pruned %d older tool outputs, saved ~%d tokens", pruned_count, tokens_saved)
 
-        if should_auto_compact(req.messages, system=req.system):
+        if should_checkpoint(req.messages, system=req.system):
+            try:
+                compacted, _, _ = await compact_conversation_history(
+                    self.pool,
+                    req.messages,
+                    model=compactor_settings.checkpointer_model,
+                    prompt=GOOGLE_CASCADE_CHECKPOINTER_PROMPT,
+                )
+                req.messages = compacted
+            except Exception as e:
+                logger.warning("Cascade checkpointer auto-compaction error: %s", e)
+        elif should_auto_compact(req.messages, system=req.system):
             try:
                 compacted, _, _ = await compact_conversation_history(self.pool, req.messages)
                 req.messages = compacted
@@ -1864,7 +1949,18 @@ class CloudCodeClient:
             if pruned_count > 0:
                 logger.info("[Smart Pruner] Pruned %d older tool outputs, saved ~%d tokens", pruned_count, tokens_saved)
 
-        if should_auto_compact(req.messages, system=req.system):
+        if should_checkpoint(req.messages, system=req.system):
+            try:
+                compacted, _, _ = await compact_conversation_history(
+                    self.pool,
+                    req.messages,
+                    model=compactor_settings.checkpointer_model,
+                    prompt=GOOGLE_CASCADE_CHECKPOINTER_PROMPT,
+                )
+                req.messages = compacted
+            except Exception as e:
+                logger.warning("Cascade checkpointer auto-compaction error: %s", e)
+        elif should_auto_compact(req.messages, system=req.system):
             try:
                 compacted, _, _ = await compact_conversation_history(self.pool, req.messages)
                 req.messages = compacted
