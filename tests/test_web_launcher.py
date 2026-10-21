@@ -511,15 +511,23 @@ def test_download_language_server_tar(tmp_path):
     assert os.access(result, os.X_OK)
 
 
-def test_download_language_server_non_interactive_skips_dmg(tmp_path):
-    """macOS DMG download must return None without crashing."""
-    from agy_proxy.web_launcher import download_language_server
-    result = download_language_server(
-        dest_dir=tmp_path / "bin",
-        interactive=False,
-        platform_key="darwin-arm",
+def test_download_language_server_dmg_and_exe(tmp_path):
+    """Verifies that DMG and EXE extractors are defined and handle missing 7z / invalid archives gracefully."""
+    from agy_proxy.web_launcher import (
+        _extract_language_server_from_dmg,
+        _extract_language_server_from_exe,
+        _find_7z,
     )
-    assert result is None
+
+    dummy_file = tmp_path / "dummy.dmg"
+    dummy_file.write_bytes(b"not a valid archive")
+
+    # Graceful degradation on invalid archive
+    res_dmg = _extract_language_server_from_dmg(dummy_file, tmp_path / "out_dmg")
+    assert res_dmg is None
+
+    res_exe = _extract_language_server_from_exe(dummy_file, tmp_path / "out_exe")
+    assert res_exe is None
 
 
 def test_cli_download_server_flag(tmp_path):

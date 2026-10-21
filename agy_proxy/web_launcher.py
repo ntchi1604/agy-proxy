@@ -239,6 +239,22 @@ def detect_platform_key() -> Optional[str]:
     return None
 
 
+def _find_7z() -> Optional[str]:
+    """Finds 7z / p7zip executable across Linux, macOS, and Windows."""
+    for c in ("7z", "7za", "7zr"):
+        found = shutil.which(c)
+        if found:
+            return found
+    if sys.platform == "win32":
+        for p in (
+            r"C:\Program Files\7-Zip\7z.exe",
+            r"C:\Program Files (x86)\7-Zip\7z.exe",
+        ):
+            if os.path.isfile(p):
+                return p
+    return None
+
+
 def _extract_language_server_from_tar(archive_path: Path, dest_dir: Path) -> Optional[Path]:
     """
     Extracts the language_server binary from a .tar.gz archive produced by the
@@ -267,6 +283,94 @@ def _extract_language_server_from_tar(archive_path: Path, dest_dir: Path) -> Opt
     return None
 
 
+def _extract_language_server_from_dmg(archive_path: Path, dest_dir: Path) -> Optional[Path]:
+    """
+    Extracts language_server from a macOS .dmg file.
+    Supports 7z (cross-platform on Linux, macOS, Windows) and native macOS hdiutil.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_file = dest_dir / "language_server"
+
+    # 1. Cross-platform extraction with 7z
+    seven_zip = _find_7z()
+    if seven_zip:
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                cmd = [seven_zip, "e", "-y", "-r", f"-o{td}", str(archive_path), "*language_server*"]
+                res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if res.returncode == 0:
+                    for f in Path(td).glob("*language_server*"):
+                        if f.is_file() and not f.name.endswith((".txt", ".md", ".json", ".log")):
+                            shutil.copy2(f, dest_file)
+                            os.chmod(dest_file, 0o755)
+                            logger.info(f"Extracted language_server from DMG via 7z → {dest_file}")
+                            return dest_file
+        except Exception as e:
+            logger.debug(f"7z DMG extraction failed: {e}")
+
+    # 2. Native macOS hdiutil mounting (macOS only)
+    if sys.platform == "darwin" and shutil.which("hdiutil"):
+        try:
+            with tempfile.TemporaryDirectory() as mnt:
+                attach_cmd = ["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mnt, str(archive_path)]
+                res = subprocess.run(attach_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if res.returncode == 0:
+                    try:
+                        found = search_dir_for_language_server(Path(mnt))
+                        if found and found.is_file():
+                            shutil.copy2(found, dest_file)
+                            os.chmod(dest_file, 0o755)
+                            logger.info(f"Extracted language_server from DMG via hdiutil → {dest_file}")
+                            return dest_file
+                    finally:
+                        subprocess.run(["hdiutil", "detach", mnt, "-force"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            logger.debug(f"hdiutil DMG extraction failed: {e}")
+
+    return None
+
+
+def _extract_language_server_from_exe(archive_path: Path, dest_dir: Path) -> Optional[Path]:
+    """
+    Extracts language_server.exe from a Windows NSIS installer .exe file.
+    NSIS installers contain an inner app-*.7z archive containing resources/bin/language_server.exe.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_file = dest_dir / "language_server.exe"
+
+    seven_zip = _find_7z()
+    if seven_zip:
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                tpath = Path(td)
+                sub_dir = tpath / "sub"
+                sub_dir.mkdir(parents=True, exist_ok=True)
+
+                # Step 1: Extract inner .7z archive from NSIS installer
+                cmd1 = [seven_zip, "e", "-y", "-r", f"-o{sub_dir}", str(archive_path), "*.7z"]
+                subprocess.run(cmd1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                inner_7z = list(sub_dir.glob("*.7z"))
+                if inner_7z:
+                    # Step 2: Extract language_server.exe from inner .7z
+                    cmd2 = [seven_zip, "e", "-y", "-r", f"-o{td}", str(inner_7z[0]), "*language_server*"]
+                    subprocess.run(cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    # Direct attempt
+                    cmd_direct = [seven_zip, "e", "-y", "-r", f"-o{td}", str(archive_path), "*language_server*"]
+                    subprocess.run(cmd_direct, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                for f in tpath.glob("*language_server*.exe"):
+                    shutil.copy2(f, dest_file)
+                    os.chmod(dest_file, 0o755)
+                    logger.info(f"Extracted language_server.exe via 7z → {dest_file}")
+                    return dest_file
+        except Exception as e:
+            logger.debug(f"7z EXE extraction failed: {e}")
+
+    return None
+
+
 def download_language_server(
     dest_dir: Optional[Path] = None,
     interactive: bool = True,
@@ -278,9 +382,10 @@ def download_language_server(
     Downloads to dest_dir (default: ~/.config/agy-proxy/bin/).
     Returns the path to the extracted language_server binary, or None on failure.
 
-    On Linux/macOS: downloads tar.gz and extracts language_server binary.
-    On Windows: downloads .exe and saves as language_server.exe.
-    On macOS (DMG): not auto-extractable — instructs user to install manually.
+    Supports:
+      - Linux (.tar.gz): extracted via pure Python tarfile
+      - macOS (.dmg): extracted via 7z or native hdiutil
+      - Windows (.exe): extracted via 7z from NSIS installer container
     """
     dest_dir = dest_dir or DEFAULT_BIN_DIR
     pkey = platform_key or detect_platform_key()
@@ -295,19 +400,13 @@ def download_language_server(
 
     url, archive_type = DOWNLOAD_URLS[pkey]
 
-    # macOS DMG cannot be auto-extracted — show instructions
-    if archive_type == "dmg":
-        console.print("[bold yellow]⚠️  macOS DMG cannot be auto-extracted.[/bold yellow]")
-        console.print(f"   Download manually: [bold cyan]{url}[/bold cyan]")
-        console.print("   Mount the DMG, drag Antigravity.app to /Applications, then re-run.")
-        return None
-
     # Ask user confirmation when interactive
     if interactive and sys.stdin and sys.stdin.isatty():
         console.print(f"\n[bold yellow]📦 Antigravity language_server not found on this system.[/bold yellow]")
         console.print(f"   Platform detected: [bold cyan]{pkey}[/bold cyan]")
         console.print(f"   Download URL: [dim]{url}[/dim]")
-        console.print(f"   Install target: [bold cyan]{dest_dir / 'language_server'}[/bold cyan]")
+        ls_target_name = "language_server.exe" if archive_type == "exe" else "language_server"
+        console.print(f"   Install target: [bold cyan]{dest_dir / ls_target_name}[/bold cyan]")
         try:
             answer = input("\nDownload and install automatically? [Y/n]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -317,7 +416,7 @@ def download_language_server(
             return None
 
     dest_dir.mkdir(parents=True, exist_ok=True)
-    ls_name = "language_server" if archive_type != "exe" else "language_server.exe"
+    ls_name = "language_server.exe" if archive_type == "exe" else "language_server"
     final_path = dest_dir / ls_name
 
     console.print(f"[bold green]⬇️  Downloading Antigravity Hub ({pkey})...[/bold green]")
@@ -331,17 +430,32 @@ def download_language_server(
 
         _download_with_progress(url, tmp_path)
 
+        console.print(f"[bold cyan]📦 Extracting language_server from {archive_type}...[/bold cyan]")
         if archive_type == "tar.gz":
             result = _extract_language_server_from_tar(tmp_path, dest_dir)
             if result is None:
-                console.print("[bold red]❌ Could not find language_server binary inside the archive.[/bold red]")
+                console.print("[bold red]❌ Could not find language_server binary inside the .tar.gz archive.[/bold red]")
+                return None
+            final_path = result
+        elif archive_type == "dmg":
+            result = _extract_language_server_from_dmg(tmp_path, dest_dir)
+            if result is None:
+                console.print("[bold red]❌ Could not extract language_server from DMG archive.[/bold red]")
+                if not _find_7z() and sys.platform != "darwin":
+                    console.print("[dim]Hint: Install 7-Zip (`sudo apt install p7zip-full` on Linux) to unpack DMG files directly.[/dim]")
                 return None
             final_path = result
         elif archive_type == "exe":
-            shutil.move(str(tmp_path), str(final_path))
-            os.chmod(final_path, 0o755)
+            result = _extract_language_server_from_exe(tmp_path, dest_dir)
+            if result is None:
+                console.print("[bold red]❌ Could not extract language_server.exe from Windows installer.[/bold red]")
+                if not _find_7z():
+                    console.print("[dim]Hint: Install 7-Zip (`sudo apt install p7zip-full` on Linux or 7-Zip on Windows) to extract NSIS archives.[/dim]")
+                return None
+            final_path = result
         else:
             shutil.move(str(tmp_path), str(final_path))
+            os.chmod(final_path, 0o755)
 
         # Clean up temp file if it still exists
         if tmp_path.exists():
@@ -488,7 +602,7 @@ def find_language_server(
 
         # 6a. Offer to auto-download
         pkey = detect_platform_key()
-        if pkey and pkey in DOWNLOAD_URLS and DOWNLOAD_URLS[pkey][1] != "dmg":
+        if pkey and pkey in DOWNLOAD_URLS:
             downloaded = download_language_server(interactive=True, platform_key=pkey)
             if downloaded and downloaded.is_file():
                 if persist:
