@@ -143,63 +143,63 @@ MODEL_ALIASES: dict[str, str] = {
     # --------------------------------------------------------------------------
     # 2. GEMINI WEB MODELS (Routed EXCLUSIVELY via gemini.google.com web session)
     #    These models execute in browser automation and do not use CloudCode API.
-    #    Both canonical web-* prefix and legacy *-web suffix are supported.
+    #    Both canonical *-web suffix and web-* prefix aliases are supported.
     # --------------------------------------------------------------------------
-    # Canonical web-* prefix models
-    "web-gemini-4-argon": "web-gemini-4-argon-high",
-    "web-gemini-4-argon-high": "web-gemini-4-argon-high",
-    "web-gemini-4-argon-medium": "web-gemini-4-argon-medium",
-    "web-gemini-4-argon-low": "web-gemini-4-argon-low",
-    "web-gemini-4-argon-spark": "web-gemini-4-argon-spark",
-    "web-gemini-4-argon-task": "web-gemini-4-argon-spark",
-    "web-gemini-4-argon-agent": "web-gemini-4-argon-spark",
-    "web-gemini-4-spark": "web-gemini-4-argon-spark",
-    "web-gemini-4-task": "web-gemini-4-argon-spark",
-    "web-gemini-4-agent": "web-gemini-4-argon-spark",
-    "web-gemini-4": "web-gemini-4-argon-high",
-    "web-argon": "web-gemini-4-argon-high",
-    "web-argon-spark": "web-gemini-4-argon-spark",
-    "web-argon-task": "web-gemini-4-argon-spark",
-    "web-argon-agent": "web-gemini-4-argon-spark",
-    "web-task": "web-gemini-4-argon-spark",
-    "web-agent": "web-gemini-4-argon-spark",
-    "web-spark": "web-gemini-4-argon-spark",
-    "web-spark-argon": "web-gemini-4-argon-spark",
-    "web-task-spark": "web-gemini-4-argon-spark",
-    "spark-task": "web-gemini-4-argon-spark",
-    "task-spark": "web-gemini-4-argon-spark",
-    "spark": "web-gemini-4-argon-spark",
-    "spark-argon": "web-gemini-4-argon-spark",
-    "gemini-spark": "web-gemini-4-argon-spark",
-    "web-spark-flash": "web-gemini-3.8-flash-spark",
-    "spark-flash": "web-gemini-3.8-flash-spark",
-    "gemini-spark-flash": "web-gemini-3.8-flash-spark",
+    # Web prefix aliases (web-*) mapped to canonical suffix (*-web)
+    "web-gemini-4-argon": "gemini-4-argon-web-high",
+    "web-gemini-4-argon-high": "gemini-4-argon-web-high",
+    "web-gemini-4-argon-medium": "gemini-4-argon-web-medium",
+    "web-gemini-4-argon-low": "gemini-4-argon-web-low",
+    "web-gemini-4-argon-spark": "gemini-4-argon-web-spark",
+    "web-gemini-4-argon-task": "gemini-4-argon-web-spark",
+    "web-gemini-4-argon-agent": "gemini-4-argon-web-spark",
+    "web-gemini-4-spark": "gemini-4-argon-web-spark",
+    "web-gemini-4-task": "gemini-4-argon-web-spark",
+    "web-gemini-4-agent": "gemini-4-argon-web-spark",
+    "web-gemini-4": "gemini-4-argon-web-high",
+    "web-argon": "gemini-4-argon-web-high",
+    "web-argon-spark": "gemini-4-argon-web-spark",
+    "web-argon-task": "gemini-4-argon-web-spark",
+    "web-argon-agent": "gemini-4-argon-web-spark",
+    "web-task": "gemini-4-argon-web-spark",
+    "web-agent": "gemini-4-argon-web-spark",
+    "web-spark": "gemini-4-argon-web-spark",
+    "web-spark-argon": "gemini-4-argon-web-spark",
+    "web-task-spark": "gemini-4-argon-web-spark",
+    "spark-task": "gemini-4-argon-web-spark",
+    "task-spark": "gemini-4-argon-web-spark",
+    "spark": "gemini-4-argon-web-spark",
+    "spark-argon": "gemini-4-argon-web-spark",
+    "gemini-spark": "gemini-4-argon-web-spark",
+    "web-spark-flash": "gemini-3.8-flash-web-spark",
+    "spark-flash": "gemini-3.8-flash-web-spark",
+    "gemini-spark-flash": "gemini-3.8-flash-web-spark",
 
-    "web-gemini-3.8-flash": "web-gemini-3.8-flash-high",
-    "web-gemini-3.8-flash-high": "web-gemini-3.8-flash-high",
-    "web-gemini-3.8-flash-medium": "web-gemini-3.8-flash-medium",
-    "web-gemini-3.8-flash-low": "web-gemini-3.8-flash-low",
-    "web-gemini-3.8-flash-spark": "web-gemini-3.8-flash-spark",
-    "web-gemini-3.8-flash-task": "web-gemini-3.8-flash-spark",
-    "web-gemini-3.8-flash-agent": "web-gemini-3.8-flash-spark",
-    "web-gemini-3.8-spark": "web-gemini-3.8-flash-spark",
-    "web-gemini-3.8-task": "web-gemini-3.8-flash-spark",
-    "web-gemini-3.8-agent": "web-gemini-3.8-flash-spark",
-    "web-flash": "web-gemini-3.8-flash-high",
-    "web-flash-spark": "web-gemini-3.8-flash-spark",
-    "web-flash-task": "web-gemini-3.8-flash-spark",
+    "web-gemini-3.8-flash": "gemini-3.8-flash-web-high",
+    "web-gemini-3.8-flash-high": "gemini-3.8-flash-web-high",
+    "web-gemini-3.8-flash-medium": "gemini-3.8-flash-web-medium",
+    "web-gemini-3.8-flash-low": "gemini-3.8-flash-web-low",
+    "web-gemini-3.8-flash-spark": "gemini-3.8-flash-web-spark",
+    "web-gemini-3.8-flash-task": "gemini-3.8-flash-web-spark",
+    "web-gemini-3.8-flash-agent": "gemini-3.8-flash-web-spark",
+    "web-gemini-3.8-spark": "gemini-3.8-flash-web-spark",
+    "web-gemini-3.8-task": "gemini-3.8-flash-web-spark",
+    "web-gemini-3.8-agent": "gemini-3.8-flash-web-spark",
+    "web-flash": "gemini-3.8-flash-web-high",
+    "web-flash-spark": "gemini-3.8-flash-web-spark",
+    "web-flash-task": "gemini-3.8-flash-web-spark",
 
-    "web-gemini-3.1-pro": "web-gemini-3.1-pro-high",
-    "web-gemini-3.1-pro-high": "web-gemini-3.1-pro-high",
-    "web-gemini-3.1-pro-medium": "web-gemini-3.1-pro-medium",
-    "web-gemini-3.1-pro-low": "web-gemini-3.1-pro-low",
-    "web-pro": "web-gemini-3.1-pro-high",
+    "web-gemini-3.1-pro": "gemini-3.1-pro-web-high",
+    "web-gemini-3.1-pro-high": "gemini-3.1-pro-web-high",
+    "web-gemini-3.1-pro-medium": "gemini-3.1-pro-web-medium",
+    "web-gemini-3.1-pro-low": "gemini-3.1-pro-web-low",
+    "web-pro": "gemini-3.1-pro-web-high",
 
-    "web-gemini-3.5-flash-lite": "web-gemini-3.5-flash-lite-high",
-    "web-gemini-3.5-flash-lite-high": "web-gemini-3.5-flash-lite-high",
-    "web-gemini-3.5-flash-lite-medium": "web-gemini-3.5-flash-lite-medium",
-    "web-gemini-3.5-flash-lite-low": "web-gemini-3.5-flash-lite-low",
-    "web-flash-lite": "web-gemini-3.5-flash-lite-high",
+    "web-gemini-3.5-flash-lite": "gemini-3.5-flash-lite-web-high",
+    "web-gemini-3.5-flash-lite-high": "gemini-3.5-flash-lite-web-high",
+    "web-gemini-3.5-flash-lite-medium": "gemini-3.5-flash-lite-web-medium",
+    "web-gemini-3.5-flash-lite-low": "gemini-3.5-flash-lite-web-low",
+    "web-flash-lite": "gemini-3.5-flash-lite-web-high",
 
     # Suffix *-web models (legacy / compatibility with CloudCode placeholder enums)
     "gemini-4-argon-web": "gemini-4-argon-web-high",
@@ -938,40 +938,39 @@ def normalize_model_name(model_name: Any) -> str:
     )
 
     if is_web_query:
-        is_canonical_web = raw.startswith("web-") or raw.startswith("web_") or raw.startswith("web/")
         if "spark" in cleaned:
             if "3.8" in cleaned or ("flash" in cleaned and "lite" not in cleaned):
-                return "web-gemini-3.8-flash-spark" if is_canonical_web else "gemini-3.8-flash-web-spark"
-            return "web-gemini-4-argon-spark" if is_canonical_web else "gemini-4-argon-web-spark"
+                return "gemini-3.8-flash-web-spark"
+            return "gemini-4-argon-web-spark"
         if "task" in cleaned or "agent" in cleaned:
             if "3.8" in cleaned or ("flash" in cleaned and "lite" not in cleaned):
-                return "web-gemini-3.8-flash-task" if is_canonical_web else "gemini-3.8-flash-web-task"
-            return "web-gemini-4-argon-task" if is_canonical_web else "gemini-4-argon-web-task"
+                return "gemini-3.8-flash-web-task"
+            return "gemini-4-argon-web-task"
         if "argon" in cleaned or "gemini-4" in cleaned or "gemini-4.0" in cleaned or cleaned == "gemini-4":
             if "low" in cleaned:
-                return "web-gemini-4-argon-low" if is_canonical_web else "gemini-4-argon-web-low"
+                return "gemini-4-argon-web-low"
             if "med" in cleaned:
-                return "web-gemini-4-argon-medium" if is_canonical_web else "gemini-4-argon-web-medium"
-            return "web-gemini-4-argon-high" if is_canonical_web else "gemini-4-argon-web-high"
+                return "gemini-4-argon-web-medium"
+            return "gemini-4-argon-web-high"
         if "3.5" in cleaned or "lite" in cleaned:
             if "low" in cleaned:
-                return "web-gemini-3.5-flash-lite-low" if is_canonical_web else "gemini-3.5-flash-lite-web-low"
+                return "gemini-3.5-flash-lite-web-low"
             if "med" in cleaned:
-                return "web-gemini-3.5-flash-lite-medium" if is_canonical_web else "gemini-3.5-flash-lite-web-medium"
-            return "web-gemini-3.5-flash-lite-high" if is_canonical_web else "gemini-3.5-flash-lite-web-high"
+                return "gemini-3.5-flash-lite-web-medium"
+            return "gemini-3.5-flash-lite-web-high"
         if "3.1-pro" in cleaned or "3_1-pro" in cleaned or "3-1-pro" in cleaned or ("pro" in cleaned and "2.5" not in cleaned):
             if "low" in cleaned:
-                return "web-gemini-3.1-pro-low" if is_canonical_web else "gemini-3.1-pro-web-low"
+                return "gemini-3.1-pro-web-low"
             if "med" in cleaned:
-                return "web-gemini-3.1-pro-medium" if is_canonical_web else "gemini-3.1-pro-web-medium"
-            return "web-gemini-3.1-pro-high" if is_canonical_web else "gemini-3.1-pro-web-high"
+                return "gemini-3.1-pro-web-medium"
+            return "gemini-3.1-pro-web-high"
         if "3.8" in cleaned or "flash" in cleaned:
             if "low" in cleaned:
-                return "web-gemini-3.8-flash-low" if is_canonical_web else "gemini-3.8-flash-web-low"
+                return "gemini-3.8-flash-web-low"
             if "med" in cleaned:
-                return "web-gemini-3.8-flash-medium" if is_canonical_web else "gemini-3.8-flash-web-medium"
-            return "web-gemini-3.8-flash-high" if is_canonical_web else "gemini-3.8-flash-web-high"
-        return "web-gemini-4-argon-high" if is_canonical_web else "gemini-4-argon-web-high"
+                return "gemini-3.8-flash-web-medium"
+            return "gemini-3.8-flash-web-high"
+        return "gemini-4-argon-web-high"
 
     # Non-web Keyword checks
     # Claude query check

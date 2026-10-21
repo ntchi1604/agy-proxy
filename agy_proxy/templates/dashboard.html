@@ -4004,17 +4004,17 @@ ightarrow$ v1.0.3</p>
     }
 
     const GEMINI_WEB_MODELS = [
-      { id: 'web-gemini-4-argon-high', name: '4-argon (high) [Web Flagship · Thinking]' },
-      { id: 'web-gemini-4-argon-medium', name: '4-argon (medium) [Web · Thinking]' },
-      { id: 'web-gemini-4-argon-low', name: '4-argon (low) [Web · Fast]' },
-      { id: 'web-gemini-4-argon-spark', name: '4-argon spark (web) [Autonomous Spark Agent]' },
-      { id: 'web-gemini-3.8-flash-spark', name: '3.8-flash spark (web) [Autonomous Spark Agent]' },
-      { id: 'web-gemini-3.5-flash-lite-high', name: '3.5-flash-lite (high) [Web · Thinking]' },
-      { id: 'web-gemini-3.5-flash-lite-medium', name: '3.5-flash-lite (medium) [Web · Thinking]' },
-      { id: 'web-gemini-3.5-flash-lite-low', name: '3.5-flash-lite (low) [Web · Ultra Fast]' },
-      { id: 'web-gemini-3.8-flash-high', name: '3.8-flash (high) [Web · Thinking]' },
-      { id: 'web-gemini-3.8-flash-low', name: '3.8-flash (low) [Web · Fast]' },
-      { id: 'web-gemini-3.1-pro-high', name: '3.1-pro (high) [Web · Thinking]' },
+      { id: 'gemini-4-argon-web-high', name: 'gemini-4-argon-web-high (Flagship · High Thinking)' },
+      { id: 'gemini-4-argon-web-medium', name: 'gemini-4-argon-web-medium (Medium Thinking)' },
+      { id: 'gemini-4-argon-web-low', name: 'gemini-4-argon-web-low (Fast)' },
+      { id: 'gemini-4-argon-web-spark', name: 'gemini-4-argon-web-spark [Autonomous Spark Agent]' },
+      { id: 'gemini-3.8-flash-web-high', name: 'gemini-3.8-flash-web-high (Flash High Thinking)' },
+      { id: 'gemini-3.8-flash-web-low', name: 'gemini-3.8-flash-web-low (Flash Fast)' },
+      { id: 'gemini-3.8-flash-web-spark', name: 'gemini-3.8-flash-web-spark [Autonomous Spark Agent]' },
+      { id: 'gemini-3.1-pro-web-high', name: 'gemini-3.1-pro-web-high (Pro High Thinking)' },
+      { id: 'gemini-3.5-flash-lite-web-high', name: 'gemini-3.5-flash-lite-web-high (Lite High Thinking)' },
+      { id: 'gemini-3.5-flash-lite-web-medium', name: 'gemini-3.5-flash-lite-web-medium (Lite Medium)' },
+      { id: 'gemini-3.5-flash-lite-web-low', name: 'gemini-3.5-flash-lite-web-low (Lite Ultra Fast)' },
     ];
 
     const API_KEY_MODELS = [
@@ -4079,7 +4079,7 @@ ightarrow$ v1.0.3</p>
         if (GEMINI_WEB_MODELS.some(m => m.id === prevVal)) {
           select.value = prevVal;
         } else {
-          select.value = 'web-gemini-4-argon-high';
+          select.value = 'gemini-4-argon-web-high';
         }
       } else if (acc && acc.auth_method === 'api_key') {
         // STRICT: Google AI Studio API Keys ONLY support Gemini API models (no Claude, no web-only)
@@ -4381,9 +4381,9 @@ ightarrow$ v1.0.3</p>
       if (acc && acc.auth_method === 'gemini_web') {
         const modelSel = document.getElementById('modelSelect');
         if (modelSel) {
-          modelSel.value = 'web-gemini-4-argon-high';
+          modelSel.value = 'gemini-4-argon-web-high';
           const activeM = document.getElementById('activeModelBadge');
-          if (activeM) activeM.innerText = 'web-gemini-4-argon-high';
+          if (activeM) activeM.innerText = 'gemini-4-argon-web-high';
         }
       }
       setTimeout(() => {
