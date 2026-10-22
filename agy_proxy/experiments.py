@@ -1770,27 +1770,25 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                         exp_val["boolValue"] = True
 
     # Unlock Gemini 4 Argon if returned as disabled for consumer tier
+    # Strategy: use only gemini-4-argon key (remove gemini-4-argon-disabled to prevent duplicate)
     if "gemini-4-argon-disabled" in models:
-        # 1. Fully unlock original gemini-4-argon-disabled entry
-        models["gemini-4-argon-disabled"]["disabled"] = False
-        models["gemini-4-argon-disabled"]["recommended"] = True
-        models["gemini-4-argon-disabled"].pop("tagTitle", None)
-        models["gemini-4-argon-disabled"].pop("tagDescription", None)
-
-        # 2. Create and unlock gemini-4-argon
+        # Promote gemini-4-argon-disabled → gemini-4-argon (single clean entry, no duplicate)
+        argon_entry = models.pop("gemini-4-argon-disabled")
+        argon_entry["disabled"] = False
+        argon_entry["recommended"] = True
+        argon_entry.pop("tagTitle", None)
+        argon_entry.pop("tagDescription", None)
+        argon_entry.pop("betaWarningMessage", None)
+        # Only set if not already present (gemini-4-argon might already exist)
         if "gemini-4-argon" not in models:
-            argon_entry = copy.deepcopy(models["gemini-4-argon-disabled"])
-            argon_entry["recommended"] = True
-            argon_entry["disabled"] = False
-            argon_entry.pop("tagTitle", None)
-            argon_entry.pop("tagDescription", None)
             models["gemini-4-argon"] = argon_entry
         else:
             models["gemini-4-argon"]["disabled"] = False
             models["gemini-4-argon"]["recommended"] = True
             models["gemini-4-argon"].pop("tagTitle", None)
             models["gemini-4-argon"].pop("tagDescription", None)
-    elif "gemini-4-argon" in models:
+
+    if "gemini-4-argon" in models:
         models["gemini-4-argon"]["disabled"] = False
         models["gemini-4-argon"]["recommended"] = True
         models["gemini-4-argon"].pop("tagTitle", None)
@@ -1806,7 +1804,7 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                 m_info.pop("tagDescription", None)
             m_info.pop("betaWarningMessage", None)
 
-    # Synchronize agentModelSorts so gemini-4-argon is present alongside gemini-4-argon-disabled
+    # Fix agentModelSorts: replace gemini-4-argon-disabled with gemini-4-argon (dedup, single entry)
     sorts = data.get("agentModelSorts")
     if isinstance(sorts, list):
         for s in sorts:
@@ -1815,12 +1813,18 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                     if isinstance(grp, dict):
                         mids = grp.get("modelIds")
                         if isinstance(mids, list):
-                            if "gemini-4-argon-disabled" in mids and "gemini-4-argon" not in mids:
-                                idx = mids.index("gemini-4-argon-disabled")
-                                mids.insert(idx + 1, "gemini-4-argon")
-                            elif "gemini-4-argon" in mids and "gemini-4-argon-disabled" not in mids:
-                                idx = mids.index("gemini-4-argon")
-                                mids.insert(idx + 1, "gemini-4-argon-disabled")
+                            # Replace all gemini-4-argon-disabled → gemini-4-argon
+                            for i, mid in enumerate(mids):
+                                if mid == "gemini-4-argon-disabled":
+                                    mids[i] = "gemini-4-argon"
+                            # Deduplicate: keep only first occurrence of gemini-4-argon
+                            seen = set()
+                            deduped = []
+                            for mid in mids:
+                                if mid not in seen:
+                                    seen.add(mid)
+                                    deduped.append(mid)
+                            grp["modelIds"] = deduped
 
     # Ensure bidirectional catalog redirection for Claude 3P models:
     # claude-sonnet-4-6 <-> MODEL_PLACEHOLDER_M35
