@@ -3489,22 +3489,6 @@ def create_app(
                                 if has_tools:
                                     preamble, tool_call = CloudCodeClient._extract_gemini_web_tool_call(accumulated_text, declared_tools)
                                     clean_preamble = re.sub(r"(?:```)?(?:json)?\s*$", "", (preamble or "").strip(), flags=re.IGNORECASE).strip()
-                                    if clean_preamble:
-                                        event_preamble = {
-                                            "response": {
-                                                "candidates": [{
-                                                    "content": {
-                                                        "role": "model",
-                                                        "parts": [{"text": clean_preamble}],
-                                                    },
-                                                    "finishReason": None,
-                                                    "index": 0,
-                                                }],
-                                                "modelVersion": req_model,
-                                            }
-                                        }
-                                        yield f"data: {json.dumps(event_preamble)}\n\n"
-
                                     if tool_call:
                                         call_id = f"call_{uuid.uuid4().hex[:8]}"
                                         logger.info(
@@ -3513,6 +3497,22 @@ def create_app(
                                             tool_call["name"],
                                             list(tool_call.get("arguments", {}).keys()),
                                         )
+                                        if clean_preamble:
+                                            event_preamble = {
+                                                "response": {
+                                                    "candidates": [{
+                                                        "content": {
+                                                            "role": "model",
+                                                            "parts": [{"text": clean_preamble}],
+                                                        },
+                                                        "finishReason": None,
+                                                        "index": 0,
+                                                    }],
+                                                    "modelVersion": req_model,
+                                                }
+                                            }
+                                            yield f"data: {json.dumps(event_preamble)}\n\n"
+
                                         event_tool = {
                                             "response": {
                                                 "candidates": [{
@@ -3539,13 +3539,13 @@ def create_app(
                                         }
                                         yield f"data: {json.dumps(event_tool)}\n\n"
                                     else:
-                                        clean_acc = accumulated_text.strip()
+                                        clean_acc = clean_preamble or accumulated_text.strip() or "Task completed."
                                         event_text = {
                                             "response": {
                                                 "candidates": [{
                                                     "content": {
                                                         "role": "model",
-                                                        "parts": [{"text": clean_acc if clean_acc else "Task completed."}],
+                                                        "parts": [{"text": clean_acc}],
                                                     },
                                                     "finishReason": "STOP",
                                                     "index": 0,
