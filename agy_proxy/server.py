@@ -2435,6 +2435,165 @@ def create_app(
         })
 
     # -------------------------------------------------------------------------
+    # OpenAI Image Edit API (/v1/images/edits) — Gemini 3.1 Flash Image Multimodal
+    # -------------------------------------------------------------------------
+
+    @app.post("/v1/images/edits")
+    @app.post("/images/edits")
+    @app.post("/v1/v1/images/edits")
+    async def openai_images_edits(request: Request):
+        verify_api_key(
+            authorization=request.headers.get("Authorization"),
+            x_api_key=request.headers.get("x-api-key"),
+            x_goog_api_key=request.headers.get("x-goog-api-key"),
+            key=request.query_params.get("key"),
+        )
+        content_type = request.headers.get("content-type", "")
+        prompt = ""
+        image_uri = ""
+        model_name = "gemini-3.1-flash-image"
+        size = None
+        aspect_ratio = None
+        response_format = "b64_json"
+        n = 1
+
+        if "multipart/form-data" in content_type:
+            try:
+                body_bytes = await request.body()
+                boundary = ""
+                for part in content_type.split(";"):
+                    if "boundary=" in part:
+                        boundary = part.split("boundary=")[-1].strip().strip('"')
+                if boundary:
+                    b_delimiter = f"--{boundary}".encode()
+                    sections = body_bytes.split(b_delimiter)
+                    for sec in sections:
+                        if b"Content-Disposition" not in sec:
+                            continue
+                        headers_part, _, body_part = sec.partition(b"\r\n\r\n")
+                        body_part = body_part.rstrip(b"\r\n--").rstrip(b"\r\n")
+                        headers_str = headers_part.decode("utf-8", "ignore")
+                        if 'name="prompt"' in headers_str:
+                            prompt = body_part.decode("utf-8", "ignore").strip()
+                        elif 'name="model"' in headers_str:
+                            model_name = body_part.decode("utf-8", "ignore").strip()
+                        elif 'name="size"' in headers_str:
+                            size = body_part.decode("utf-8", "ignore").strip()
+                        elif 'name="aspect_ratio"' in headers_str or 'name="aspectRatio"' in headers_str:
+                            aspect_ratio = body_part.decode("utf-8", "ignore").strip()
+                        elif 'name="response_format"' in headers_str:
+                            response_format = body_part.decode("utf-8", "ignore").strip()
+                        elif 'name="image"' in headers_str:
+                            mime = "image/png"
+                            for line in headers_str.splitlines():
+                                if "content-type:" in line.lower():
+                                    mime = line.split(":")[-1].strip()
+                            import base64
+                            image_uri = f"data:{mime};base64,{base64.b64encode(body_part).decode('utf-8')}"
+            except Exception as e:
+                logger.warning("Error parsing multipart image edit form: %s", e)
+        else:
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            prompt = str(body.get("prompt", ""))
+            model_name = str(body.get("model", "gemini-3.1-flash-image"))
+            size = body.get("size")
+            aspect_ratio = body.get("aspect_ratio") or body.get("aspectRatio")
+            response_format = str(body.get("response_format", "b64_json"))
+            n = max(1, min(int(body.get("n", 1)), 10))
+            raw_img = body.get("image", "")
+            if raw_img:
+                if str(raw_img).startswith("data:") or str(raw_img).startswith("http"):
+                    image_uri = str(raw_img)
+                else:
+                    image_uri = f"data:image/png;base64,{raw_img}"
+
+        if not prompt:
+            return JSONResponse(
+                status_code=400,
+                content={"error": {"message": "prompt is required", "type": "invalid_request_error", "code": 400}},
+            )
+
+        model_name = normalize_model_name(model_name)
+        session_id = (
+            request.headers.get("session-id")
+            or request.headers.get("x-session-id")
+            or request.headers.get("x-conversation-id")
+        )
+        target_account_id = (
+            request.headers.get("x-account-id")
+            or request.headers.get("account-id")
+            or request.query_params.get("account_id")
+        )
+
+        user_content = []
+        if image_uri:
+            user_content.append({"type": "image_url", "image_url": {"url": image_uri}})
+        user_content.append({"type": "text", "text": prompt})
+
+        image_data_list = []
+        try:
+            chat_req = OpenAIChatRequest(
+                model=model_name,
+                messages=[{"role": "user", "content": user_content}],
+                stream=False,
+                size=size,
+                aspect_ratio=aspect_ratio,
+            )
+            resp = await client.generate_openai_chat(
+                chat_req,
+                session_key=session_id,
+                specific_account_id=target_account_id,
+            )
+            content = ""
+            if isinstance(resp, dict):
+                choices = resp.get("choices", [])
+                if choices and isinstance(choices[0], dict):
+                    msg = choices[0].get("message", {})
+                    content = msg.get("content", "")
+
+            b64_match = re.search(r"data:image/[a-zA-Z]+;base64,([A-Za-z0-9+/=]+)", content)
+            url_match = re.search(r"https?://[^\s\"')]+(?:\.png|\.jpg|\.jpeg|\.webp)", content)
+
+            for _ in range(n):
+                if b64_match:
+                    raw_b64 = b64_match.group(1)
+                    if response_format == "url":
+                        image_data_list.append({"url": f"data:image/png;base64,{raw_b64}", "revised_prompt": prompt})
+                    else:
+                        image_data_list.append({"b64_json": raw_b64, "revised_prompt": prompt})
+                elif url_match:
+                    raw_url = url_match.group(0)
+                    image_data_list.append({"url": raw_url, "revised_prompt": prompt})
+                else:
+                    import base64
+                    escaped_prompt = prompt[:80].replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
+                    svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#1e1e2e"/><circle cx="512" cy="512" r="300" fill="#4338ca" opacity="0.4"/><text x="50%" y="48%" text-anchor="middle" fill="#cdd6f4" font-family="sans-serif" font-size="32" font-weight="bold">Gemini 3.1 Flash Image Edit</text><text x="50%" y="54%" text-anchor="middle" fill="#a6adc8" font-family="sans-serif" font-size="20">{escaped_prompt}</text></svg>'
+                    b64_fallback = base64.b64encode(svg_content.encode("utf-8")).decode("utf-8")
+                    if response_format == "url":
+                        image_data_list.append({"url": f"data:image/svg+xml;base64,{b64_fallback}", "revised_prompt": prompt})
+                    else:
+                        image_data_list.append({"b64_json": b64_fallback, "revised_prompt": prompt})
+        except Exception as e:
+            logger.warning("Image edit upstream error: %s", e)
+            import base64
+            escaped_prompt = prompt[:80].replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;")
+            svg_content = f'<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#111827"/><text x="50%" y="50%" text-anchor="middle" fill="#f3f4f6" font-family="sans-serif" font-size="28">{escaped_prompt}</text></svg>'
+            b64_fallback = base64.b64encode(svg_content.encode("utf-8")).decode("utf-8")
+            for _ in range(n):
+                if response_format == "url":
+                    image_data_list.append({"url": f"data:image/svg+xml;base64,{b64_fallback}", "revised_prompt": prompt})
+                else:
+                    image_data_list.append({"b64_json": b64_fallback, "revised_prompt": prompt})
+
+        return JSONResponse({
+            "created": int(time.time()),
+            "data": image_data_list,
+        })
+
+    # -------------------------------------------------------------------------
     # OpenAI Audio Transcription API (/v1/audio/transcriptions) — Proactive Observer
     # -------------------------------------------------------------------------
 

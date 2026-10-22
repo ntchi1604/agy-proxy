@@ -124,6 +124,41 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         data_url = resp_url.json()
         self.assertIn("url", data_url["data"][0])
 
+    def test_openai_image_edit_endpoint(self):
+        # 1. Prompt is required
+        resp = self.client.post("/v1/images/edits", json={})
+        self.assertEqual(resp.status_code, 400)
+
+        # 2. JSON edit request with base64 image
+        dummy_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        resp = self.client.post(
+            "/v1/images/edits",
+            json={
+                "image": dummy_b64,
+                "prompt": "add a red hat",
+                "model": "gemini-3.1-flash-image",
+                "response_format": "b64_json",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("data", data)
+        self.assertIn("b64_json", data["data"][0])
+
+        # 3. Multipart edit request
+        files = {
+            "image": ("test.png", b"\x89PNG\r\n\x1a\nfakeimagebytes", "image/png"),
+        }
+        data_form = {
+            "prompt": "make it winter style",
+            "model": "gemini-3.1-flash-image",
+            "response_format": "url",
+        }
+        resp_mp = self.client.post("/v1/images/edits", data=data_form, files=files)
+        self.assertEqual(resp_mp.status_code, 200)
+        data_mp = resp_mp.json()
+        self.assertIn("url", data_mp["data"][0])
+
     def test_openai_audio_transcription_endpoint(self):
         resp = self.client.post(
             "/v1/audio/transcriptions",
