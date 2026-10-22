@@ -172,7 +172,7 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
                 }
             ],
             "commandModelIds": ["gemini-3-flash"],
-            "tabModelIds": ["chat_20706", "chat_23310"],
+            "tabModelIds": ["tab_flash_lite_preview", "tab_jump_flash_lite_preview", "chat_20706", "chat_23310"],
             "imageGenerationModelIds": ["gemini-3.1-flash-image"],
             "mqueryModelIds": ["gemini-3.5-flash-lite"],
             "webSearchModelIds": ["gemini-3.5-flash-lite"],
