@@ -15,6 +15,47 @@ logger = logging.getLogger("agy_proxy.claude_helper")
 
 
 CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
+    # ── Anthropic Claude 5.5 & 4.6 ──
+    "claude-sonnet-5-5-high": {
+        "displayName": "Claude Sonnet 5.5 (High Reasoning)",
+        "description": "Anthropic Claude Sonnet 5.5 flagship hybrid model with extended thinking",
+        "effortLevel": "high",
+    },
+    "claude-sonnet-5-5-medium": {
+        "displayName": "Claude Sonnet 5.5 (Medium Reasoning)",
+        "description": "Anthropic Claude Sonnet 5.5 with medium thinking depth",
+        "effortLevel": "medium",
+    },
+    "claude-sonnet-5-5-low": {
+        "displayName": "Claude Sonnet 5.5 (Low Reasoning)",
+        "description": "Anthropic Claude Sonnet 5.5 with fast low reasoning",
+        "effortLevel": "low",
+    },
+    "claude-sonnet-5-5": {
+        "displayName": "Claude Sonnet 5.5",
+        "description": "Anthropic Claude Sonnet 5.5 flagship hybrid model",
+        "effortLevel": "high",
+    },
+    "claude-opus-5-5-high": {
+        "displayName": "Claude Opus 5.5 (High Reasoning)",
+        "description": "Anthropic Claude Opus 5.5 high-capability reasoning model with deep thinking",
+        "effortLevel": "high",
+    },
+    "claude-opus-5-5-medium": {
+        "displayName": "Claude Opus 5.5 (Medium Reasoning)",
+        "description": "Anthropic Claude Opus 5.5 with medium thinking depth",
+        "effortLevel": "medium",
+    },
+    "claude-opus-5-5-low": {
+        "displayName": "Claude Opus 5.5 (Low Reasoning)",
+        "description": "Anthropic Claude Opus 5.5 with fast low reasoning",
+        "effortLevel": "low",
+    },
+    "claude-opus-5-5": {
+        "displayName": "Claude Opus 5.5 (Thinking)",
+        "description": "Anthropic Claude Opus 5.5 high-capability reasoning model",
+        "effortLevel": "high",
+    },
     "claude-sonnet-4-6": {
         "displayName": "Claude Sonnet 4.6 (Thinking)",
         "description": "Anthropic flagship hybrid model with extended thinking (Default 3P)",
@@ -40,19 +81,28 @@ CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
         "description": "Ultra fast lightweight model alias",
         "effortLevel": "low",
     },
-    "gemini-4-argon-web-high": {
-        "displayName": "Gemini 4 Argon (Web High)",
-        "description": "Google Next-Gen Gemini 4 Argon via Gemini Web session (High Reasoning)",
-        "effortLevel": "high",
+
+    # ── Image Generation & Unlimited Tab Models ──
+    "gemini-3.1-flash-image": {
+        "displayName": "Gemini 3.1 Flash Image (Imagen 3)",
+        "description": "Google multimodal image generation & synthesis model",
+        "effortLevel": "medium",
     },
-    "gemini-4-argon-web-spark": {
-        "displayName": "Gemini 4 Argon (Web Spark Agent)",
-        "description": "Google Next-Gen Gemini 4 Argon autonomous agent preset with Spark tools",
-        "effortLevel": "high",
+    "tab_flash_lite_preview": {
+        "displayName": "Antigravity Tab (Flash Lite Preview)",
+        "description": "Ultra-fast unlimited code completion & tab agent model",
+        "effortLevel": "low",
     },
-    "anthropic.gemini-4-argon-web-high": {
-        "displayName": "Gemini 4 Argon (Web High - Anthropic Alias)",
-        "description": "Google Next-Gen Gemini 4 Argon Web model with extended thinking",
+    "tab_jump_flash_lite_preview": {
+        "displayName": "Antigravity Tab Jump (Flash Lite Preview)",
+        "description": "Ultra-fast code jump navigation & completion model",
+        "effortLevel": "low",
+    },
+
+    # ── Gemini 4 Argon & 3.8 Flash (CloudCode) ──
+    "gemini-4-argon": {
+        "displayName": "Gemini 4 Argon",
+        "description": "Google Next-Gen Gemini 4 Argon Flagship model",
         "effortLevel": "high",
     },
     "gemini-4-argon-high": {
@@ -60,25 +110,144 @@ CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
         "description": "Google Next-Gen Gemini 4 Argon CloudCode Flagship with deep reasoning",
         "effortLevel": "high",
     },
-    "anthropic.gemini-3.8-flash-high": {
-        "displayName": "Gemini 3.8 Flash (High Reasoning)",
-        "description": "Google Flagship model with deep thinking & reasoning capabilities",
-        "effortLevel": "high",
+    "gemini-4-argon-medium": {
+        "displayName": "Gemini 4 Argon (Medium Reasoning)",
+        "description": "Google Next-Gen Gemini 4 Argon with balanced reasoning depth",
+        "effortLevel": "medium",
+    },
+    "gemini-4-argon-low": {
+        "displayName": "Gemini 4 Argon (Low Reasoning)",
+        "description": "Google Next-Gen Gemini 4 Argon with fast lightweight reasoning",
+        "effortLevel": "low",
     },
     "gemini-3.8-flash-high": {
         "displayName": "Gemini 3.8 Flash (High Reasoning)",
         "description": "Google Flagship model with deep thinking & reasoning capabilities",
         "effortLevel": "high",
     },
-    "gemini-3.8-flash-web-spark": {
-        "displayName": "Gemini 3.8 Flash (Web Spark Agent)",
-        "description": "Gemini 3.8 Flash autonomous agent preset with Spark Web execution",
+    "gemini-3.8-flash-medium": {
+        "displayName": "Gemini 3.8 Flash (Medium Reasoning)",
+        "description": "Google Gemini 3.8 Flash with balanced reasoning depth",
+        "effortLevel": "medium",
+    },
+    "gemini-3.8-flash-low": {
+        "displayName": "Gemini 3.8 Flash (Low Reasoning)",
+        "description": "Google Gemini 3.8 Flash with fast lightweight reasoning",
+        "effortLevel": "low",
+    },
+    "gemini-3.8-flash-tiered": {
+        "displayName": "Gemini 3.8 Flash (Tiered Reasoning)",
+        "description": "Google Gemini 3.8 Flash with dynamic adaptive reasoning effort",
         "effortLevel": "high",
     },
     "gemini-3.8-flash-deepagent": {
         "displayName": "Gemini 3.8 Flash (DeepAgent Swarm)",
         "description": "Autonomous multi-agent swarm preset with 64k thinking budget",
         "effortLevel": "high",
+    },
+    "anthropic.gemini-3.8-flash-high": {
+        "displayName": "Gemini 3.8 Flash (High Reasoning - Anthropic Alias)",
+        "description": "Google Flagship model with deep thinking & reasoning capabilities",
+        "effortLevel": "high",
+    },
+    "anthropic.gemini-4-argon-web-high": {
+        "displayName": "Gemini 4 Argon (Web High - Anthropic Alias)",
+        "description": "Google Next-Gen Gemini 4 Argon Web model with extended thinking",
+        "effortLevel": "high",
+    },
+
+    # ── Additional Gemini Flagship Models ──
+    "gemini-3.5-flash-lite": {
+        "displayName": "Gemini 3.5 Flash Lite",
+        "description": "Ultra-fast lightweight high-efficiency coding model",
+        "effortLevel": "low",
+    },
+    "gemini-3.1-flash-lite": {
+        "displayName": "Gemini 3.1 Flash Lite",
+        "description": "Ultra-fast low-latency assistant model",
+        "effortLevel": "low",
+    },
+    "gemini-2.5-pro": {
+        "displayName": "Gemini 2.5 Pro",
+        "description": "Google multimodal complex reasoning powerhouse",
+        "effortLevel": "high",
+    },
+    "gemini-2.5-flash": {
+        "displayName": "Gemini 2.5 Flash",
+        "description": "High speed multimodal flagship model",
+        "effortLevel": "medium",
+    },
+
+    # ── Gemini Web Models (gemini.google.com session) ──
+    "gemini-4-argon-web-high": {
+        "displayName": "Gemini 4 Argon (Web High)",
+        "description": "Google Next-Gen Gemini 4 Argon via Gemini Web session (High Reasoning)",
+        "effortLevel": "high",
+    },
+    "gemini-4-argon-web-medium": {
+        "displayName": "Gemini 4 Argon (Web Medium)",
+        "description": "Google Next-Gen Gemini 4 Argon via Gemini Web session (Medium Reasoning)",
+        "effortLevel": "medium",
+    },
+    "gemini-4-argon-web-low": {
+        "displayName": "Gemini 4 Argon (Web Low)",
+        "description": "Google Next-Gen Gemini 4 Argon via Gemini Web session (Fast Low Reasoning)",
+        "effortLevel": "low",
+    },
+    "gemini-4-argon-web-spark": {
+        "displayName": "Gemini 4 Argon (Web Spark Agent)",
+        "description": "Google Next-Gen Gemini 4 Argon autonomous agent preset with Spark tools",
+        "effortLevel": "high",
+    },
+    "gemini-3.8-flash-web-high": {
+        "displayName": "Gemini 3.8 Flash (Web High)",
+        "description": "Google Gemini 3.8 Flash via Gemini Web session (High Reasoning)",
+        "effortLevel": "high",
+    },
+    "gemini-3.8-flash-web-medium": {
+        "displayName": "Gemini 3.8 Flash (Web Medium)",
+        "description": "Google Gemini 3.8 Flash via Gemini Web session (Medium Reasoning)",
+        "effortLevel": "medium",
+    },
+    "gemini-3.8-flash-web-low": {
+        "displayName": "Gemini 3.8 Flash (Web Low)",
+        "description": "Google Gemini 3.8 Flash via Gemini Web session (Low Reasoning)",
+        "effortLevel": "low",
+    },
+    "gemini-3.8-flash-web-spark": {
+        "displayName": "Gemini 3.8 Flash (Web Spark Agent)",
+        "description": "Gemini 3.8 Flash autonomous agent preset with Spark Web execution",
+        "effortLevel": "high",
+    },
+    "gemini-3.1-pro-web-high": {
+        "displayName": "Gemini 3.1 Pro (Web High)",
+        "description": "Google Gemini 3.1 Pro via Gemini Web session (High Reasoning)",
+        "effortLevel": "high",
+    },
+    "gemini-3.1-pro-web-medium": {
+        "displayName": "Gemini 3.1 Pro (Web Medium)",
+        "description": "Google Gemini 3.1 Pro via Gemini Web session (Medium Reasoning)",
+        "effortLevel": "medium",
+    },
+    "gemini-3.1-pro-web-low": {
+        "displayName": "Gemini 3.1 Pro (Web Low)",
+        "description": "Google Gemini 3.1 Pro via Gemini Web session (Low Reasoning)",
+        "effortLevel": "low",
+    },
+    "gemini-3.5-flash-lite-web-high": {
+        "displayName": "Gemini 3.5 Flash Lite (Web High)",
+        "description": "Google Gemini 3.5 Flash Lite via Gemini Web session (High Reasoning)",
+        "effortLevel": "high",
+    },
+    "gemini-3.5-flash-lite-web-medium": {
+        "displayName": "Gemini 3.5 Flash Lite (Web Medium)",
+        "description": "Google Gemini 3.5 Flash Lite via Gemini Web session (Medium Reasoning)",
+        "effortLevel": "medium",
+    },
+    "gemini-3.5-flash-lite-web-low": {
+        "displayName": "Gemini 3.5 Flash Lite (Web Low)",
+        "description": "Google Gemini 3.5 Flash Lite via Gemini Web session (Low Reasoning)",
+        "effortLevel": "low",
     },
 }
 

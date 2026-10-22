@@ -50,6 +50,12 @@ class TestCodexHelper(unittest.TestCase):
         self.assertIn("gemini-4-argon-web-high", slugs)
         self.assertIn("gemini-4-argon-web-spark", slugs)
         self.assertIn("gemini-3.8-flash-web-spark", slugs)
+        self.assertIn("claude-sonnet-5-5-high", slugs)
+        self.assertIn("claude-opus-5-5-high", slugs)
+        self.assertIn("gemini-3.1-flash-image", slugs)
+        self.assertIn("tab_flash_lite_preview", slugs)
+        self.assertIn("gemini-4-argon-web-medium", slugs)
+        self.assertIn("gemini-3.1-pro-web-high", slugs)
         self.assertNotIn("gpt-daybreak-blue-latest", slugs)
         self.assertNotIn("gpt-daybreak-red-latest", slugs)
 

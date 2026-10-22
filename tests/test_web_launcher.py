@@ -295,7 +295,7 @@ def test_extract_and_patch_web_bundle(tmp_path):
     # Check patched main.js content
     main_js_content = (out_bundle / "main.js").read_text()
     assert "MODEL_ENUM_MAP" in main_js_content
-    assert "_sep_ordered_v13" in main_js_content
+    assert "_sep_ordered_v14" in main_js_content
     assert "cleanTemplate" in main_js_content
     assert "gemini-3.1-flash-image" in main_js_content
     assert "tab_flash_lite_preview" in main_js_content
@@ -421,6 +421,114 @@ def test_sync_bundle_proxy_mode_direct_vs_proxy(tmp_path):
     js_content = (out_bundle / "main.js").read_text()
     assert "gemini-3.1-flash-image" in js_content
     assert "isProxyActive" in js_content
+
+
+def test_enhance_user_status_direct_and_proxy_models(tmp_path):
+    import json
+    import subprocess
+    import shutil
+    from agy_proxy.web_launcher import patch_web_bundle
+
+    bundle_dir = tmp_path / "model_test_bundle"
+    bundle_dir.mkdir()
+    dummy_js = 'restrictToCorpDomain:!0; var tk=a=>a.modelOrAlias?{label:a.label,value:1}; function gMa({children:a,userStatus:b}){return .Provider,{value:g},a)}'
+    (bundle_dir / "main.js").write_text(dummy_js, encoding="utf-8")
+    (bundle_dir / "index.html").write_text("<html><head></head><body></body></html>", encoding="utf-8")
+
+    assert patch_web_bundle(bundle_dir) is True
+    patched_js = (bundle_dir / "main.js").read_text(encoding="utf-8")
+
+    # Verify all expected model IDs and enums are present in MODEL_ENUM_MAP
+    assert '"gemini-4-argon":1421' in patched_js
+    assert '"gemini-4-argon-high":1421' in patched_js
+    assert '"gemini-4-argon-medium":1422' in patched_js
+    assert '"gemini-4-argon-low":1423' in patched_js
+    assert '"claude-sonnet-5-5-high":1515' in patched_js
+    assert '"claude-opus-5-5-high":1518' in patched_js
+    assert '"gemini-3.8-flash-deepagent":1522' in patched_js
+    assert '"gemini-3.7-flash":1315' in patched_js
+    assert '"gemini-3.6-flash-high":1524' in patched_js
+    assert '"gemini-3.1-pro-high":1531' in patched_js
+
+    # If node is installed, execute the patched enhanceUserStatus in both direct and proxy modes
+    node_bin = shutil.which("node")
+    if node_bin:
+        start = patched_js.find("var MODEL_ENUM_MAP={")
+        end = patched_js.find("};", patched_js.find("return b}}", start)) + 2
+        enhancer_js = patched_js[start:end]
+
+        test_script = f"""
+        {enhancer_js}
+        
+        function runTest(isProxy) {{
+            global.window = {{ __AGY_PROXY_ACTIVE__: isProxy }};
+            var initialUserStatus = {{
+                cascadeModelConfigData: {{
+                    clientModelConfigs: [
+                        {{ label: "Gemini 3.8 Flash (High)", disabled: false }},
+                        {{ label: "Gemini 4 Argon", modelId: "gemini-4-argon-disabled", disabled: true }}
+                    ],
+                    clientModelSorts: [
+                        {{ name: "Recommended", groups: [{{ modelLabels: ["Gemini 3.8 Flash (High)", "Gemini 4 Argon"] }}] }}
+                    ]
+                }}
+            }};
+            var enhanced = __enhanceUserStatus(initialUserStatus);
+            var recGroup = enhanced.cascadeModelConfigData.clientModelSorts[0].groups[0];
+            var configs = enhanced.cascadeModelConfigData.clientModelConfigs;
+            return {{
+                labels: recGroup.modelLabels,
+                configs: configs.map(c => ({{ label: c.label, disabled: c.disabled, value: c.value }}))
+            }};
+        }}
+        
+        var directRes = runTest(false);
+        var proxyRes = runTest(true);
+        console.log(JSON.stringify({{ direct: directRes, proxy: proxyRes }}));
+        """
+        proc = subprocess.run([node_bin, "-e", test_script], capture_output=True, text=True, check=True)
+        out = json.loads(proc.stdout)
+        
+        # In direct mode (offline / without proxy):
+        direct_labels = out["direct"]["labels"]
+        assert "── Default ──────────────────" in direct_labels
+        assert "── Web ──────────────────" not in direct_labels
+        assert "── Antigravity ───────────" in direct_labels
+        assert "── Fast Completion (Unlimited) ───" in direct_labels
+        assert "── Image Generation ─────────" in direct_labels
+        
+        # Verify key Antigravity models are in direct mode
+        assert "Gemini 4 Argon (High)" in direct_labels
+        assert "Gemini 4 Argon (Medium)" in direct_labels
+        assert "Gemini 4 Argon (Low)" in direct_labels
+        assert "Claude Sonnet 5.5 (High)" in direct_labels
+        assert "Claude Opus 5.5 (High)" in direct_labels
+        assert "Gemini 3.8 Flash (DeepAgent)" in direct_labels
+        assert "Gemini 3.8 Flash (Tiered)" in direct_labels
+        assert "Gemini 3.7 Flash (High)" in direct_labels
+        assert "Gemini 3.6 Flash (High)" in direct_labels
+        assert "Gemini 3.1 Pro (High)" in direct_labels
+        assert "Gemini 2.5 Pro" in direct_labels
+        assert "Gemini 3.1 Flash (Image)" in direct_labels
+        assert "Tab Flash Lite Preview [Unlimited]" in direct_labels
+        
+        # Verify no Web models leaked into direct mode
+        for lbl in direct_labels:
+            assert "(Web)" not in lbl
+            
+        # Verify all models have disabled: false
+        for cfg in out["direct"]["configs"]:
+            if not cfg["label"].startswith("──"):
+                assert cfg["disabled"] is False, f"Model {{cfg['label']}} should be enabled"
+                
+        # In proxy mode:
+        proxy_labels = out["proxy"]["labels"]
+        assert "── Web ──────────────────" in proxy_labels
+        assert "Gemini 4 Argon (Web) (High)" in proxy_labels
+        assert "Gemini 3.8 Flash (Web) (High)" in proxy_labels
+        assert "Gemini 3.1 Pro (Web) (High)" in proxy_labels
+        assert "Gemini 4 Argon (High)" in proxy_labels
+        assert "Claude Sonnet 5.5 (High)" in proxy_labels
 
 
 def test_can_open_browser_cooldown(tmp_path, monkeypatch):

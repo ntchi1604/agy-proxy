@@ -98,9 +98,9 @@ Using `agy-proxy web --patched` (or `agy-proxy web -P`) automatically extracts t
 - 🤖 **Autonomous Mode**: Enables the autonomous execution toggle (`labs-autonomous-mode`) without repeated permission prompts.
 - 💬 **Inline Actions & Thought Steering**: Displays floating toast action cards and allows editing agent thoughts in real-time.
 - 🎯 **Full Model Selector Unlocked**: Direct access to all Google models categorized neatly with section banners:
-  - **Default**: Default recommended workspace models.
-  - **Web**: Gemini 4 Argon (Web), Gemini 3.8 Flash (Web), Gemini 3.1 Pro (Web), Gemini 3.5 Flash-Lite (Web).
-  - **Antigravity**: Gemini 3.8 Flash (High/Med/Low/Tiered/DeepAgent), Claude Sonnet 4.6 & Opus 4.6 (Thinking), Claude Sonnet 5.5, GPT-OSS 120B, Gemini 3.5 Flash/Lite, Gemini 2.5 Pro/Flash/Thinking.
+  - **Default**: Default recommended workspace models (Gemini 3.8 Flash).
+  - **Web**: Gemini 4 Argon (Web), Gemini 3.8 Flash (Web), Gemini 3.1 Pro (Web), Gemini 3.5 Flash-Lite (Web) [shown only when running with proxy].
+  - **Antigravity**: Gemini 4 Argon (High/Med/Low), Claude Sonnet 5.5 (High/Med/Low), Claude Opus 5.5 (High/Med/Low), Gemini 3.8 Flash (DeepAgent & Tiered), Claude Sonnet 4.6 & Opus 4.6 (Thinking), GPT-OSS 120B, Gemini 3.7 Flash, Gemini 3.6 Flash, Gemini 3.5 Flash/Lite, Gemini 3.1 Pro (High/Med/Low), Gemini 3 Flash, Gemini 2.5 Pro/Flash/Thinking [always visible in both direct and proxy modes].
   - **Fast Completion (Unlimited)**: Tab Flash Lite Preview [Unlimited], Tab Jump Prediction [Unlimited].
   - **Image Generation**: Gemini 3.1 Flash (Image) (with full multimodal image attachments and markdown image rendering).
 - 🧹 **Google3 Clutter Removed**: Suppresses scary Google3 chat migration banners (`projectV5Migration`), broken `Agent Team` blaze calls, and inaccessible `Chief of Staff` concierge archives.
