@@ -76,6 +76,18 @@ def test_worker_endpoints_and_deepagent():
         if (!flag || flag.boolValue !== true) {{
           throw new Error('Deepagent flag not set to true');
         }}
+
+        // 3. Count tokens endpoint
+        const ctReq = new Request('https://edge.workers.dev/v1/messages/count_tokens', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ model: 'claude-sonnet-4-6', messages: [{{ role: 'user', content: 'test message' }}] }})
+        }});
+        const ctRes = await worker.fetch(ctReq, {{}});
+        const ctData = await ctRes.json();
+        if (typeof ctData.input_tokens !== 'number' || ctData.input_tokens <= 0) {{
+          throw new Error('count_tokens failed: ' + JSON.stringify(ctData));
+        }}
       }} finally {{
         globalThis.fetch = origFetch;
       }}

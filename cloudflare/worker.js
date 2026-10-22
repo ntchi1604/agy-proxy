@@ -915,19 +915,77 @@ function buildCloudCodePayload(reqJson, backendModel, auth) {
     };
   }
 
-  const generationConfig = {};
-  if (reqJson.max_tokens || reqJson.max_completion_tokens) {
-    generationConfig.maxOutputTokens =
-      reqJson.max_tokens || reqJson.max_completion_tokens;
+  let targetBackendModel = backendModel;
+  if (backendModel === "gemini-3.8-flash-deepagent" || backendModel === "gemini-deepagent") {
+    targetBackendModel = "gemini-3.8-flash-high";
+  } else if (
+    backendModel === "claude-sonnet-4-6-deepagent" ||
+    backendModel === "claude-deepagent" ||
+    backendModel === "claude-sonnet-deepagent"
+  ) {
+    targetBackendModel = "claude-sonnet-4-6";
+  } else if (
+    backendModel === "claude-opus-4-6-deepagent" ||
+    backendModel === "claude-opus-deepagent"
+  ) {
+    targetBackendModel = "claude-opus-4-6-thinking";
   }
+
+  const generationConfig = {};
   if (typeof reqJson.temperature === "number") {
     generationConfig.temperature = reqJson.temperature;
   }
   if (typeof reqJson.top_p === "number") {
     generationConfig.topP = reqJson.top_p;
   }
-  if (Object.keys(generationConfig).length > 0) {
-    innerRequest.generationConfig = generationConfig;
+
+  const thinkingConfig = { includeThoughts: true, thinkingBudget: -1 };
+  const isDeepAgent =
+    backendModel.includes("deepagent") ||
+    targetBackendModel.includes("deepagent");
+
+  if (isDeepAgent) {
+    thinkingConfig.includeThoughts = true;
+    thinkingConfig.thinkingBudget = 64000;
+    thinkingConfig.thinkingLevel = "HIGH";
+  } else if (reqJson.thinking && typeof reqJson.thinking === "object") {
+    if (typeof reqJson.thinking.budget_tokens === "number") {
+      thinkingConfig.thinkingBudget = reqJson.thinking.budget_tokens;
+    } else if (reqJson.thinking.type === "disabled") {
+      thinkingConfig.includeThoughts = false;
+      thinkingConfig.thinkingBudget = 0;
+    }
+  }
+
+  let maxTokens = reqJson.max_tokens || reqJson.max_completion_tokens || 65536;
+  if (
+    thinkingConfig.thinkingBudget > 0 &&
+    maxTokens <= thinkingConfig.thinkingBudget
+  ) {
+    maxTokens = Math.max(
+      maxTokens + thinkingConfig.thinkingBudget,
+      thinkingConfig.thinkingBudget + 1536
+    );
+  }
+  generationConfig.maxOutputTokens = maxTokens;
+  generationConfig.thinkingConfig = thinkingConfig;
+
+  innerRequest.generationConfig = generationConfig;
+
+  if (targetBackendModel === "claude-sonnet-4-6") {
+    innerRequest.labels = {
+      ...(innerRequest.labels || {}),
+      model_enum: "MODEL_PLACEHOLDER_M35",
+      used_claude: "true",
+      used_non_gemini_model: "true",
+    };
+  } else if (targetBackendModel === "claude-opus-4-6-thinking") {
+    innerRequest.labels = {
+      ...(innerRequest.labels || {}),
+      model_enum: "MODEL_PLACEHOLDER_M26",
+      used_claude: "true",
+      used_non_gemini_model: "true",
+    };
   }
 
   if (Array.isArray(reqJson.tools) && reqJson.tools.length > 0) {
@@ -961,12 +1019,13 @@ function buildCloudCodePayload(reqJson, backendModel, auth) {
     }
   }
 
+  const isImageGen = backendModel.includes("image");
   return {
     project: auth.project_id || "default",
-    requestId: `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    model: backendModel,
+    requestId: `${isImageGen ? "image_gen" : "agent"}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    model: targetBackendModel,
     userAgent: "antigravity",
-    requestType: "agent",
+    requestType: isImageGen ? "image_gen" : "agent",
     request: innerRequest,
   };
 }
@@ -1154,6 +1213,24 @@ export default {
         JSON.stringify({ object: "list", data: fullModelCards }),
         { headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
       );
+    }
+
+    // 4.5. Token Counting Route
+    const isCountTokensRoute =
+      url.pathname === "/v1/messages/count_tokens" ||
+      url.pathname === "/messages/count_tokens";
+
+    if (isCountTokensRoute && request.method === "POST") {
+      let body = {};
+      try {
+        body = await request.json();
+      } catch (e) {}
+      const serialized = JSON.stringify(body);
+      const estimatedTokens = Math.max(1, Math.floor(serialized.length / 3.7));
+      return new Response(JSON.stringify({ input_tokens: estimatedTokens }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
     }
 
     // 5. Standalone Serverless Mode: Chat Completions, Messages & Responses
