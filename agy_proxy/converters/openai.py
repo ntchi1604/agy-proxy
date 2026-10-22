@@ -378,11 +378,19 @@ def openai_to_cloudcode_payload(
     if sess_id_str:
         inner_request["sessionId"] = sess_id_str
 
+    target_backend_model = backend_model
+    if backend_model == "gemini-3.8-flash-deepagent":
+        target_backend_model = "gemini-3.8-flash-high"
+    elif backend_model == "claude-opus-4-6-deepagent":
+        target_backend_model = "claude-opus-4-6-thinking"
+    elif backend_model == "claude-sonnet-4-6-deepagent":
+        target_backend_model = "claude-sonnet-4-6"
+
     payload: dict[str, Any] = {
         "project": project_id,
         "requestId": req_id,
         "request": inner_request,
-        "model": "gemini-3.8-flash-high" if backend_model == "gemini-3.8-flash-deepagent" else backend_model,
+        "model": target_backend_model,
         "userAgent": "antigravity",
         "requestType": req_type,
     }

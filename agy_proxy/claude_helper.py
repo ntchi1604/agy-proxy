@@ -61,9 +61,19 @@ CLAUDE_RECOMMENDED_MODELS: dict[str, dict[str, str]] = {
         "description": "Anthropic flagship hybrid model with extended thinking (Default 3P)",
         "effortLevel": "high",
     },
+    "claude-sonnet-4-6-deepagent": {
+        "displayName": "Claude Sonnet 4.6 (DeepAgent)",
+        "description": "Anthropic Claude Sonnet 4.6 autonomous agent preset with 64k thinking budget",
+        "effortLevel": "high",
+    },
     "claude-opus-4-6-thinking": {
         "displayName": "Claude Opus 4.6 (Thinking)",
         "description": "Anthropic high-capability reasoning model with thinking",
+        "effortLevel": "high",
+    },
+    "claude-opus-4-6-deepagent": {
+        "displayName": "Claude Opus 4.6 (DeepAgent)",
+        "description": "Anthropic Claude Opus 4.6 autonomous agent preset with 64k thinking budget",
         "effortLevel": "high",
     },
     "claude-3-7-sonnet": {

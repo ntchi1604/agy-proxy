@@ -246,6 +246,11 @@ MODEL_ALIASES: dict[str, str] = {
     # --------------------------------------------------------------------------
     "gemini-deepagent": "gemini-3.8-flash-deepagent",
     "gemini-3.8-flash-deepagent": "gemini-3.8-flash-deepagent",
+    "claude-deepagent": "claude-sonnet-4-6-deepagent",
+    "claude-sonnet-deepagent": "claude-sonnet-4-6-deepagent",
+    "claude-sonnet-4-6-deepagent": "claude-sonnet-4-6-deepagent",
+    "claude-opus-deepagent": "claude-opus-4-6-deepagent",
+    "claude-opus-4-6-deepagent": "claude-opus-4-6-deepagent",
 }
 
 
@@ -276,6 +281,8 @@ VALID_CLOUDCODE_MODELS = {
     # 3rd Party models
     "claude-sonnet-4-6",
     "claude-opus-4-6-thinking",
+    "claude-sonnet-4-6-deepagent",
+    "claude-opus-4-6-deepagent",
     "claude-sonnet-5-5-high",
     "claude-sonnet-5-5-medium",
     "claude-sonnet-5-5-low",
@@ -371,6 +378,8 @@ CLOUDCODE_PLACEHOLDER_MAP: dict[str, str] = {
     "claude-opus-5-5-medium": "MODEL_PLACEHOLDER_M519",
     "claude-opus-5-5-low": "MODEL_PLACEHOLDER_M520",
     "gemini-3.8-flash-deepagent": "MODEL_PLACEHOLDER_M522",
+    "claude-sonnet-4-6-deepagent": "MODEL_PLACEHOLDER_M527",
+    "claude-opus-4-6-deepagent": "MODEL_PLACEHOLDER_M528",
     "gemini-3.7-flash-tiered": "MODEL_PLACEHOLDER_M523",
     "gemini-3.6-flash-high": "MODEL_PLACEHOLDER_M524",
     "gemini-3.6-flash-medium": "MODEL_PLACEHOLDER_M525",
@@ -524,6 +533,8 @@ EXACT_MODEL_METADATA: dict[str, dict[str, Any]] = {
     # 3rd Party models
     "claude-sonnet-4-6": {"displayName": "Claude Sonnet 4.6 (Thinking)", "maxTokens": 200000},
     "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)", "maxTokens": 200000},
+    "claude-sonnet-4-6-deepagent": {"displayName": "Claude Sonnet 4.6 (DeepAgent)", "maxTokens": 200000},
+    "claude-opus-4-6-deepagent": {"displayName": "Claude Opus 4.6 (DeepAgent)", "maxTokens": 200000},
     "claude-sonnet-5-5-high": {"displayName": "Claude Sonnet 5.5 (High)", "maxTokens": 200000},
     "claude-sonnet-5-5-medium": {"displayName": "Claude Sonnet 5.5 (Medium)", "maxTokens": 200000},
     "claude-sonnet-5-5-low": {"displayName": "Claude Sonnet 5.5 (Low)", "maxTokens": 200000},
@@ -622,6 +633,8 @@ PROXY_CATALOG_MODELS: dict[str, dict[str, Any]] = {
     # Anthropic Claude Models
     "claude-sonnet-4-6": {"displayName": "Claude Sonnet 4.6 (Thinking)", "maxTokens": 200000, "description": "Anthropic flagship hybrid model with extended thinking (Antigravity 3P)", "category": "Anthropic"},
     "claude-opus-4-6-thinking": {"displayName": "Claude Opus 4.6 (Thinking)", "maxTokens": 200000, "description": "Anthropic high-capability reasoning model (Antigravity 3P)", "category": "Anthropic"},
+    "claude-sonnet-4-6-deepagent": {"displayName": "Claude Sonnet 4.6 (DeepAgent)", "maxTokens": 200000, "description": "Anthropic Claude Sonnet 4.6 autonomous agent preset with 64k thinking budget", "category": "Anthropic"},
+    "claude-opus-4-6-deepagent": {"displayName": "Claude Opus 4.6 (DeepAgent)", "maxTokens": 200000, "description": "Anthropic Claude Opus 4.6 autonomous agent preset with 64k thinking budget", "category": "Anthropic"},
     "claude-3-7-sonnet": {"displayName": "Claude 3.7 Sonnet", "maxTokens": 200000, "description": "Claude 3.7 Sonnet standard alias", "category": "Anthropic"},
     "claude-3-7-sonnet-latest": {"displayName": "Claude 3.7 Sonnet (Latest)", "maxTokens": 200000, "description": "Anthropic Claude 3.7 Sonnet latest release with hybrid reasoning", "category": "Anthropic"},
     "claude-3-5-sonnet": {"displayName": "Claude 3.5 Sonnet", "maxTokens": 200000, "description": "Claude 3.5 Sonnet standard alias", "category": "Anthropic"},

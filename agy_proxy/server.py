@@ -104,12 +104,15 @@ def _get_default_passthrough_response(action_key: str) -> dict[str, Any]:
             disp = meta.get("displayName", m)
             max_tok = meta.get("maxTokens", 1048576)
             supports_thinking = (
-                any(k in m for k in ("high", "medium", "low", "thinking", "tiered"))
+                any(k in m for k in ("high", "medium", "low", "thinking", "tiered", "deepagent"))
                 or "argon" in m
             )
             thinking_budget = -1
             thinking_level = 2
-            if "low" in m:
+            if "deepagent" in m:
+                thinking_budget = 64000
+                thinking_level = 3
+            elif "low" in m:
                 thinking_budget = 1000
                 thinking_level = 1
             elif "medium" in m or "med" in m:
@@ -3336,7 +3339,9 @@ def create_app(
             if is_generation:
                 from agy_proxy.models import is_deepagent_model
                 if is_deepagent_model(req_model):
-                    logger.info("[%s] %s [DeepAgent Swarm 64k Reasoning -> gemini-3.8-flash-high] (Antigravity CloudCode)", acc_label, req_model)
+                    req_m_lower = (req_model or "").lower()
+                    agent_desc = "Claude Opus DeepAgent" if "opus" in req_m_lower else ("Claude Sonnet DeepAgent" if "claude" in req_m_lower else "Gemini DeepAgent")
+                    logger.info("[%s] %s [%s Swarm 64k Reasoning] (Antigravity CloudCode)", acc_label, req_model, agent_desc)
                 else:
                     logger.info("[%s] %s (Antigravity CloudCode)", acc_label, req_model or "streamGenerateContent")
             else:
@@ -3634,10 +3639,18 @@ def create_app(
                     is_gemini_web_model,
                 )
 
-                # 1. DeepAgent swarm preset routes through gemini-3.8-flash-high with 64k thinking budget
+                # 1. DeepAgent swarm presets: route through flagship backend with 64k thinking budget
                 if is_deepagent_model(target_m):
-                    logger.info("[%s] Routing DeepAgent swarm request (%s) -> gemini-3.8-flash-high (64k reasoning)", acc_label, target_m)
-                    target_m = "gemini-3.8-flash-high"
+                    target_m_lower = target_m.lower()
+                    if "opus" in target_m_lower:
+                        target_m = "claude-opus-4-6-thinking"
+                        logger.info("[%s] Routing Claude Opus DeepAgent (%s) -> %s (64k reasoning)", acc_label, req_model, target_m)
+                    elif "claude" in target_m_lower:
+                        target_m = "claude-sonnet-4-6"
+                        logger.info("[%s] Routing Claude Sonnet DeepAgent (%s) -> %s (64k reasoning)", acc_label, req_model, target_m)
+                    else:
+                        target_m = "gemini-3.8-flash-high"
+                        logger.info("[%s] Routing Gemini DeepAgent (%s) -> %s (64k reasoning)", acc_label, req_model, target_m)
                     if isinstance(candidate_body, dict):
                         candidate_body["model"] = target_m
                         if "request" in candidate_body and isinstance(candidate_body["request"], dict):

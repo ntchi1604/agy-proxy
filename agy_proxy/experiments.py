@@ -1856,12 +1856,15 @@ def enhance_available_models(data: dict[str, Any]) -> dict[str, Any]:
                 disp = meta.get("displayName", m)
                 max_tok = meta.get("maxTokens", 1048576)
                 supports_thinking = (
-                    any(k in m for k in ("high", "medium", "low", "thinking", "tiered"))
+                    any(k in m for k in ("high", "medium", "low", "thinking", "tiered", "deepagent"))
                     or "argon" in m
                 )
                 thinking_budget = -1
                 thinking_level = 2
-                if "low" in m:
+                if "deepagent" in m:
+                    thinking_budget = 64000
+                    thinking_level = 3
+                elif "low" in m:
                     thinking_budget = 1000
                     thinking_level = 1
                 elif "medium" in m or "med" in m:
