@@ -313,6 +313,22 @@ if [ "$has_cloud_endpoint" -eq 0 ]; then
     fi
 fi
 
+# Inject --web_bundle_path when proxy is active (patched web UI with custom models)
+AGY_WEB_BUNDLE="${{AGY_WEB_BUNDLE_PATH:-$HOME/.config/agy-proxy/web_ui}}"
+if [ "$CURRENT_MODE" = "proxy" ] && [ -d "$AGY_WEB_BUNDLE" ] && [ -f "$AGY_WEB_BUNDLE/main.js" ]; then
+    has_web_bundle=0
+    for arg in "${{FINAL_ARGS[@]}}"; do
+        if [[ "$arg" == "--web_bundle_path" || "$arg" == --web_bundle_path=* ]]; then
+            has_web_bundle=1
+            break
+        fi
+    done
+    if [ "$has_web_bundle" -eq 0 ]; then
+        FINAL_ARGS+=("--web_bundle_path" "$AGY_WEB_BUNDLE")
+        echo "[wrapper] 🧩 Injecting patched web bundle: $AGY_WEB_BUNDLE" >&2
+    fi
+fi
+
 # Live Auto-Switching: Watchdog monitors proxy connectivity and signals language_server when state changes
 if [ "${{ENABLE_WATCHDOG}}" != "0" ]; then
     (
