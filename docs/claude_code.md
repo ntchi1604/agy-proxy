@@ -17,8 +17,10 @@ The repository includes pre-built wrapper scripts that configure the environment
 # Launch on custom proxy port:
 ./run_claude.sh -p 8080
 
-# Launch with a specific model (e.g. Claude Sonnet 4.6 or Gemini 3.8):
+# Launch with a specific model (e.g. Claude Sonnet 4.6, DeepAgent, or Gemini 3.8):
 ./run_claude.sh -m claude-sonnet-4-6
+./run_claude.sh -m claude-sonnet-4-6-deepagent
+./run_claude.sh -m claude-opus-4-6-deepagent
 ./run_claude.sh -m gemini-3.8-flash-high
 
 # Pass direct arguments to Claude Code CLI:
@@ -30,6 +32,8 @@ The repository includes pre-built wrapper scripts that configure the environment
 ```cmd
 :: Command Prompt:
 run_claude.bat
+run_claude.bat -m claude-sonnet-4-6
+run_claude.bat -m claude-sonnet-4-6-deepagent
 run_claude.bat -p 8080 -m gemini-3.8-flash-high
 ```
 

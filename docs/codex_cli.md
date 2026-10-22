@@ -6,10 +6,11 @@ Integrate OpenAI's **Codex CLI (v0.150+)** directly with `agy-proxy` to leverage
 
 ## 🚀 Integration Methods
 
-### Option A — 1-Click Launcher (`run_codex.sh`)
+### Option A — 1-Click Launcher (`run_codex.sh` / `run_codex.bat`)
 
 Use the built-in helper script to launch Codex CLI with interactive model selection:
 
+#### Linux / macOS:
 ```bash
 # Interactive mode with Antigravity model catalog:
 ./run_codex.sh
@@ -17,6 +18,15 @@ Use the built-in helper script to launch Codex CLI with interactive model select
 # Launch directly with a specific model:
 ./run_codex.sh -m gemini-3.8-flash-high
 ./run_codex.sh -m claude-sonnet-4-6
+./run_codex.sh -m claude-sonnet-4-6-deepagent
+```
+
+#### Windows:
+```cmd
+:: Interactive mode or specific model:
+run_codex.bat
+run_codex.bat -m claude-sonnet-4-6
+run_codex.bat -m gemini-3.8-flash-high
 ```
 
 ---

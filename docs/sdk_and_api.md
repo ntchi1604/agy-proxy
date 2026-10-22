@@ -67,6 +67,28 @@ response = client.messages.create(
 print(response.content[0].text)
 ```
 
+### Image Generation & Multi-Image Editing
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="dummy")
+
+# Text-to-Image Generation (with dynamic aspect ratio support: 1:1, 16:9, 4:3, 21:9):
+img_res = client.images.generate(
+    model="gemini-3.1-flash-image",
+    prompt="A majestic lion on a savanna sunset 16:9",
+    n=1,
+)
+print("Generated image URL / B64:", img_res.data[0].url)
+
+# Multi-Image Editing (/v1/images/edits):
+edit_res = client.images.edit(
+    model="gemini-3.1-flash-image",
+    image=open("character.png", "rb"),
+    prompt="Place this character inside a cybernetic laboratory background",
+)
+```
+
 ---
 
 ## 📋 Environment Variables Reference

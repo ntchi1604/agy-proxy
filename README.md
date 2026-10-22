@@ -29,23 +29,26 @@ It unlocks high-tier models (**Gemini 3.8 Flash**, **Gemini 3.1 Pro**, **Claude 
 
 #### Linux & macOS:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/qumhab/agy-proxy/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kqlio67/agy-proxy/main/install.sh | bash
 ```
 
 #### Windows (PowerShell):
 ```powershell
-irm https://raw.githubusercontent.com/qumhab/agy-proxy/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/kqlio67/agy-proxy/main/install.ps1 | iex
 ```
 
 ### 2. Run with Python / UV / Pip
 
 ```bash
 # Clone the repository:
-git clone https://github.com/qumhab/agy-proxy.git
+git clone https://github.com/kqlio67/agy-proxy.git
 cd agy-proxy
 
 # Run with UV (Recommended - no manual venv needed):
 uv run python -m agy_proxy.cli start
+
+# OR on Windows (1-Click Batch):
+start_proxy.bat
 
 # OR install in editable mode and run:
 pip install -e .
@@ -85,13 +88,31 @@ agy-proxy web --download-server
 ### 2. 🤖 Claude Code CLI
 Run Anthropic's official Claude Code CLI routed through `agy-proxy`:
 ```bash
+# Linux / macOS:
 ./run_claude.sh
-# Or with a specific model:
 ./run_claude.sh -m claude-sonnet-4-6
+./run_claude.sh -m claude-sonnet-4-6-deepagent
+
+# Windows:
+run_claude.bat
+run_claude.bat -m claude-sonnet-4-6
 ```
 👉 *Detailed guide: [Claude Code CLI Integration](docs/claude_code.md)*
 
-### 3. 🖥️ Antigravity IDE Patcher
+### 3. ⌨️ OpenAI Codex CLI
+Run OpenAI Codex CLI with full Antigravity model catalog:
+```bash
+# Linux / macOS:
+./run_codex.sh
+./run_codex.sh -m claude-sonnet-4-6
+
+# Windows:
+run_codex.bat
+run_codex.bat -m claude-sonnet-4-6
+```
+👉 *Detailed guide: [OpenAI Codex CLI Integration](docs/codex_cli.md)*
+
+### 4. 🖥️ Antigravity IDE Patcher
 Route Antigravity IDE's internal `language_server` through `agy-proxy`:
 ```bash
 # Check current patch status:
@@ -134,10 +155,14 @@ Configure your clients using any of these supported model identifiers:
 | Model ID | Provider Family | Context Window | Best For |
 | :--- | :--- | :--- | :--- |
 | `gemini-3.8-flash-high` | Gemini 3.8 | 1,048,576 tokens | Ultra-fast coding, agentic workflows, low latency. |
-| `gemini-3.8-flash-thinking-high` | Gemini 3.8 | 1,048,576 tokens | Complex reasoning, deep bug investigations. |
+| `gemini-3.8-flash-deepagent` | Gemini 3.8 | 1,048,576 tokens | Autonomous multi-agent coding preset with high reasoning effort. |
+| `gemini-4-argon` / `gemini-4-argon-high` | Gemini 4 Argon | 1,048,576 tokens | Next-gen flagship reasoning model (auto-unlocked). |
 | `gemini-3.1-pro-high` | Gemini 3.1 | 1,048,576 tokens | Large refactors, high-precision architecture design. |
-| `claude-sonnet-4-6` | Claude 3.5/3.7 | 200,000 tokens | Top-tier code synthesis, Cursor & Claude Code. |
-| `claude-opus-4-6-thinking` | Claude 3.7 | 200,000 tokens | Deep extended thinking, mathematically rigorous proofs. |
+| `claude-sonnet-4-6` | Claude 3.5/3.7/4.6 | 200,000 tokens | Top-tier code synthesis, Cursor & Claude Code. |
+| `claude-sonnet-4-6-deepagent` | Claude 4.6 | 200,000 tokens | Autonomous agent preset with 64k extended thinking budget. |
+| `claude-opus-4-6-thinking` | Claude 4.6 | 200,000 tokens | Deep extended thinking, mathematically rigorous proofs. |
+| `claude-opus-4-6-deepagent` | Claude 4.6 | 200,000 tokens | Maximum capability autonomous agent with 64k thinking budget. |
+| `gemini-3.1-flash-image` | Gemini 3.1 | 65,536 tokens | Image generation & multi-image edits (`/v1/images/*`). |
 | `gpt-4o` *(alias)* | OpenAI Mapping | Maps to Flash High | Drop-in replacement for OpenAI-default tools. |
 
 ---
