@@ -202,6 +202,36 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         text_s, _, _, _, _ = parse_gemini_sse_candidate(cand_snake)
         self.assertIn("![Generated Image](data:image/png;base64,cG5nZGF0YQ==)", text_s)
 
+    def test_image_model_payload_generation(self):
+        from agy_proxy.converter import openai_to_cloudcode_payload, anthropic_to_cloudcode_payload
+        from agy_proxy.models import OpenAIChatRequest, AnthropicRequest
+
+        # OpenAI format -> CloudCode payload
+        req_oa = OpenAIChatRequest(
+            model="gemini-3.1-flash-image",
+            messages=[{"role": "user", "content": "Generate a mountain sunset"}],
+        )
+        payload_oa = openai_to_cloudcode_payload(req_oa, project_id="test-proj")
+        self.assertEqual(payload_oa["requestType"], "image_gen")
+        self.assertEqual(payload_oa["model"], "gemini-3.1-flash-image")
+        self.assertTrue(payload_oa["requestId"].startswith("image_gen/"))
+        self.assertEqual(payload_oa["request"]["generationConfig"]["candidateCount"], 1)
+        self.assertEqual(payload_oa["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "4:3")
+        self.assertNotIn("tools", payload_oa["request"])
+        self.assertNotIn("systemInstruction", payload_oa["request"])
+
+        # Anthropic format -> CloudCode payload
+        req_ant = AnthropicRequest(
+            model="gemini-3.1-flash-image",
+            messages=[{"role": "user", "content": "Draw an ocean view"}],
+        )
+        payload_ant = anthropic_to_cloudcode_payload(req_ant, project_id="test-proj")
+        self.assertEqual(payload_ant["requestType"], "image_gen")
+        self.assertEqual(payload_ant["model"], "gemini-3.1-flash-image")
+        self.assertTrue(payload_ant["requestId"].startswith("image_gen/"))
+        self.assertEqual(payload_ant["request"]["generationConfig"]["candidateCount"], 1)
+        self.assertEqual(payload_ant["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "4:3")
+
 
 if __name__ == "__main__":
     unittest.main()

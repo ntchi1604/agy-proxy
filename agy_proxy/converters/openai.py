@@ -21,7 +21,7 @@ from agy_proxy.converters.common import (
     normalize_model_name,
     sanitize_gemini_schema,
 )
-from agy_proxy.models import OpenAIChatRequest
+from agy_proxy.models import OpenAIChatRequest, is_image_model
 
 logger = logging.getLogger("agy_proxy.converters.openai")
 
@@ -329,6 +329,19 @@ def openai_to_cloudcode_payload(
         req_type = "checkpoint"
         if "tools" in inner_request:
             inner_request.pop("tools", None)
+    elif is_image_model(backend_model):
+        req_type = "image_gen"
+        generation_config = {
+            "candidateCount": 1,
+            "imageConfig": {
+                "aspectRatio": "4:3",
+            },
+        }
+        inner_request["generationConfig"] = generation_config
+        if "tools" in inner_request:
+            inner_request.pop("tools", None)
+        if "systemInstruction" in inner_request:
+            inner_request.pop("systemInstruction", None)
     elif req.tools:
         req_type = "agent"
     else:
@@ -338,7 +351,10 @@ def openai_to_cloudcode_payload(
     now_ms = int(time.time() * 1000)
     sess_id_str = str(session_id).strip() if session_id and str(session_id).strip() else None
 
-    if req_type == "checkpoint":
+    if req_type == "image_gen":
+        traj_id = str(uuid.uuid4())
+        req_id = f"image_gen/{now_ms}/{traj_id}/{turn_no}"
+    elif req_type == "checkpoint":
         req_id = f"checkpoint/{uuid.uuid4()}"
     elif sess_id_str:
         conv_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, sess_id_str))
