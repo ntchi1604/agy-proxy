@@ -476,12 +476,8 @@ def test_enhance_available_models_argon_unlocking():
 
     enhanced = enhance_available_models(mock_models_data)
 
-    # 1. Verify original gemini-4-argon-disabled is unlocked
-    m_disabled = enhanced["models"]["gemini-4-argon-disabled"]
-    assert m_disabled["disabled"] is False
-    assert m_disabled["recommended"] is True
-    assert "tagTitle" not in m_disabled
-    assert "tagDescription" not in m_disabled
+    # 1. Verify gemini-4-argon-disabled is removed to prevent duplicate
+    assert "gemini-4-argon-disabled" not in enhanced["models"]
 
     # 2. Verify synthesized gemini-4-argon is created and fully unlocked
     assert "gemini-4-argon" in enhanced["models"]
@@ -492,13 +488,10 @@ def test_enhance_available_models_argon_unlocking():
     assert "tagDescription" not in m_argon
     assert m_argon["model"] == "MODEL_PLACEHOLDER_M421"
 
-    # 3. Verify agentModelSorts has gemini-4-argon inserted alongside gemini-4-argon-disabled
+    # 3. Verify agentModelSorts replaced gemini-4-argon-disabled with gemini-4-argon
     rec_group = enhanced["agentModelSorts"][0]["groups"][0]["modelIds"]
-    assert "gemini-4-argon-disabled" in rec_group
+    assert "gemini-4-argon-disabled" not in rec_group
     assert "gemini-4-argon" in rec_group
-    disabled_idx = rec_group.index("gemini-4-argon-disabled")
-    argon_idx = rec_group.index("gemini-4-argon")
-    assert argon_idx == disabled_idx + 1
 
 
 def test_new_curated_safe_flags_activation():

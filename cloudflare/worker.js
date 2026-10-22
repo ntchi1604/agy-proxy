@@ -104,6 +104,8 @@ const VALID_CLOUDCODE_MODELS = new Set([
   // 3rd Party models
   "claude-sonnet-4-6",
   "claude-opus-4-6-thinking",
+  "claude-sonnet-4-6-deepagent",
+  "claude-opus-4-6-deepagent",
   "gpt-oss-120b-medium",
 ]);
 
@@ -266,7 +268,12 @@ const MODEL_ALIASES = {
   "deepseek-r1": "gemini-3.8-flash-high",
   "deepseek-v3": "gemini-3.8-flash-high",
   "gemini-deepagent": "gemini-3.8-flash-deepagent",
-  "gemini-3.8-flash-deepagent": "gemini-3.8-flash-deepagent"
+  "gemini-3.8-flash-deepagent": "gemini-3.8-flash-deepagent",
+  "claude-deepagent": "claude-sonnet-4-6-deepagent",
+  "claude-sonnet-deepagent": "claude-sonnet-4-6-deepagent",
+  "claude-sonnet-4-6-deepagent": "claude-sonnet-4-6-deepagent",
+  "claude-opus-deepagent": "claude-opus-4-6-deepagent",
+  "claude-opus-4-6-deepagent": "claude-opus-4-6-deepagent"
 };
 
 const PROXY_MODELS_LIST = [
@@ -296,6 +303,8 @@ const PROXY_MODELS_LIST = [
   // Anthropic Claude
   { id: "claude-sonnet-4-6", object: "model", owned_by: "anthropic", description: "Claude Sonnet 4.6 (Extended Thinking)" },
   { id: "claude-opus-4-6-thinking", object: "model", owned_by: "anthropic", description: "Claude Opus 4.6 (Extended Thinking)" },
+  { id: "claude-sonnet-4-6-deepagent", object: "model", owned_by: "anthropic", description: "Claude Sonnet 4.6 (DeepAgent)" },
+  { id: "claude-opus-4-6-deepagent", object: "model", owned_by: "anthropic", description: "Claude Opus 4.6 (DeepAgent)" },
   { id: "claude-3-7-sonnet", object: "model", owned_by: "anthropic-alias", description: "Claude 3.7 Sonnet alias" },
   { id: "claude-3-5-sonnet", object: "model", owned_by: "anthropic-alias", description: "Claude 3.5 Sonnet alias" },
   { id: "claude-3-opus", object: "model", owned_by: "anthropic-alias", description: "Claude 3 Opus alias" },

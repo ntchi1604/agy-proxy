@@ -206,7 +206,6 @@ def openai_to_cloudcode_payload(
         generation_config["topP"] = req.top_p
 
     max_tokens = req.max_tokens or req.max_completion_tokens or 8192
-    generation_config["maxOutputTokens"] = max_tokens
 
     # Configure thinking for models that support it (default -1 for dynamic unconstrained budget)
     thinking_config: dict[str, Any] = {"includeThoughts": True, "thinkingBudget": -1}
@@ -216,6 +215,11 @@ def openai_to_cloudcode_payload(
         thinking_req=req.thinking if isinstance(req.thinking, dict) else None,
         reasoning_effort=getattr(req, "reasoning_effort", None),
     )
+    tb = thinking_config.get("thinkingBudget", 0)
+    if isinstance(tb, (int, float)) and tb > 0 and max_tokens <= tb:
+        max_tokens = max(max_tokens + tb, tb + 1536)
+
+    generation_config["maxOutputTokens"] = max_tokens
     generation_config["thinkingConfig"] = thinking_config
 
     if req.response_format and isinstance(req.response_format, dict):
@@ -385,6 +389,17 @@ def openai_to_cloudcode_payload(
         target_backend_model = "claude-opus-4-6-thinking"
     elif backend_model == "claude-sonnet-4-6-deepagent":
         target_backend_model = "claude-sonnet-4-6"
+
+    if target_backend_model == "claude-sonnet-4-6":
+        labels = inner_request.setdefault("labels", {})
+        labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M35")
+        labels.setdefault("used_claude", "true")
+        labels.setdefault("used_non_gemini_model", "true")
+    elif target_backend_model == "claude-opus-4-6-thinking":
+        labels = inner_request.setdefault("labels", {})
+        labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M26")
+        labels.setdefault("used_claude", "true")
+        labels.setdefault("used_non_gemini_model", "true")
 
     payload: dict[str, Any] = {
         "project": project_id,

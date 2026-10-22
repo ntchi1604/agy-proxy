@@ -212,8 +212,13 @@ def anthropic_to_cloudcode_payload(
         thinking_req=req.thinking if isinstance(req.thinking, dict) else None,
         output_config=getattr(req, "output_config", None),
     )
+    max_out = req.max_tokens or 65536
+    tb = thinking_config.get("thinkingBudget", 0)
+    if isinstance(tb, (int, float)) and tb > 0 and max_out <= tb:
+        max_out = max(max_out + tb, tb + 1536)
+
     generation_config: dict[str, Any] = {
-        "maxOutputTokens": req.max_tokens or 65536,
+        "maxOutputTokens": max_out,
         "thinkingConfig": thinking_config,
     }
     if req.temperature is not None:
@@ -411,12 +416,12 @@ def anthropic_to_cloudcode_payload(
     if sess_id_str:
         inner_request["sessionId"] = sess_id_str
 
-    if backend_model == "claude-sonnet-4-6":
+    if backend_model in ("claude-sonnet-4-6", "claude-sonnet-4-6-deepagent"):
         labels = inner_request.setdefault("labels", {})
         labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M35")
         labels.setdefault("used_claude", "true")
         labels.setdefault("used_non_gemini_model", "true")
-    elif backend_model == "claude-opus-4-6-thinking":
+    elif backend_model in ("claude-opus-4-6-thinking", "claude-opus-4-6-deepagent"):
         labels = inner_request.setdefault("labels", {})
         labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M26")
         labels.setdefault("used_claude", "true")

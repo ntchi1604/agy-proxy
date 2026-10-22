@@ -3720,12 +3720,21 @@ def create_app(
                     candidate_body["model"] = target_m
                     candidate_body["request"]["model"] = target_m
 
-                    if target_m == "claude-sonnet-4-6" or target_m == "MODEL_PLACEHOLDER_M35":
+                    gen_cfg = candidate_body["request"].get("generationConfig")
+                    if isinstance(gen_cfg, dict):
+                        tc = gen_cfg.get("thinkingConfig")
+                        if isinstance(tc, dict):
+                            tb = tc.get("thinkingBudget", 0)
+                            mo = gen_cfg.get("maxOutputTokens")
+                            if isinstance(tb, (int, float)) and tb > 0 and (mo is None or mo <= tb):
+                                gen_cfg["maxOutputTokens"] = max((mo or 0) + tb, tb + 1536)
+
+                    if target_m in ("claude-sonnet-4-6", "claude-sonnet-4-6-deepagent", "MODEL_PLACEHOLDER_M35", "MODEL_PLACEHOLDER_M527"):
                         labels = candidate_body["request"].setdefault("labels", {})
                         labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M35")
                         labels.setdefault("used_claude", "true")
                         labels.setdefault("used_non_gemini_model", "true")
-                    elif target_m == "claude-opus-4-6-thinking" or target_m == "MODEL_PLACEHOLDER_M26":
+                    elif target_m in ("claude-opus-4-6-thinking", "claude-opus-4-6-deepagent", "MODEL_PLACEHOLDER_M26", "MODEL_PLACEHOLDER_M528"):
                         labels = candidate_body["request"].setdefault("labels", {})
                         labels.setdefault("model_enum", "MODEL_PLACEHOLDER_M26")
                         labels.setdefault("used_claude", "true")
