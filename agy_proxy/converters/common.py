@@ -625,16 +625,82 @@ def _is_title_generation(sys_text: str, messages: list[Any]) -> bool:
     return False
 
 
+SUPPORTED_ASPECT_RATIOS: set[str] = {
+    "1:1", "3:4", "4:3", "9:16", "16:9",
+    "21:9", "3:2", "2:3", "5:4", "4:5", "1:4", "4:1", "1:8", "8:1"
+}
+
+
+def extract_aspect_ratio(
+    prompt: str = "",
+    size: str | None = None,
+    explicit_ratio: str | None = None,
+    default: str = "4:3",
+) -> str:
+    """
+    Extracts the desired image aspect ratio from explicit params, OpenAI size, or prompt keywords/ratios.
+    Falls back to default (default: "4:3").
+    """
+    # 1. Explicit parameter
+    if explicit_ratio:
+        cleaned = str(explicit_ratio).strip().replace(" ", "")
+        if cleaned in SUPPORTED_ASPECT_RATIOS:
+            return cleaned
+
+    # 2. OpenAI size parameter mapping
+    if size:
+        size_cleaned = str(size).strip().lower()
+        size_map = {
+            "1024x1024": "1:1",
+            "512x512": "1:1",
+            "256x256": "1:1",
+            "1792x1024": "16:9",
+            "1920x1080": "16:9",
+            "1280x720": "16:9",
+            "1024x1792": "9:16",
+            "1080x1920": "9:16",
+            "720x1280": "9:16",
+            "1024x768": "4:3",
+            "800x600": "4:3",
+            "768x1024": "3:4",
+            "600x800": "3:4",
+        }
+        if size_cleaned in size_map:
+            return size_map[size_cleaned]
+
+    # 3. Regex scan in prompt text (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, etc.)
+    import re
+    ratio_match = re.search(r'\b(1:1|16:9|9:16|4:3|3:4|21:9|3:2|2:3|5:4|4:5|1:4|4:1|1:8|8:1)\b', prompt)
+    if ratio_match:
+        return ratio_match.group(1)
+
+    # 4. Keyword heuristics in prompt text
+    prompt_lower = prompt.lower()
+    if any(w in prompt_lower for w in ["widescreen", "wallpaper", "desktop", "landscape", "banner"]):
+        return "16:9"
+    if any(w in prompt_lower for w in ["story", "reel", "shorts", "vertical", "phone", "mobile"]):
+        return "9:16"
+    if any(w in prompt_lower for w in ["portrait"]):
+        return "3:4"
+    if any(w in prompt_lower for w in ["square", "avatar", "profile picture", "icon"]):
+        return "1:1"
+
+    return default
+
+
 __all__ = [
     "DEFAULT_MODEL",
     "DEFAULT_THOUGHT_SIGNATURE",
+    "SUPPORTED_ASPECT_RATIOS",
     "_IMAGE_CACHE",
     "_THOUGHT_SIGNATURE_CACHE",
     "_apply_thinking_config",
     "_extract_media_from_url",
     "_extract_message_text",
     "_is_title_generation",
+    "clean_system_prompt_text",
     "ensure_tool_pairing_integrity",
+    "extract_aspect_ratio",
     "get_thought_signature",
     "logger",
     "normalize_model_name",

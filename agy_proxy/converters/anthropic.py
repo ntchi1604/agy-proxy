@@ -16,6 +16,7 @@ from agy_proxy.converters.common import (
     _is_title_generation,
     clean_system_prompt_text,
     ensure_tool_pairing_integrity,
+    extract_aspect_ratio,
     get_thought_signature,
     normalize_model_name,
     sanitize_gemini_schema,
@@ -366,10 +367,15 @@ def anthropic_to_cloudcode_payload(
             inner_request.pop("tools", None)
     elif is_image_model(backend_model):
         req_type = "image_gen"
+        last_prompt = _extract_message_text(req.messages[-1]) if req.messages else ""
+        chosen_ratio = extract_aspect_ratio(
+            prompt=last_prompt,
+            default="4:3",
+        )
         generation_config = {
             "candidateCount": 1,
             "imageConfig": {
-                "aspectRatio": "4:3",
+                "aspectRatio": chosen_ratio,
             },
         }
         inner_request["generationConfig"] = generation_config

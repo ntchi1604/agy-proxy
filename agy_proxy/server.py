@@ -2374,10 +2374,14 @@ def create_app(
 
         image_data_list = []
         try:
+            size = body.get("size")
+            aspect_ratio = body.get("aspect_ratio") or body.get("aspectRatio")
             chat_req = OpenAIChatRequest(
                 model=model_name,
-                messages=[{"role": "user", "content": f"Generate image: {prompt}"}],
+                messages=[{"role": "user", "content": prompt}],
                 stream=False,
+                size=size,
+                aspect_ratio=aspect_ratio,
             )
             resp = await client.generate_openai_chat(
                 chat_req,

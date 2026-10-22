@@ -220,17 +220,57 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         self.assertNotIn("tools", payload_oa["request"])
         self.assertNotIn("systemInstruction", payload_oa["request"])
 
+        # OpenAI format -> CloudCode payload with explicit aspect ratio in prompt
+        req_oa_ratio = OpenAIChatRequest(
+            model="gemini-3.1-flash-image",
+            messages=[{"role": "user", "content": "Generate a 16:9 wallpaper of starry night"}],
+        )
+        payload_oa_ratio = openai_to_cloudcode_payload(req_oa_ratio, project_id="test-proj")
+        self.assertEqual(payload_oa_ratio["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "16:9")
+
+        # OpenAI format with size parameter
+        req_oa_size = OpenAIChatRequest(
+            model="gemini-3.1-flash-image",
+            messages=[{"role": "user", "content": "Draw an avatar"}],
+            size="1024x1024",
+        )
+        payload_oa_size = openai_to_cloudcode_payload(req_oa_size, project_id="test-proj")
+        self.assertEqual(payload_oa_size["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "1:1")
+
         # Anthropic format -> CloudCode payload
         req_ant = AnthropicRequest(
             model="gemini-3.1-flash-image",
-            messages=[{"role": "user", "content": "Draw an ocean view"}],
+            messages=[{"role": "user", "content": "Draw an ocean view vertical story"}],
         )
         payload_ant = anthropic_to_cloudcode_payload(req_ant, project_id="test-proj")
         self.assertEqual(payload_ant["requestType"], "image_gen")
         self.assertEqual(payload_ant["model"], "gemini-3.1-flash-image")
         self.assertTrue(payload_ant["requestId"].startswith("image_gen/"))
         self.assertEqual(payload_ant["request"]["generationConfig"]["candidateCount"], 1)
-        self.assertEqual(payload_ant["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "4:3")
+        self.assertEqual(payload_ant["request"]["generationConfig"]["imageConfig"]["aspectRatio"], "9:16")
+
+    def test_extract_aspect_ratio_all_supported(self):
+        from agy_proxy.converters.common import extract_aspect_ratio, SUPPORTED_ASPECT_RATIOS
+        self.assertIn("1:1", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("16:9", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("9:16", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("3:4", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("4:3", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("21:9", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("3:2", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("2:3", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("5:4", SUPPORTED_ASPECT_RATIOS)
+        self.assertIn("4:5", SUPPORTED_ASPECT_RATIOS)
+
+        self.assertEqual(extract_aspect_ratio("draw a cat"), "4:3")
+        self.assertEqual(extract_aspect_ratio("draw 16:9 wallpaper"), "16:9")
+        self.assertEqual(extract_aspect_ratio("vertical phone reel"), "9:16")
+        self.assertEqual(extract_aspect_ratio("portrait photo"), "3:4")
+        self.assertEqual(extract_aspect_ratio("square avatar"), "1:1")
+        self.assertEqual(extract_aspect_ratio(size="1024x1024"), "1:1")
+        self.assertEqual(extract_aspect_ratio(size="1792x1024"), "16:9")
+        self.assertEqual(extract_aspect_ratio(size="1024x1792"), "9:16")
+        self.assertEqual(extract_aspect_ratio(explicit_ratio="21:9"), "21:9")
 
 
 if __name__ == "__main__":
