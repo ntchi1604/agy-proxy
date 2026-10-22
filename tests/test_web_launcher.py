@@ -295,7 +295,7 @@ def test_extract_and_patch_web_bundle(tmp_path):
     # Check patched main.js content
     main_js_content = (out_bundle / "main.js").read_text()
     assert "MODEL_ENUM_MAP" in main_js_content
-    assert "_sep_ordered_v14" in main_js_content
+    assert "_sep_ordered_v15" in main_js_content
     assert "cleanTemplate" in main_js_content
     assert "gemini-3.1-flash-image" in main_js_content
     assert "tab_flash_lite_preview" in main_js_content
@@ -497,10 +497,10 @@ def test_enhance_user_status_direct_and_proxy_models(tmp_path):
         assert "── Fast Completion (Unlimited) ───" in direct_labels
         assert "── Image Generation ─────────" in direct_labels
         
-        # Verify key Antigravity models are in direct mode
+        # Verify key models are in direct mode
         assert "Gemini 4 Argon (High)" in direct_labels
-        assert "Gemini 4 Argon (Medium)" in direct_labels
-        assert "Gemini 4 Argon (Low)" in direct_labels
+        assert "Claude Sonnet 4.6 (Thinking)" in direct_labels
+        assert "Claude Opus 4.6 (Thinking)" in direct_labels
         assert "Claude Sonnet 5.5 (High)" in direct_labels
         assert "Claude Opus 5.5 (High)" in direct_labels
         assert "Gemini 3.8 Flash (DeepAgent)" in direct_labels
