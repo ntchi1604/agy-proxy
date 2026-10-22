@@ -145,12 +145,13 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         self.assertIn("data", data)
         self.assertIn("b64_json", data["data"][0])
 
-        # 3. Multipart edit request
-        files = {
-            "image": ("test.png", b"\x89PNG\r\n\x1a\nfakeimagebytes", "image/png"),
-        }
+        # 3. Multipart edit request with multiple images
+        files = [
+            ("image", ("test1.png", b"\x89PNG\r\n\x1a\nfakeimagebytes1", "image/png")),
+            ("image", ("test2.png", b"\x89PNG\r\n\x1a\nfakeimagebytes2", "image/png")),
+        ]
         data_form = {
-            "prompt": "make it winter style",
+            "prompt": "combine the two images into one scene",
             "model": "gemini-3.1-flash-image",
             "response_format": "url",
         }
@@ -158,6 +159,20 @@ class TestImageAndAudioCapabilities(unittest.TestCase):
         self.assertEqual(resp_mp.status_code, 200)
         data_mp = resp_mp.json()
         self.assertIn("url", data_mp["data"][0])
+
+        # 4. JSON edit request with multiple images list
+        resp_multi = self.client.post(
+            "/v1/images/edits",
+            json={
+                "images": [dummy_b64, dummy_b64],
+                "prompt": "fuse kitten into couple picture",
+                "model": "gemini-3.1-flash-image",
+                "response_format": "b64_json",
+            },
+        )
+        self.assertEqual(resp_multi.status_code, 200)
+        data_multi = resp_multi.json()
+        self.assertIn("b64_json", data_multi["data"][0])
 
     def test_openai_audio_transcription_endpoint(self):
         resp = self.client.post(

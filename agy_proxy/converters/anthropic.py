@@ -383,6 +383,10 @@ def anthropic_to_cloudcode_payload(
             inner_request.pop("tools", None)
         if "systemInstruction" in inner_request:
             inner_request.pop("systemInstruction", None)
+        # Ensure text prompt is Part 0 followed by reference/source images (Parts 1..n)
+        for c in contents:
+            if "parts" in c and isinstance(c["parts"], list):
+                c["parts"].sort(key=lambda p: 0 if "text" in p else 1)
     elif req.tools:
         req_type = "agent"
     else:

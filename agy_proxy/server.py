@@ -2450,7 +2450,7 @@ def create_app(
         )
         content_type = request.headers.get("content-type", "")
         prompt = ""
-        image_uri = ""
+        image_uris: list[str] = []
         model_name = "gemini-3.1-flash-image"
         size = None
         aspect_ratio = None
@@ -2483,13 +2483,14 @@ def create_app(
                             aspect_ratio = body_part.decode("utf-8", "ignore").strip()
                         elif 'name="response_format"' in headers_str:
                             response_format = body_part.decode("utf-8", "ignore").strip()
-                        elif 'name="image"' in headers_str:
+                        elif any(k in headers_str for k in ('name="image"', 'name="images"', 'name="mask"')):
                             mime = "image/png"
                             for line in headers_str.splitlines():
                                 if "content-type:" in line.lower():
                                     mime = line.split(":")[-1].strip()
                             import base64
-                            image_uri = f"data:{mime};base64,{base64.b64encode(body_part).decode('utf-8')}"
+                            img_b64 = base64.b64encode(body_part).decode("utf-8")
+                            image_uris.append(f"data:{mime};base64,{img_b64}")
             except Exception as e:
                 logger.warning("Error parsing multipart image edit form: %s", e)
         else:
@@ -2503,12 +2504,22 @@ def create_app(
             aspect_ratio = body.get("aspect_ratio") or body.get("aspectRatio")
             response_format = str(body.get("response_format", "b64_json"))
             n = max(1, min(int(body.get("n", 1)), 10))
-            raw_img = body.get("image", "")
-            if raw_img:
-                if str(raw_img).startswith("data:") or str(raw_img).startswith("http"):
-                    image_uri = str(raw_img)
+
+            raw_imgs = body.get("images") or []
+            if not isinstance(raw_imgs, list):
+                raw_imgs = [raw_imgs]
+            for single_key in ("image", "mask"):
+                if body.get(single_key):
+                    raw_imgs.append(body.get(single_key))
+
+            for raw_img in raw_imgs:
+                if not raw_img:
+                    continue
+                s_img = str(raw_img).strip()
+                if s_img.startswith("data:") or s_img.startswith("http"):
+                    image_uris.append(s_img)
                 else:
-                    image_uri = f"data:image/png;base64,{raw_img}"
+                    image_uris.append(f"data:image/png;base64,{s_img}")
 
         if not prompt:
             return JSONResponse(
@@ -2528,10 +2539,9 @@ def create_app(
             or request.query_params.get("account_id")
         )
 
-        user_content = []
-        if image_uri:
-            user_content.append({"type": "image_url", "image_url": {"url": image_uri}})
-        user_content.append({"type": "text", "text": prompt})
+        user_content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for uri in image_uris:
+            user_content.append({"type": "image_url", "image_url": {"url": uri}})
 
         image_data_list = []
         try:
