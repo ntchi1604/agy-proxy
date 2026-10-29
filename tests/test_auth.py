@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import httpx
+import pytest
 
 from agy_proxy.auth import (
     AccountPool,
@@ -33,6 +34,30 @@ from agy_proxy.auth import (
     parse_token_dict,
 )
 
+
+
+@pytest.fixture(autouse=True)
+def _no_credential_store(monkeypatch):
+    """Keep auth tests off the real OS credential store (and its side effects)."""
+    monkeypatch.setattr("agy_proxy.auth.pool._cred_read", lambda *a, **k: None)
+    monkeypatch.setattr("agy_proxy.auth.pool._cred_write", lambda *a, **k: False)
+
+
+class TestWinCredStore(unittest.TestCase):
+    """Native Windows Credential Manager fallback used when keyring is absent."""
+
+    def test_roundtrip(self):
+        from agy_proxy.auth import wincred
+
+        if not wincred.is_supported():
+            self.skipTest("Windows only")
+        service, user, value = "agy_proxy.selftest", "probe", '{"a": 1}'
+        self.assertTrue(wincred.set_password(service, user, value))
+        try:
+            self.assertEqual(wincred.get_password(service, user), value)
+        finally:
+            wincred._advapi32.CredDeleteW(wincred._target(service, user), wincred.CRED_TYPE_GENERIC, 0)
+        self.assertIsNone(wincred.get_password(service, user))
 
 
 class TestTokenParsing(unittest.TestCase):

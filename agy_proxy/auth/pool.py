@@ -18,6 +18,8 @@ try:
 except ImportError:
     keyring = None
 
+from agy_proxy.auth import wincred
+
 import httpx
 
 from agy_proxy.auth.api_key import AIStudioApiKeySession
@@ -46,25 +48,45 @@ from agy_proxy.auth.token_utils import (
 )
 from agy_proxy.models import is_3p_model, is_claude_5_5_model, get_claude_fallback_model
 
+_CRED_SERVICE = "agy_proxy.credentials"
+
+
+def _cred_read(acc_id: str) -> str | None:
+    """Read a stored credential blob, preferring keyring then native CredMan."""
+    if keyring is not None:
+        try:
+            val = keyring.get_password(_CRED_SERVICE, acc_id)
+            if val:
+                return val
+        except Exception:
+            pass
+    return wincred.get_password(_CRED_SERVICE, acc_id)
+
+
+def _cred_write(acc_id: str, value: str) -> bool:
+    if keyring is not None:
+        try:
+            keyring.set_password(_CRED_SERVICE, acc_id, value)
+            return True
+        except Exception:
+            pass
+    return wincred.set_password(_CRED_SERVICE, acc_id, value)
+
+
 def _load_sensitive_data(acc_id: str, item: dict):
-    if keyring is None:
-        return
     try:
-        data_str = keyring.get_password("agy_proxy.credentials", acc_id)
+        data_str = _cred_read(acc_id)
         if data_str:
             sensitive = json.loads(data_str)
-            item.update(sensitive)
+            if isinstance(sensitive, dict):
+                item.update(sensitive)
     except Exception as e:
         pass  # Silently fallback to JSON per user preference
 
 def _save_sensitive_data(acc_id: str, sensitive: dict, fallback_item: dict):
-    if keyring is not None:
-        try:
-            keyring.set_password("agy_proxy.credentials", acc_id, json.dumps(sensitive))
-            return
-        except Exception as e:
-            pass  # Silently fallback to JSON per user preference
-    # Fallback to plain text if keyring is unavailable or fails
+    if _cred_write(acc_id, json.dumps(sensitive)):
+        return
+    # Fallback to plain text if the credential store is unavailable
     fallback_item.update(sensitive)
 
 def _web_sessions_match(a: Any, b: Any) -> bool:

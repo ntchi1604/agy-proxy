@@ -23,6 +23,10 @@ from agy_proxy.auth.token_utils import _decode_jwt_payload
 from agy_proxy.models import is_3p_model
 
 
+class _PermanentRefreshError(RuntimeError):
+    """Refresh failure that retrying cannot fix (bad/absent refresh_token, 4xx)."""
+
+
 class AntigravityOAuthSession(AccountSession):
     """Manages Google CloudCode / Antigravity OAuth2 sessions, tokens, projects, and quotas."""
 
@@ -103,10 +107,18 @@ class AntigravityOAuthSession(AccountSession):
             last_exc = None
             for retry in range(3):
                 try:
+                    if not self.refresh_token:
+                        raise _PermanentRefreshError(
+                            f"[{self.email or self.account_id}] No refresh_token stored for this account "
+                            "(credential store entry missing); re-add the account instead of retrying."
+                        )
                     resp = await client.post(OAUTH_TOKEN_URL, data=data, timeout=30.0)
                     if resp.status_code != 200:
                         logger.error("[%s] Token refresh failed [%d]: %s", self.email, resp.status_code, resp.text)
-                        raise RuntimeError(f"Token refresh failed ({resp.status_code}): {resp.text}")
+                        exc = RuntimeError(f"Token refresh failed ({resp.status_code}): {resp.text}")
+                        if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                            raise _PermanentRefreshError(str(exc)) from exc
+                        raise exc
 
                     tok_data = resp.json()
                     self.access_token = tok_data["access_token"]
@@ -138,6 +150,8 @@ class AntigravityOAuthSession(AccountSession):
                             logger.error("[%s] on_token_refreshed callback error: %s", self.email, cb_err)
 
                     return self.access_token
+                except _PermanentRefreshError:
+                    raise
                 except Exception as e:
                     last_exc = e
                     if retry < 2:
