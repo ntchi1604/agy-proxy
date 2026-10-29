@@ -2,6 +2,8 @@
 Data models and schemas for OpenAI, Anthropic, and Gemini API requests and responses.
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
@@ -1055,7 +1057,7 @@ class OpenAIMessage(BaseModel):
 
 class OpenAIChatRequest(BaseModel):
     model: str = DEFAULT_MODEL
-    messages: list[OpenAIMessage | dict[str, Any]]
+    messages: list[OpenAIMessage | AnthropicMessage | dict[str, Any]]
     stream: bool | None = False
     temperature: float | None = None
     top_p: float | None = None
@@ -1119,11 +1121,15 @@ class AnthropicContentBlock(BaseModel):
 class AnthropicMessage(BaseModel):
     role: str
     content: str | list[AnthropicContentBlock | dict[str, Any]]
+    name: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    model_config = ConfigDict(extra="allow")
 
 
 class AnthropicRequest(BaseModel):
     model: str = DEFAULT_MODEL
-    messages: list[AnthropicMessage | dict[str, Any]]
+    messages: list[AnthropicMessage | OpenAIMessage | dict[str, Any]]
     system: str | list[dict[str, Any]] | None = None
     max_tokens: int | None = 4096
     temperature: float | None = None
@@ -1188,4 +1194,9 @@ def is_audio_model(model_name: Any) -> bool:
         return False
     cleaned = str(model_name).lower()
     return any(k in cleaned for k in ("whisper", "proactive-observer", "audio"))
+
+
+OpenAIChatRequest.model_rebuild()
+AnthropicRequest.model_rebuild()
+
 

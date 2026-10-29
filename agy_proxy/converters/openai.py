@@ -47,11 +47,11 @@ def openai_to_cloudcode_payload(
             tool_calls = msg.get("tool_calls")
             tool_call_id = msg.get("tool_call_id")
         else:
-            role = msg.role
-            content = msg.content
-            name = msg.name
-            tool_calls = msg.tool_calls
-            tool_call_id = msg.tool_call_id
+            role = getattr(msg, "role", "user")
+            content = getattr(msg, "content", None)
+            name = getattr(msg, "name", None)
+            tool_calls = getattr(msg, "tool_calls", None)
+            tool_call_id = getattr(msg, "tool_call_id", None)
 
         if role in ("system", "developer"):
             if isinstance(content, str) and content:
@@ -87,8 +87,8 @@ def openai_to_cloudcode_payload(
             tool_calls = msg.get("tool_calls")
             tool_call_id = msg.get("tool_call_id")
         else:
-            role = msg.role
-            content = msg.content
+            role = getattr(msg, "role", "user")
+            content = getattr(msg, "content", "")
             name = getattr(msg, "name", None)
             tool_calls = getattr(msg, "tool_calls", None)
             tool_call_id = getattr(msg, "tool_call_id", None)
